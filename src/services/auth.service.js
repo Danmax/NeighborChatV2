@@ -5,6 +5,10 @@ import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
 import { InputValidator } from '../lib/security.js';
 
+// Track magic link cooldown per email
+const magicLinkCooldowns = new Map();
+const COOLDOWN_SECONDS = 60;
+
 /**
  * Send magic link email for passwordless auth
  */
@@ -12,15 +16,46 @@ export async function sendMagicLink(email) {
     const supabase = getSupabase();
     const validatedEmail = InputValidator.validateEmail(email);
 
+    // Check cooldown
+    const lastSend = magicLinkCooldowns.get(validatedEmail);
+    if (lastSend) {
+        const secondsLeft = COOLDOWN_SECONDS - Math.floor((Date.now() - lastSend) / 1000);
+        if (secondsLeft > 0) {
+            throw new Error(`Please wait ${secondsLeft} seconds before requesting another link`);
+        }
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
         email: validatedEmail,
         options: {
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: `${window.location.origin}/#/`
         }
     });
 
     if (error) throw error;
+
+    // Record send time for cooldown
+    magicLinkCooldowns.set(validatedEmail, Date.now());
+
     return { success: true, email: validatedEmail };
+}
+
+/**
+ * Sign in with GitHub OAuth
+ */
+export async function signInWithGitHub() {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+            redirectTo: `${window.location.origin}/#/`,
+            scopes: 'read:user user:email'
+        }
+    });
+
+    if (error) throw error;
+    return { success: true, data };
 }
 
 /**
