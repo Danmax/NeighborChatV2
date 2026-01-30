@@ -1,0 +1,405 @@
+// Realtime service - Supabase presence and channels
+import { getSupabase } from '../lib/supabase.js';
+import { currentUser } from '../stores/auth.js';
+import {
+    setOnlineUsers,
+    updateOnlineUser,
+    removeOnlineUser,
+    userStatus,
+    setUserStatus
+} from '../stores/presence.js';
+import { get } from 'svelte/store';
+
+let presenceChannel = null;
+let lobbyChannel = null;
+let inviteChannel = null;
+let chatChannel = null;
+
+/**
+ * Set up presence channel to track online users
+ */
+export function setupPresenceChannel() {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) {
+        console.warn('Cannot setup presence: no user');
+        return null;
+    }
+
+    // Clean up existing channel
+    if (presenceChannel) {
+        presenceChannel.unsubscribe();
+    }
+
+    const channelName = 'online-users';
+    presenceChannel = supabase.channel(channelName);
+
+    presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+            const state = presenceChannel.presenceState();
+            const users = {};
+
+            Object.keys(state).forEach(key => {
+                state[key].forEach(presence => {
+                    if (presence.user_id) {
+                        users[presence.user_id] = {
+                            user_id: presence.user_id,
+                            name: presence.name,
+                            avatar: presence.avatar,
+                            interests: presence.interests || [],
+                            status: presence.status || 'available',
+                            joinedAt: presence.online_at
+                        };
+                    }
+                });
+            });
+
+            setOnlineUsers(users);
+        })
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+            newPresences.forEach(presence => {
+                if (presence.user_id) {
+                    updateOnlineUser(presence.user_id, {
+                        user_id: presence.user_id,
+                        name: presence.name,
+                        avatar: presence.avatar,
+                        interests: presence.interests || [],
+                        status: presence.status || 'available',
+                        joinedAt: presence.online_at
+                    });
+                }
+            });
+        })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+            leftPresences.forEach(presence => {
+                if (presence.user_id) {
+                    removeOnlineUser(presence.user_id);
+                }
+            });
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await trackPresence();
+            }
+        });
+
+    return presenceChannel;
+}
+
+/**
+ * Track current user's presence
+ */
+export async function trackPresence(status = 'available') {
+    const user = get(currentUser);
+
+    if (!presenceChannel || !user) return;
+
+    setUserStatus(status);
+
+    await presenceChannel.track({
+        user_id: user.user_id,
+        name: user.name,
+        avatar: user.avatar,
+        interests: user.interests || [],
+        status: status,
+        online_at: new Date().toISOString()
+    });
+}
+
+/**
+ * Update presence status
+ */
+export async function updatePresenceStatus(status) {
+    await trackPresence(status);
+}
+
+/**
+ * Untrack presence (go offline)
+ */
+export async function untrackPresence() {
+    if (presenceChannel) {
+        await presenceChannel.untrack();
+        setUserStatus('offline');
+    }
+}
+
+/**
+ * Set up lobby chat channel
+ * @param {Function} onMessage - Callback for new messages
+ * @param {string} channelId - Channel ID (general, new-here, tech, pets, community)
+ */
+export function setupLobbyChannel(onMessage, channelId = 'general') {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return null;
+
+    if (lobbyChannel) {
+        lobbyChannel.unsubscribe();
+    }
+
+    // Create channel-specific room name
+    const channelName = `lobby-${channelId}`;
+    lobbyChannel = supabase.channel(channelName);
+
+    lobbyChannel
+        .on('broadcast', { event: 'message' }, ({ payload }) => {
+            onMessage?.(payload);
+        })
+        .subscribe();
+
+    return lobbyChannel;
+}
+
+/**
+ * Cleanup lobby channel
+ */
+export function cleanupLobbyChannel() {
+    if (lobbyChannel) {
+        lobbyChannel.unsubscribe();
+        lobbyChannel = null;
+    }
+}
+
+/**
+ * Send message to lobby chat
+ * @param {string} message - Message content
+ * @param {string} channelId - Channel ID
+ */
+export async function sendLobbyMessage(message, channelId = 'general') {
+    const user = get(currentUser);
+
+    if (!lobbyChannel || !user) return null;
+
+    const payload = {
+        id: Date.now().toString(),
+        user_id: user.user_id,
+        name: user.name,
+        avatar: user.avatar,
+        message: message,
+        channel: channelId,
+        timestamp: Date.now()
+    };
+
+    await lobbyChannel.send({
+        type: 'broadcast',
+        event: 'message',
+        payload
+    });
+
+    // Return the message so it can be added locally (sender doesn't receive own broadcast)
+    return payload;
+}
+
+/**
+ * Set up invite listener channel
+ */
+export function setupInviteChannel(onInvite) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return null;
+
+    if (inviteChannel) {
+        inviteChannel.unsubscribe();
+    }
+
+    // Listen for invites to this user
+    inviteChannel = supabase.channel(`invites-${user.user_id}`);
+
+    inviteChannel
+        .on('broadcast', { event: 'chat-invite' }, ({ payload }) => {
+            onInvite?.(payload);
+        })
+        .subscribe();
+
+    return inviteChannel;
+}
+
+/**
+ * Send chat invite to another user
+ */
+export async function sendChatInvite(targetUserId) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return;
+
+    const targetChannel = supabase.channel(`invites-${targetUserId}`);
+
+    // Wait for channel to be subscribed before sending
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            targetChannel.unsubscribe();
+            reject(new Error('Channel subscription timeout'));
+        }, 5000);
+
+        targetChannel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                resolve();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                clearTimeout(timeout);
+                reject(new Error(`Channel error: ${status}`));
+            }
+        });
+    });
+
+    await targetChannel.send({
+        type: 'broadcast',
+        event: 'chat-invite',
+        payload: {
+            from: {
+                user_id: user.user_id,
+                name: user.name,
+                avatar: user.avatar,
+                interests: user.interests || []
+            },
+            timestamp: Date.now()
+        }
+    });
+
+    // Cleanup the temporary channel
+    targetChannel.unsubscribe();
+}
+
+/**
+ * Set up P2P chat channel
+ */
+export function setupChatChannel(roomId, callbacks = {}) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user || !roomId) return null;
+
+    // Clean up existing chat channel
+    if (chatChannel) {
+        chatChannel.unsubscribe();
+    }
+
+    chatChannel = supabase.channel(roomId);
+
+    chatChannel
+        .on('broadcast', { event: 'message' }, ({ payload }) => {
+            callbacks.onMessage?.(payload);
+        })
+        .on('broadcast', { event: 'typing' }, ({ payload }) => {
+            callbacks.onTyping?.(payload);
+        })
+        .on('broadcast', { event: 'read' }, ({ payload }) => {
+            callbacks.onRead?.(payload);
+        })
+        .on('broadcast', { event: 'leave' }, ({ payload }) => {
+            callbacks.onLeave?.(payload);
+        })
+        .subscribe();
+
+    return chatChannel;
+}
+
+/**
+ * Send message to P2P chat
+ */
+export async function sendChatMessage(message, isGif = false) {
+    const user = get(currentUser);
+
+    if (!chatChannel || !user) return null;
+
+    const msg = {
+        id: `${user.user_id}-${Date.now()}`,
+        user_id: user.user_id,
+        name: user.name,
+        avatar: user.avatar,
+        message: message,
+        isGif: isGif,
+        timestamp: new Date().toISOString()
+    };
+
+    await chatChannel.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: msg
+    });
+
+    return msg;
+}
+
+/**
+ * Send typing indicator
+ */
+export async function sendTypingIndicator(isTyping = true) {
+    const user = get(currentUser);
+
+    if (!chatChannel || !user) return;
+
+    await chatChannel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+            user_id: user.user_id,
+            name: user.name,
+            isTyping: isTyping
+        }
+    });
+}
+
+/**
+ * Send read receipt
+ */
+export async function sendReadReceipt() {
+    const user = get(currentUser);
+
+    if (!chatChannel || !user) return;
+
+    await chatChannel.send({
+        type: 'broadcast',
+        event: 'read',
+        payload: {
+            user_id: user.user_id,
+            timestamp: new Date().toISOString()
+        }
+    });
+}
+
+/**
+ * Leave chat room
+ */
+export async function leaveChat() {
+    const user = get(currentUser);
+
+    if (chatChannel && user) {
+        await chatChannel.send({
+            type: 'broadcast',
+            event: 'leave',
+            payload: {
+                user_id: user.user_id,
+                name: user.name
+            }
+        });
+        chatChannel.unsubscribe();
+        chatChannel = null;
+    }
+}
+
+/**
+ * Clean up all channels
+ */
+export function cleanupChannels() {
+    if (presenceChannel) {
+        presenceChannel.unsubscribe();
+        presenceChannel = null;
+    }
+    if (lobbyChannel) {
+        lobbyChannel.unsubscribe();
+        lobbyChannel = null;
+    }
+    if (inviteChannel) {
+        inviteChannel.unsubscribe();
+        inviteChannel = null;
+    }
+    if (chatChannel) {
+        chatChannel.unsubscribe();
+        chatChannel = null;
+    }
+}

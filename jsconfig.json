@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    },
+    "moduleResolution": "bundler"
+  },
+  "include": ["src/**/*.js", "src/**/*.svelte"]
+}

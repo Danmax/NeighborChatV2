@@ -1,0 +1,178 @@
+// Contacts service - Supabase operations for saved contacts
+import { getSupabase } from '../lib/supabase.js';
+import { currentUser } from '../stores/auth.js';
+import {
+    setContacts,
+    addContact,
+    updateContact,
+    removeContact,
+    contactsLoading,
+    contactsError
+} from '../stores/contacts.js';
+import { get } from 'svelte/store';
+
+// Transform database row to app format
+function transformContactFromDb(row) {
+    return {
+        id: row.id,
+        user_id: row.contact_user_id,
+        name: row.contact_name,
+        avatar: row.contact_avatar,
+        interests: row.contact_interests || [],
+        notes: row.notes,
+        favorite: row.favorite || false,
+        created_at: row.created_at
+    };
+}
+
+// Generate a valid UUID v4
+function generateUUID() {
+    return crypto.randomUUID();
+}
+
+// Transform app format to database row
+function transformContactToDb(contactData, ownerId) {
+    return {
+        id: contactData.id || generateUUID(),
+        owner_id: ownerId,
+        contact_user_id: contactData.user_id,
+        contact_name: contactData.name,
+        contact_avatar: contactData.avatar || {},
+        contact_interests: contactData.interests || [],
+        notes: contactData.notes || null
+    };
+}
+
+/**
+ * Fetch user's contacts from Supabase
+ */
+export async function fetchContacts() {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return [];
+
+    contactsLoading.set(true);
+    contactsError.set(null);
+
+    try {
+        const { data, error } = await supabase
+            .from('saved_contacts')
+            .select('*')
+            .eq('owner_id', user.user_id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const contacts = (data || []).map(transformContactFromDb);
+        setContacts(contacts);
+        return contacts;
+    } catch (error) {
+        console.error('Failed to fetch contacts:', error);
+        contactsError.set(error.message);
+        return [];
+    } finally {
+        contactsLoading.set(false);
+    }
+}
+
+/**
+ * Add a new contact
+ */
+export async function saveContact(contactData) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('Must be logged in to save contacts');
+    }
+
+    const dbContact = transformContactToDb(contactData, user.user_id);
+
+    try {
+        const { data, error } = await supabase
+            .from('saved_contacts')
+            .upsert(dbContact, { onConflict: 'id' })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        const contact = transformContactFromDb(data);
+        addContact(contact);
+        return contact;
+    } catch (error) {
+        console.error('Failed to save contact:', error);
+        throw error;
+    }
+}
+
+/**
+ * Update a contact
+ */
+export async function updateContactInDb(userId, updates) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return;
+
+    // Transform updates to DB format
+    const dbUpdates = {};
+    if (updates.name) dbUpdates.contact_name = updates.name;
+    if (updates.avatar) dbUpdates.contact_avatar = updates.avatar;
+    if (updates.interests) dbUpdates.contact_interests = updates.interests;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.favorite !== undefined) dbUpdates.favorite = updates.favorite;
+
+    try {
+        const { data, error } = await supabase
+            .from('saved_contacts')
+            .update(dbUpdates)
+            .eq('owner_id', user.user_id)
+            .eq('contact_user_id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        const contact = transformContactFromDb(data);
+        updateContact(userId, contact);
+        return contact;
+    } catch (error) {
+        console.error('Failed to update contact:', error);
+        throw error;
+    }
+}
+
+/**
+ * Remove a contact
+ */
+export async function deleteContact(userId) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) return;
+
+    try {
+        const { error } = await supabase
+            .from('saved_contacts')
+            .delete()
+            .eq('owner_id', user.user_id)
+            .eq('contact_user_id', userId);
+
+        if (error) throw error;
+
+        removeContact(userId);
+        return true;
+    } catch (error) {
+        console.error('Failed to delete contact:', error);
+        throw error;
+    }
+}
+
+/**
+ * Toggle favorite status
+ */
+export async function toggleFavoriteInDb(userId, currentFavorite) {
+    return updateContactInDb(userId, { favorite: !currentFavorite });
+}
