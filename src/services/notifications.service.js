@@ -450,3 +450,36 @@ export function sendEventInviteNotification(targetUserId, event, fromUser) {
 
     return notification;
 }
+
+/**
+ * Send a mention notification (for @mentions in chat)
+ * @param {string} targetUserId - User ID to notify
+ * @param {Object} fromUser - User who sent the mention
+ * @param {string} channelName - Name of the channel where mention occurred
+ * @param {string} messagePreview - Preview of the message
+ */
+export function sendMentionNotification(targetUserId, fromUser, channelName, messagePreview) {
+    const notification = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user_id: targetUserId,
+        type: NOTIFICATION_TYPES.CHAT_MENTION,
+        title: 'You were mentioned',
+        message: `${fromUser.name} mentioned you in #${channelName}: "${messagePreview.substring(0, 50)}${messagePreview.length > 50 ? '...' : ''}"`,
+        data: {
+            from_user_id: fromUser.user_id,
+            from_user_name: fromUser.name,
+            from_user_avatar: fromUser.avatar,
+            channel: channelName,
+            message: messagePreview
+        },
+        read: false,
+        created_at: new Date().toISOString()
+    };
+
+    // Cross-user notifications use localStorage
+    const notifications = getStoredNotifications();
+    notifications.unshift(notification);
+    saveNotifications(notifications);
+
+    return notification;
+}

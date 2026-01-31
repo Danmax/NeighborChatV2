@@ -1,5 +1,5 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onDestroy } from 'svelte';
     import { fade, scale } from 'svelte/transition';
     import Avatar from '../avatar/Avatar.svelte';
 
@@ -8,11 +8,55 @@
 
     const dispatch = createEventDispatcher();
 
+    let remainingTime = 60;
+    let intervalId = null;
+
+    // Start countdown when modal shows
+    $: if (show && invite) {
+        remainingTime = 60;
+
+        // Clear any existing interval
+        if (intervalId) {
+            clearInterval(intervalId);
+        }
+
+        // Start countdown
+        intervalId = setInterval(() => {
+            remainingTime--;
+
+            if (remainingTime <= 0) {
+                clearInterval(intervalId);
+                intervalId = null;
+                handleDecline(); // Auto-decline on timeout
+            }
+        }, 1000);
+    }
+
+    // Clean up interval when modal closes
+    $: if (!show && intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+
+    onDestroy(() => {
+        if (intervalId) {
+            clearInterval(intervalId);
+        }
+    });
+
     function handleAccept() {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
         dispatch('accept', invite);
     }
 
     function handleDecline() {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
         dispatch('decline', invite);
     }
 
@@ -21,6 +65,10 @@
             handleDecline();
         }
     }
+
+    // Format time as MM:SS
+    $: timeDisplay = `${Math.floor(remainingTime / 60)}:${String(remainingTime % 60).padStart(2, '0')}`;
+    $: timeWarning = remainingTime <= 10;
 </script>
 
 {#if show && invite}
@@ -37,6 +85,9 @@
             <div class="invite-header">
                 <span class="invite-icon">💬</span>
                 <h3>Chat Invite</h3>
+                <div class="countdown-timer" class:warning={timeWarning}>
+                    ⏱️ {timeDisplay}
+                </div>
             </div>
 
             <div class="invite-body">
@@ -105,6 +156,33 @@
         font-weight: 700;
         color: var(--text);
         margin: 0;
+    }
+
+    .countdown-timer {
+        margin-top: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--primary);
+        padding: 4px 12px;
+        background: var(--cream);
+        border-radius: 12px;
+        display: inline-block;
+        transition: all 0.2s ease;
+    }
+
+    .countdown-timer.warning {
+        background: #FFEBEE;
+        color: #C62828;
+        animation: pulse 0.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
+        }
     }
 
     .invite-body {

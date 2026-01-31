@@ -3,6 +3,12 @@ import { getSupabase } from '../lib/supabase.js';
 import { currentUser, updateCurrentUser } from '../stores/auth.js';
 import { get } from 'svelte/store';
 import { cacheData, getCachedData } from '../lib/utils/cache.js';
+import {
+    validateUsername,
+    checkUsernameAvailability,
+    sanitizeUsernameInput
+} from '../lib/utils/username.js';
+import { formatPhoneNumber, normalizePhoneNumber } from '../lib/utils/phone.js';
 
 /**
  * Load user profile from Supabase
@@ -25,28 +31,51 @@ export async function loadUserProfile(userId) {
 
 /**
  * Save user profile to Supabase
+ * Includes all profile fields for comprehensive saves
  */
 export async function saveUserProfile(profileData) {
     const supabase = getSupabase();
     const user = get(currentUser);
 
-    if (!user || user.isGuest) {
-        // For guests, just save locally
-        cacheData('profile', profileData);
-        updateCurrentUser(profileData);
-        return profileData;
+    if (!user) {
+        throw new Error('Must be logged in to save profile');
     }
+
+    // Build upsert data with all provided fields
+    const upsertData = {
+        user_id: user.user_id,
+        updated_at: new Date().toISOString()
+    };
+
+    // Core profile fields
+    if (profileData.name !== undefined) upsertData.display_name = profileData.name;
+    if (profileData.username !== undefined) upsertData.username = profileData.username?.toLowerCase();
+    if (profileData.avatar !== undefined) upsertData.avatar = profileData.avatar;
+    if (profileData.interests !== undefined) upsertData.interests = profileData.interests || [];
+    if (profileData.location !== undefined) upsertData.location = profileData.location;
+
+    // Extended profile fields
+    if (profileData.birthday !== undefined) upsertData.birthday = profileData.birthday;
+    if (profileData.title !== undefined) upsertData.title = profileData.title;
+    if (profileData.phone !== undefined) upsertData.phone = profileData.phone ? normalizePhoneNumber(profileData.phone) : null;
+    if (profileData.city !== undefined) upsertData.city = profileData.city;
+    if (profileData.magic_email !== undefined) upsertData.magic_email = profileData.magic_email;
+    if (profileData.bio !== undefined) upsertData.bio = profileData.bio;
+
+    // Banner customization
+    if (profileData.banner_color !== undefined) upsertData.banner_color = profileData.banner_color;
+    if (profileData.banner_pattern !== undefined) upsertData.banner_pattern = profileData.banner_pattern;
+
+    // Privacy settings
+    if (profileData.show_city !== undefined) upsertData.show_city = profileData.show_city;
+    if (profileData.show_phone !== undefined) upsertData.show_phone = profileData.show_phone;
+    if (profileData.show_email !== undefined) upsertData.show_email = profileData.show_email;
+    if (profileData.show_birthday !== undefined) upsertData.show_birthday = profileData.show_birthday;
+    if (profileData.show_interests !== undefined) upsertData.show_interests = profileData.show_interests;
 
     const { data, error } = await supabase
         .from('user_profiles')
-        .upsert({
-            user_id: user.user_id,
-            display_name: profileData.name,
-            avatar: profileData.avatar,
-            interests: profileData.interests || [],
-            location: profileData.location,
-            updated_at: new Date().toISOString()
-        }, {
+        .upsert(upsertData, {
             onConflict: 'user_id'
         })
         .select()
@@ -54,14 +83,27 @@ export async function saveUserProfile(profileData) {
 
     if (error) throw error;
 
-    // Update local state
-    updateCurrentUser({
-        name: profileData.name,
-        avatar: profileData.avatar,
-        interests: profileData.interests,
-        location: profileData.location
-    });
+    // Update local state with saved data
+    const localUpdate = {};
+    if (profileData.name !== undefined) localUpdate.name = profileData.name;
+    if (profileData.username !== undefined) localUpdate.username = profileData.username?.toLowerCase();
+    if (profileData.avatar !== undefined) localUpdate.avatar = profileData.avatar;
+    if (profileData.interests !== undefined) localUpdate.interests = profileData.interests;
+    if (profileData.location !== undefined) localUpdate.location = profileData.location;
+    if (profileData.birthday !== undefined) localUpdate.birthday = profileData.birthday;
+    if (profileData.title !== undefined) localUpdate.title = profileData.title;
+    if (profileData.phone !== undefined) localUpdate.phone = profileData.phone;
+    if (profileData.city !== undefined) localUpdate.city = profileData.city;
+    if (profileData.bio !== undefined) localUpdate.bio = profileData.bio;
+    if (profileData.banner_color !== undefined) localUpdate.banner_color = profileData.banner_color;
+    if (profileData.banner_pattern !== undefined) localUpdate.banner_pattern = profileData.banner_pattern;
+    if (profileData.show_city !== undefined) localUpdate.show_city = profileData.show_city;
+    if (profileData.show_phone !== undefined) localUpdate.show_phone = profileData.show_phone;
+    if (profileData.show_email !== undefined) localUpdate.show_email = profileData.show_email;
+    if (profileData.show_birthday !== undefined) localUpdate.show_birthday = profileData.show_birthday;
+    if (profileData.show_interests !== undefined) localUpdate.show_interests = profileData.show_interests;
 
+    updateCurrentUser(localUpdate);
     cacheData('profile', data);
 
     return data;
@@ -73,12 +115,8 @@ export async function saveUserProfile(profileData) {
 export async function updateAvatar(avatar) {
     const user = get(currentUser);
 
-    if (!user) return;
-
-    if (user.isGuest) {
-        updateCurrentUser({ avatar });
-        cacheData('avatar', avatar);
-        return avatar;
+    if (!user) {
+        throw new Error('Must be logged in to update avatar');
     }
 
     const supabase = getSupabase();
@@ -102,12 +140,8 @@ export async function updateAvatar(avatar) {
 export async function updateInterests(interests) {
     const user = get(currentUser);
 
-    if (!user) return;
-
-    if (user.isGuest) {
-        updateCurrentUser({ interests });
-        cacheData('interests', interests);
-        return interests;
+    if (!user) {
+        throw new Error('Must be logged in to update interests');
     }
 
     const supabase = getSupabase();
@@ -131,18 +165,18 @@ export async function updateInterests(interests) {
 export async function updateDisplayName(name) {
     const user = get(currentUser);
 
-    if (!user) return;
-
-    if (user.isGuest) {
-        updateCurrentUser({ name });
-        return name;
+    if (!user) {
+        throw new Error('Must be logged in to update display name');
     }
 
     const supabase = getSupabase();
 
     const { error } = await supabase
         .from('user_profiles')
-        .update({ display_name: name })
+        .update({
+            display_name: name,
+            updated_at: new Date().toISOString()
+        })
         .eq('user_id', user.user_id);
 
     if (error) throw error;
@@ -153,27 +187,76 @@ export async function updateDisplayName(name) {
 }
 
 /**
+ * Update username with validation and availability checking
+ */
+export async function updateUsername(username) {
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('No user logged in');
+    }
+
+    // Sanitize input
+    const sanitized = sanitizeUsernameInput(username);
+
+    if (!sanitized) {
+        throw new Error('Username cannot be empty');
+    }
+
+    // Validate format
+    const validation = validateUsername(sanitized);
+    if (!validation.valid) {
+        throw new Error(validation.error);
+    }
+
+    const supabase = getSupabase();
+
+    // Check availability (exclude current user)
+    const availability = await checkUsernameAvailability(sanitized, supabase, user.user_id);
+    if (!availability.available) {
+        throw new Error(availability.error || 'Username is not available');
+    }
+
+    // Update in database
+    const { error } = await supabase
+        .from('user_profiles')
+        .update({
+            username: sanitized.toLowerCase(),
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user_id);
+
+    if (error) {
+        // Handle unique constraint violation
+        if (error.code === '23505') {
+            throw new Error('Username is already taken');
+        }
+        throw error;
+    }
+
+    updateCurrentUser({ username: sanitized.toLowerCase() });
+
+    return sanitized.toLowerCase();
+}
+
+/**
  * Update profile details (birthday, title, phone, city, magic_email)
  */
 export async function updateProfileDetails(details) {
     const user = get(currentUser);
 
-    if (!user) return;
+    if (!user) {
+        throw new Error('Must be logged in to update profile details');
+    }
 
     // Sanitize and prepare the data
     const sanitizedDetails = {
         birthday: details.birthday || null,
         title: details.title?.trim() || null,
-        phone: details.phone?.trim() || null,
+        phone: details.phone ? normalizePhoneNumber(details.phone) : null, // Normalize phone for storage
         city: details.city?.trim() || null,
         magic_email: details.magic_email?.trim() || null
     };
-
-    if (user.isGuest) {
-        updateCurrentUser(sanitizedDetails);
-        cacheData('profileDetails', sanitizedDetails);
-        return sanitizedDetails;
-    }
 
     const supabase = getSupabase();
 
@@ -210,12 +293,10 @@ export async function getOrLoadProfile() {
     if (cached) return cached;
 
     // Load from Supabase
-    if (!user.isGuest) {
-        const profile = await loadUserProfile(user.user_id);
-        if (profile) {
-            cacheData('profile', profile);
-            return profile;
-        }
+    const profile = await loadUserProfile(user.user_id);
+    if (profile) {
+        cacheData('profile', profile);
+        return profile;
     }
 
     return null;
@@ -259,4 +340,171 @@ export const FUN_NAMES = [
     'Adventure Seeker',
     'Creative Soul',
     'Nature Lover'
+];
+
+/**
+ * Load public profile (filtered by privacy settings)
+ */
+export async function loadPublicProfile(userId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    if (!data) {
+        return null;
+    }
+
+    // Filter fields by privacy settings
+    return {
+        user_id: data.user_id,
+        display_name: data.display_name,
+        username: data.username,
+        avatar: data.avatar,
+        bio: data.bio,
+        banner_color: data.banner_color,
+        banner_pattern: data.banner_pattern,
+        interests: data.show_interests ? data.interests : [],
+        city: data.show_city ? data.city : null,
+        phone: data.show_phone ? data.phone : null,
+        birthday: data.show_birthday ? data.birthday : null,
+        // Don't include email even if show_email is true (for security)
+        created_at: data.created_at
+    };
+}
+
+/**
+ * Update privacy settings
+ */
+export async function updatePrivacySettings(settings) {
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('No user logged in');
+    }
+
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('user_profiles')
+        .update({
+            show_city: settings.show_city ?? true,
+            show_phone: settings.show_phone ?? false,
+            show_email: settings.show_email ?? false,
+            show_birthday: settings.show_birthday ?? false,
+            show_interests: settings.show_interests ?? true,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user_id);
+
+    if (error) throw error;
+
+    updateCurrentUser(settings);
+}
+
+/**
+ * Update bio
+ */
+export async function updateBio(bio) {
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('No user logged in');
+    }
+
+    if (bio && bio.length > 200) {
+        throw new Error('Bio must be 200 characters or less');
+    }
+
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('user_profiles')
+        .update({
+            bio: bio?.trim() || null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user_id);
+
+    if (error) throw error;
+
+    updateCurrentUser({ bio: bio?.trim() || null });
+    cacheData('bio', bio);
+
+    return bio;
+}
+
+/**
+ * Update banner customization
+ */
+export async function updateBanner(bannerColor, bannerPattern) {
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('No user logged in');
+    }
+
+    // Validate color format
+    if (bannerColor && !/^#[0-9A-Fa-f]{6}$/.test(bannerColor)) {
+        throw new Error('Invalid color format. Use hex format: #RRGGBB');
+    }
+
+    // Validate pattern
+    const validPatterns = ['solid', 'dots', 'stripes', 'grid', 'sparkle'];
+    if (bannerPattern && !validPatterns.includes(bannerPattern)) {
+        throw new Error('Invalid pattern. Must be: solid, dots, stripes, grid, or sparkle');
+    }
+
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('user_profiles')
+        .update({
+            banner_color: bannerColor,
+            banner_pattern: bannerPattern,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user_id);
+
+    if (error) throw error;
+
+    const updates = { banner_color: bannerColor, banner_pattern: bannerPattern };
+    updateCurrentUser(updates);
+    cacheData('banner', updates);
+
+    return updates;
+}
+
+/**
+ * Available banner patterns
+ */
+export const BANNER_PATTERNS = [
+    { id: 'solid', label: 'Solid', preview: '▬' },
+    { id: 'dots', label: 'Dots', preview: '⚫' },
+    { id: 'stripes', label: 'Stripes', preview: '▦' },
+    { id: 'grid', label: 'Grid', preview: '▦' },
+    { id: 'sparkle', label: 'Sparkle', preview: '✨' }
+];
+
+/**
+ * Banner color presets
+ */
+export const BANNER_COLORS = [
+    '#4CAF50', // Green
+    '#2196F3', // Blue
+    '#9C27B0', // Purple
+    '#FF5722', // Deep Orange
+    '#FFC107', // Amber
+    '#00BCD4', // Cyan
+    '#E91E63', // Pink
+    '#607D8B', // Blue Grey
+    '#795548', // Brown
+    '#F44336'  // Red
 ];

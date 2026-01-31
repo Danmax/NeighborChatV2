@@ -2,7 +2,10 @@
     import { createEventDispatcher } from 'svelte';
     import Avatar from './Avatar.svelte';
     import {
+        generateRandomAvatar,
         AVATAR_EMOJIS,
+        AVATAR_EMOJI2,
+        AVATAR_EMOJI3,
         AVATAR_BACKGROUNDS,
         AVATAR_BORDERS,
         AVATAR_PATTERNS
@@ -46,12 +49,20 @@
         avatar = { ...avatar, pattern: avatar.pattern === patternId ? null : patternId };
         dispatch('change', avatar);
     }
+
+    function randomizeAvatar() {
+        avatar = generateRandomAvatar();
+        dispatch('change', avatar);
+    }
 </script>
 
 <div class="avatar-creator" class:compact>
     <!-- Preview -->
     <div class="avatar-preview-container">
         <Avatar {avatar} size="xl" />
+        <button class="btn btn-secondary randomize-btn" on:click={randomizeAvatar} title="Generate random avatar">
+            🎲 Surprise Me!
+        </button>
     </div>
 
     <!-- Emoji Selection -->
@@ -82,7 +93,7 @@
                 >
                     ✕
                 </button>
-                {#each ['✨', '🌟', '💫', '⭐', '🎀', '🎩', '👑', '🎭'] as emoji}
+                {#each AVATAR_EMOJI2 as emoji}
                     <button
                         class="emoji-select-btn"
                         class:selected={avatar.emoji2 === emoji}
@@ -105,7 +116,7 @@
                 >
                     ✕
                 </button>
-                {#each ['🌸', '🍀', '💎', '🔥', '❄️', '🌊', '🎵', '💜'] as emoji}
+                {#each AVATAR_EMOJI3 as emoji}
                     <button
                         class="emoji-select-btn"
                         class:selected={avatar.emoji3 === emoji}
@@ -181,8 +192,16 @@
 
     .avatar-preview-container {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
         padding: 20px;
+    }
+
+    .randomize-btn {
+        font-size: 14px;
+        padding: 8px 16px;
+        white-space: nowrap;
     }
 
     .avatar-control-group {

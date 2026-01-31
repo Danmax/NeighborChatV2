@@ -1,6 +1,7 @@
 // Presence store - Online users and availability
 import { writable, derived } from 'svelte/store';
 import { currentUser } from './auth.js';
+import { contacts } from './contacts.js';
 import { get } from 'svelte/store';
 
 /**
@@ -36,6 +37,23 @@ export const onlineUsersList = derived(
     ([$users, $currentUser]) => {
         return Object.values($users).filter(user =>
             user.user_id !== $currentUser?.user_id
+        );
+    }
+);
+
+/**
+ * List of online users who are in the user's contacts (excluding current user)
+ * @type {import('svelte/store').Readable<Array>}
+ */
+export const onlineContactsList = derived(
+    [onlineUsers, currentUser, contacts],
+    ([$users, $currentUser, $contacts]) => {
+        // Create a Set of contact user IDs for fast lookup
+        const contactIds = new Set($contacts.map(c => c.user_id));
+
+        return Object.values($users).filter(user =>
+            user.user_id !== $currentUser?.user_id &&
+            contactIds.has(user.user_id)
         );
     }
 );

@@ -4,13 +4,56 @@ const EMOJIS = ['😊', '🌟', '🎨', '🚀', '🌈', '🎭', '🎪', '🎯', 
 const BACKGROUNDS = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5', '#FCE4EC', '#E0F2F1'];
 
 /**
- * Generate a random avatar
+ * Accent emojis for emoji2 layer (decorative elements)
+ */
+const EMOJI2_OPTIONS = ['✨', '🌟', '💫', '⭐', '🎀', '🎁', '🌸', '🌺', '🌼', '🍀'];
+
+/**
+ * Accent emojis for emoji3 layer (subtle accents)
+ */
+const EMOJI3_OPTIONS = ['🌸', '🍀', '💎', '🔥', '💧', '🌙', '☀️', '⚡'];
+
+/**
+ * Border style options for random generation
+ */
+const BORDER_OPTIONS = ['solid', 'double', 'dashed', 'rainbow'];
+
+/**
+ * Pattern style options for random generation
+ */
+const PATTERN_OPTIONS = ['dots', 'stripes', 'grid', 'sparkle'];
+
+/**
+ * Generate a random avatar with enhanced randomization
+ * Includes optional emoji2, emoji3, border, and pattern with probability weights
  */
 export function generateRandomAvatar() {
-    return {
+    const avatar = {
         emoji1: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
         background: BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)]
     };
+
+    // 40% chance of emoji2 (decorative accent)
+    if (Math.random() < 0.4) {
+        avatar.emoji2 = EMOJI2_OPTIONS[Math.floor(Math.random() * EMOJI2_OPTIONS.length)];
+    }
+
+    // 30% chance of emoji3 (subtle accent)
+    if (Math.random() < 0.3) {
+        avatar.emoji3 = EMOJI3_OPTIONS[Math.floor(Math.random() * EMOJI3_OPTIONS.length)];
+    }
+
+    // 25% chance of border
+    if (Math.random() < 0.25) {
+        avatar.border = BORDER_OPTIONS[Math.floor(Math.random() * BORDER_OPTIONS.length)];
+    }
+
+    // 20% chance of pattern
+    if (Math.random() < 0.2) {
+        avatar.pattern = PATTERN_OPTIONS[Math.floor(Math.random() * PATTERN_OPTIONS.length)];
+    }
+
+    return avatar;
 }
 
 /**
@@ -73,13 +116,29 @@ export function getAvatarEmoji(avatar) {
 }
 
 /**
- * Available emoji options for avatar creator
+ * Available emoji options for avatar creator (emoji1 - main)
  */
 export const AVATAR_EMOJIS = [
     '😊', '😎', '🤓', '🥳', '😄', '🤗', '🌟', '✨',
     '🎨', '🎭', '🎪', '🎯', '🎲', '🎸', '🌈', '🌸',
     '🍕', '☕', '🎮', '📚', '🏃', '🧘', '🎾', '⚽',
     '🐕', '🐱', '🦊', '🐻', '🦁', '🐼', '🦋', '🌺'
+];
+
+/**
+ * Available emoji options for emoji2 (decorative accent)
+ */
+export const AVATAR_EMOJI2 = [
+    '✨', '🌟', '💫', '⭐', '🎀', '🎁', '🌸', '🌺',
+    '🌼', '🍀', '🎈', '🎉', '🎊', '🔮', '💝', '🌹'
+];
+
+/**
+ * Available emoji options for emoji3 (subtle accent)
+ */
+export const AVATAR_EMOJI3 = [
+    '🌸', '🍀', '💎', '🔥', '💧', '🌙', '☀️', '⚡',
+    '❄️', '🌈', '🦋', '🐝', '🌻', '🎵'
 ];
 
 /**

@@ -1,5 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
+    import { slide, fly } from 'svelte/transition';
     import Router, { push, location } from 'svelte-spa-router';
     import { initSupabase } from './lib/supabase.js';
     import { checkExistingAuth, setupAuthListener } from './services/auth.service.js';
@@ -8,7 +9,7 @@
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
     import { userStatus, isAvailable } from './stores/presence.js';
-    import { setupInviteChannel, updatePresenceStatus } from './services/realtime.service.js';
+    import { setupInviteChannel, updatePresenceStatus, sendInviteResponse } from './services/realtime.service.js';
     import { setPendingInvite, pendingInvite, clearPendingInvite } from './stores/chat.js';
 
     // Status options
@@ -44,6 +45,7 @@
     import NotificationsScreen from './routes/notifications/NotificationsScreen.svelte';
     import OnboardingScreen from './routes/onboarding/OnboardingScreen.svelte';
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
+    import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
 
     // Import UI components
     import InviteModal from './components/ui/InviteModal.svelte';
@@ -63,6 +65,7 @@
         '/notifications': NotificationsScreen,
         '/onboarding': OnboardingScreen,
         '/profile': ProfileScreen,
+        '/profile/view/:userId': PublicProfileScreen,
         '*': LobbyScreen // Fallback
     };
 
@@ -80,21 +83,41 @@
             // Check for existing auth
             const user = await checkExistingAuth();
 
-            // Set up auth state listener
-            authSubscription = setupAuthListener(({ event, user }) => {
+            // Set up auth state listener with onboarding routing
+            authSubscription = setupAuthListener(({ event, user, shouldOnboard }) => {
                 console.log('Auth event:', event);
+
                 if (event === 'SIGNED_IN' && user) {
                     setupInviteListener();
+
+                    if (shouldOnboard) {
+                        console.log('New user detected - redirecting to onboarding');
+                        showTopMenu.set(false);
+                        push('/onboarding');
+                    } else {
+                        console.log('Returning user - showing lobby');
+                        showTopMenu.set(true);
+                        // Only navigate if currently on auth screen
+                        if ($location === '/auth') {
+                            push('/');
+                        }
+                    }
                 }
             });
 
             ready = true;
             setLoading(false);
 
-            // Show top menu and set up invite listener if authenticated
+            // Check if onboarding needed for existing session
             if (user) {
-                showTopMenu.set(true);
-                setupInviteListener();
+                if (user.isNewUser || !user.onboardingCompleted) {
+                    console.log('Existing session needs onboarding');
+                    showTopMenu.set(false);
+                    push('/onboarding');
+                } else {
+                    showTopMenu.set(true);
+                    setupInviteListener();
+                }
             }
 
         } catch (error) {
@@ -119,15 +142,37 @@
         });
     }
 
-    function handleAcceptInvite(event) {
+    async function handleAcceptInvite(event) {
         const invite = event.detail;
+
+        // Send accept response back to sender
+        if (invite?.responseChannel && invite?.from) {
+            try {
+                await sendInviteResponse(invite.responseChannel, true, invite.from);
+            } catch (err) {
+                console.error('Failed to send accept response:', err);
+            }
+        }
+
         clearPendingInvite();
+
         if (invite?.from?.user_id) {
             push(`/chat/${invite.from.user_id}`);
         }
     }
 
-    function handleDeclineInvite() {
+    async function handleDeclineInvite(event) {
+        const invite = event?.detail || $pendingInvite;
+
+        // Send decline response back to sender
+        if (invite?.responseChannel && invite?.from) {
+            try {
+                await sendInviteResponse(invite.responseChannel, false, invite.from);
+            } catch (err) {
+                console.error('Failed to send decline response:', err);
+            }
+        }
+
         clearPendingInvite();
     }
 
@@ -153,46 +198,64 @@
         </header>
 
         {#if $isAuthenticated && $showTopMenu}
-            <div class="top-user-menu visible">
-                <div class="top-menu-left">
-                    <a href="#/profile" class="top-menu-avatar" title="My Profile" style="background: {$currentUser?.avatar?.background || '#E8F5E9'};">
-                        {$currentUser?.avatar?.emoji1 || '😊'}
+            <nav class="top-nav" transition:slide={{ duration: 200 }}>
+                <div class="nav-left">
+                    <a href="#/profile" class="avatar-link" title="My Profile">
+                        <div class="avatar-wrapper" style="background: {$currentUser?.avatar?.background || '#E8F5E9'};">
+                            <span class="avatar-emoji">{$currentUser?.avatar?.emoji1 || '😊'}</span>
+                        </div>
+                        <span class="user-name">{$currentUser?.name || 'User'}</span>
                     </a>
-                    <div class="status-selector">
-                        <button
-                            class="status-toggle"
-                            on:click={() => showStatusMenu = !showStatusMenu}
-                        >
-                            <span class="status-dot" style="background: {getStatusInfo($userStatus).color}"></span>
-                            <span class="status-label">{getStatusInfo($userStatus).label}</span>
-                            <span class="status-arrow">{showStatusMenu ? '▲' : '▼'}</span>
+                </div>
+
+                <div class="nav-center">
+                    <div class="status-pill" class:open={showStatusMenu}>
+                        <button class="status-trigger" on:click={() => showStatusMenu = !showStatusMenu}>
+                            <span class="status-indicator" style="--status-color: {getStatusInfo($userStatus).color}"></span>
+                            <span class="status-text">{getStatusInfo($userStatus).label}</span>
+                            <svg class="chevron" class:rotated={showStatusMenu} viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                            </svg>
                         </button>
+
                         {#if showStatusMenu}
-                            <div class="status-menu">
+                            <div class="status-dropdown" transition:fly={{ y: -10, duration: 150 }}>
                                 {#each STATUS_OPTIONS as option}
                                     <button
-                                        class="status-option"
+                                        class="status-item"
                                         class:active={$userStatus === option.id}
                                         on:click={() => setStatus(option.id)}
                                     >
-                                        <span class="status-dot" style="background: {option.color}"></span>
-                                        <span>{option.label}</span>
+                                        <span class="status-indicator" style="--status-color: {option.color}"></span>
+                                        <span class="status-name">{option.label}</span>
+                                        {#if $userStatus === option.id}
+                                            <span class="check-icon">✓</span>
+                                        {/if}
                                     </button>
                                 {/each}
                             </div>
                         {/if}
                     </div>
                 </div>
-                <div class="top-menu-right">
-                    <a href="#/notifications" class="top-menu-btn notification-btn" title="Notifications">
-                        🔔
+
+                <div class="nav-right">
+                    <a href="#/notifications" class="nav-icon-btn" class:has-badge={$unreadCount > 0} title="Notifications">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                        </svg>
                         {#if $unreadCount > 0}
-                            <span class="notification-badge">{$unreadCount > 9 ? '9+' : $unreadCount}</span>
+                            <span class="badge">{$unreadCount > 9 ? '9+' : $unreadCount}</span>
                         {/if}
                     </a>
-                    <a href="#/profile" class="top-menu-btn" title="Settings">⚙️</a>
+                    <a href="#/profile" class="nav-icon-btn" title="Settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                    </a>
                 </div>
-            </div>
+            </nav>
         {/if}
 
         <Router {routes} on:conditionsFailed={conditionsFailed} />
@@ -237,100 +300,222 @@
 {/if}
 
 <style>
-    .notification-btn {
+    /* Modern Top Navigation - Glassmorphism */
+    .top-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    .nav-left, .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nav-center {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    /* Avatar Link */
+    .avatar-link {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        padding: 4px 12px 4px 4px;
+        border-radius: 24px;
+        transition: background 0.2s ease;
+    }
+
+    .avatar-link:hover {
+        background: rgba(0, 0, 0, 0.04);
+    }
+
+    .avatar-wrapper {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .user-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Status Pill */
+    .status-pill {
         position: relative;
     }
 
-    .notification-badge {
+    .status-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: white;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 24px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .status-trigger:hover {
+        background: var(--cream);
+        border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--status-color);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+    }
+
+    .status-text {
+        color: var(--text);
+    }
+
+    .chevron {
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
+    }
+
+    .chevron.rotated {
+        transform: rotate(180deg);
+    }
+
+    /* Status Dropdown */
+    .status-dropdown {
         position: absolute;
-        top: -4px;
-        right: -4px;
-        min-width: 16px;
-        height: 16px;
-        padding: 0 4px;
+        top: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+        min-width: 160px;
+        padding: 6px;
+        z-index: 200;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 12px;
+        border: none;
+        background: transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text);
+        transition: background 0.15s ease;
+    }
+
+    .status-item:hover {
+        background: var(--cream);
+    }
+
+    .status-item.active {
+        background: var(--primary-light, #E8F5E9);
+        font-weight: 600;
+    }
+
+    .status-name {
+        flex: 1;
+    }
+
+    .check-icon {
+        color: var(--primary);
+        font-weight: bold;
+    }
+
+    /* Navigation Icon Buttons */
+    .nav-icon-btn {
+        position: relative;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: var(--text-muted);
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .nav-icon-btn:hover {
+        background: var(--cream);
+        color: var(--text);
+    }
+
+    .nav-icon-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Notification Badge */
+    .badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
         background: #F44336;
         color: white;
         font-size: 10px;
         font-weight: 700;
-        border-radius: 8px;
+        border-radius: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
-    /* Status Selector Styles */
-    .status-selector {
-        position: relative;
-    }
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+        .user-name {
+            display: none;
+        }
 
-    .status-toggle {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        background: var(--cream, #F5F5DC);
-        border: 1px solid var(--border, #E0E0E0);
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 12px;
-        transition: all 0.2s ease;
-    }
+        .nav-center {
+            position: static;
+            transform: none;
+        }
 
-    .status-toggle:hover {
-        background: var(--cream-dark, #EAE0C8);
-    }
+        .status-text {
+            display: none;
+        }
 
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-
-    .status-label {
-        font-weight: 500;
-        color: var(--text, #333);
-    }
-
-    .status-arrow {
-        font-size: 8px;
-        color: var(--text-light, #666);
-        margin-left: 2px;
-    }
-
-    .status-menu {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        margin-top: 4px;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-        overflow: hidden;
-        z-index: 100;
-        min-width: 140px;
-    }
-
-    .status-option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
-        padding: 10px 14px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 13px;
-        color: var(--text, #333);
-        transition: background 0.15s ease;
-    }
-
-    .status-option:hover {
-        background: var(--cream, #F5F5DC);
-    }
-
-    .status-option.active {
-        background: var(--primary-light, #E8F5E9);
-        font-weight: 600;
+        .status-trigger {
+            padding: 8px 10px;
+        }
     }
 </style>

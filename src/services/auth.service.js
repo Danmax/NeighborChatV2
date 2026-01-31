@@ -1,43 +1,26 @@
 // Auth service - Supabase authentication operations
 import { getSupabase } from '../lib/supabase.js';
-import { currentUser, authUser, setCurrentUser, clearAuth } from '../stores/auth.js';
+import { currentUser, authUser, setCurrentUser, updateCurrentUser, clearAuth } from '../stores/auth.js';
 import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
 import { InputValidator } from '../lib/security.js';
 
-// Track magic link cooldown per email
-const magicLinkCooldowns = new Map();
-const COOLDOWN_SECONDS = 60;
-
 /**
- * Send magic link email for passwordless auth
+ * Sign in with Google OAuth
  */
-export async function sendMagicLink(email) {
+export async function signInWithGoogle() {
     const supabase = getSupabase();
-    const validatedEmail = InputValidator.validateEmail(email);
 
-    // Check cooldown
-    const lastSend = magicLinkCooldowns.get(validatedEmail);
-    if (lastSend) {
-        const secondsLeft = COOLDOWN_SECONDS - Math.floor((Date.now() - lastSend) / 1000);
-        if (secondsLeft > 0) {
-            throw new Error(`Please wait ${secondsLeft} seconds before requesting another link`);
-        }
-    }
-
-    const { error } = await supabase.auth.signInWithOtp({
-        email: validatedEmail,
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
         options: {
-            emailRedirectTo: `${window.location.origin}/#/`
+            redirectTo: `${window.location.origin}/#/`,
+            scopes: 'profile email'
         }
     });
 
     if (error) throw error;
-
-    // Record send time for cooldown
-    magicLinkCooldowns.set(validatedEmail, Date.now());
-
-    return { success: true, email: validatedEmail };
+    return { success: true, data };
 }
 
 /**
@@ -74,8 +57,8 @@ export async function signInWithPassword(email, password) {
 
     if (error) throw error;
 
-    // Set user data
-    const userData = createUserDataFromSession(data.user);
+    // Set user data (await async function)
+    const userData = await createUserDataFromSession(data.user);
     setCurrentUser(userData);
     authUser.set(data.user);
 
@@ -119,12 +102,81 @@ export async function signUp(name, email, password) {
         return { success: true, confirmationRequired: true };
     }
 
-    // No confirmation needed, set user
-    const userData = createUserDataFromSession(data.user);
+    // No confirmation needed, set user (await async function)
+    const userData = await createUserDataFromSession(data.user);
     setCurrentUser(userData);
     authUser.set(data.user);
 
     return { success: true, user: userData };
+}
+
+/**
+ * Check if an email already has an account
+ */
+export async function checkEmailExists(email) {
+    const supabase = getSupabase();
+    const validatedEmail = InputValidator.validateEmail(email);
+
+    // Use the database function we created in migration
+    const { data, error } = await supabase
+        .rpc('check_email_exists', { email_to_check: validatedEmail });
+
+    if (error) {
+        console.error('Email check failed:', error);
+        return { exists: false };
+    }
+
+    return { exists: !!data };
+}
+
+/**
+ * Create initial user profile in database
+ * Called after onboarding or on first login
+ */
+export async function createUserProfile(userData, onboardingData = {}) {
+    const supabase = getSupabase();
+
+    // Prepare profile data
+    const profileInsert = {
+        user_id: userData.user_id,
+        display_name: onboardingData.name || userData.name,
+        avatar: onboardingData.avatar || userData.avatar,
+        interests: onboardingData.interests || [],
+        onboarding_completed: true
+    };
+
+    // Add username if provided
+    if (onboardingData.username) {
+        profileInsert.username = onboardingData.username.toLowerCase();
+    }
+
+    const { data, error } = await supabase
+        .from('user_profiles')
+        .insert(profileInsert)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Failed to create user profile:', error);
+        throw new Error('Failed to create profile: ' + error.message);
+    }
+
+    // Update local user state with saved data
+    const userStateUpdate = {
+        name: onboardingData.name || userData.name,
+        avatar: onboardingData.avatar || userData.avatar,
+        interests: onboardingData.interests || [],
+        onboardingCompleted: true
+    };
+
+    // Add username if provided
+    if (onboardingData.username) {
+        userStateUpdate.username = onboardingData.username.toLowerCase();
+    }
+
+    updateCurrentUser(userStateUpdate);
+
+    return data;
 }
 
 /**
@@ -149,17 +201,11 @@ export async function checkExistingAuth() {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session && session.user) {
-            const userData = createUserDataFromSession(session.user);
+            // Await async createUserDataFromSession
+            const userData = await createUserDataFromSession(session.user);
             setCurrentUser(userData);
             authUser.set(session.user);
             return userData;
-        }
-
-        // Check for cached guest user
-        const cachedUser = getCachedData('currentUser');
-        if (cachedUser && cachedUser.isGuest) {
-            setCurrentUser(cachedUser);
-            return cachedUser;
         }
 
         return null;
@@ -170,19 +216,28 @@ export async function checkExistingAuth() {
 }
 
 /**
- * Set up auth state change listener
+ * Set up auth state change listener with onboarding routing
  */
 export function setupAuthListener(callback) {
     const supabase = getSupabase();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event);
 
         if (event === 'SIGNED_IN' && session) {
-            const userData = createUserDataFromSession(session.user);
+            // IMPORTANT: Now async!
+            const userData = await createUserDataFromSession(session.user);
             setCurrentUser(userData);
             authUser.set(session.user);
-            callback?.({ event, user: userData });
+
+            // Determine if onboarding needed
+            const shouldOnboard = userData.isNewUser || !userData.onboardingCompleted;
+
+            callback?.({
+                event,
+                user: userData,
+                shouldOnboard // NEW: routing decision
+            });
         }
 
         if (event === 'SIGNED_OUT') {
@@ -199,16 +254,59 @@ export function setupAuthListener(callback) {
 }
 
 /**
- * Create user data object from Supabase user
+ * Create user data object from Supabase user (async - loads profile from database)
  */
-function createUserDataFromSession(user) {
-    return {
+async function createUserDataFromSession(user) {
+    const supabase = getSupabase();
+
+    // Load profile from database
+    const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+    // Base user data from session
+    const baseData = {
         user_id: user.id,
         email: user.email,
         name: user.user_metadata?.display_name || user.email.split('@')[0],
         avatar: user.user_metadata?.avatar || generateRandomAvatar(),
-        isGuest: false,
         loginTime: Date.now()
+    };
+
+    // If profile exists, merge database data
+    if (profile && !error) {
+        return {
+            ...baseData,
+            name: profile.display_name || baseData.name,
+            username: profile.username,
+            avatar: profile.avatar || baseData.avatar,
+            interests: profile.interests || [],
+            birthday: profile.birthday,
+            title: profile.title,
+            phone: profile.phone,
+            city: profile.city,
+            magic_email: profile.magic_email,
+            bio: profile.bio,
+            banner_color: profile.banner_color,
+            banner_pattern: profile.banner_pattern,
+            // Privacy settings
+            show_city: profile.show_city ?? true,
+            show_phone: profile.show_phone ?? false,
+            show_email: profile.show_email ?? false,
+            show_birthday: profile.show_birthday ?? false,
+            show_interests: profile.show_interests ?? true,
+            onboardingCompleted: profile.onboarding_completed || false,
+            firstLoginAt: profile.first_login_at
+        };
+    }
+
+    // No profile exists - this is a NEW USER
+    return {
+        ...baseData,
+        onboardingCompleted: false,
+        isNewUser: true
     };
 }
 

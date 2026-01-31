@@ -3,10 +3,13 @@
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import { lobbyMessages, addLobbyMessage } from '../../stores/chat.js';
-    import { onlineCount } from '../../stores/presence.js';
+    import { onlineCount, onlineUsersList } from '../../stores/presence.js';
     import { setupLobbyChannel, sendLobbyMessage, cleanupLobbyChannel } from '../../services/realtime.service.js';
+    import { sendMentionNotification } from '../../services/notifications.service.js';
+    import { extractMentions } from '../../lib/utils/mentions.js';
     import MessageList from '../../components/chat/MessageList.svelte';
     import MessageInput from '../../components/chat/MessageInput.svelte';
+    import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
 
     // Available channels
     const CHANNELS = [
@@ -29,6 +32,7 @@
     let lobbyChannel = null;
     let channelMessages = {};
     let showChannelPicker = false;
+    let showGifPicker = false;
 
     // Load messages from localStorage
     function loadMessagesFromStorage() {
@@ -114,12 +118,52 @@
     }
 
     async function handleSendMessage(event) {
-        const { message } = event.detail;
-        const sentMessage = await sendLobbyMessage(message, currentChannel.id);
+        const { message, isGif } = event.detail;
+        const sentMessage = await sendLobbyMessage(message, currentChannel.id, isGif || false);
         // Add own message locally (sender doesn't receive own broadcast)
         if (sentMessage) {
             handleNewMessage(sentMessage);
+
+            // Process @mentions and send notifications (only for text messages)
+            if (!isGif) {
+                processMentions(message, currentChannel.label);
+            }
         }
+    }
+
+    /**
+     * Process @mentions in a message and send notifications
+     */
+    function processMentions(message, channelName) {
+        const mentions = extractMentions(message);
+        if (mentions.length === 0) return;
+
+        const fromUser = {
+            user_id: $currentUser?.user_id,
+            name: $currentUser?.name,
+            avatar: $currentUser?.avatar
+        };
+
+        // Find mentioned users from online users list
+        mentions.forEach(mentionedUsername => {
+            const mentionedUser = $onlineUsersList.find(user => {
+                const username = user.name?.toLowerCase().replace(/\s+/g, '');
+                const firstName = user.name?.split(' ')[0]?.toLowerCase();
+                return username === mentionedUsername ||
+                       firstName === mentionedUsername ||
+                       user.username?.toLowerCase() === mentionedUsername;
+            });
+
+            if (mentionedUser && mentionedUser.user_id !== $currentUser?.user_id) {
+                // Send notification to mentioned user
+                sendMentionNotification(
+                    mentionedUser.user_id,
+                    fromUser,
+                    channelName,
+                    message
+                );
+            }
+        });
     }
 
     function handleTyping(event) {
@@ -128,6 +172,23 @@
 
     function toggleChannelPicker() {
         showChannelPicker = !showChannelPicker;
+    }
+
+    function handleOpenGif() {
+        showGifPicker = !showGifPicker;
+    }
+
+    async function handleGifSelect(event) {
+        const gif = event.detail;
+
+        // If there's an optional message with the GIF, send it first
+        if (gif.message) {
+            await handleSendMessage({ detail: { message: gif.message, isGif: false } });
+        }
+
+        // Send the GIF
+        await handleSendMessage({ detail: { message: gif.url, isGif: true } });
+        showGifPicker = false;
     }
 </script>
 
@@ -176,10 +237,17 @@
             <MessageList messages={currentMessages} />
         </div>
 
+        <GiphyPicker
+            show={showGifPicker}
+            on:select={handleGifSelect}
+            on:close={() => showGifPicker = false}
+        />
+
         <MessageInput
             placeholder="Message #{currentChannel.label}..."
             on:send={handleSendMessage}
             on:typing={handleTyping}
+            on:openGif={handleOpenGif}
         />
     </div>
 {/if}

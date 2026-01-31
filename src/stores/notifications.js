@@ -8,6 +8,7 @@ export const notificationsLoading = writable(false);
 export const NOTIFICATION_TYPES = {
     CHAT_INVITE: 'chat_invite',
     CHAT_MESSAGE: 'chat_message',
+    CHAT_MENTION: 'chat_mention',
     EVENT_INVITE: 'event_invite',
     EVENT_REMINDER: 'event_reminder',
     CELEBRATION_REACTION: 'celebration_reaction',
@@ -77,6 +78,7 @@ export function getNotificationIcon(type) {
     switch (type) {
         case NOTIFICATION_TYPES.CHAT_INVITE: return '💬';
         case NOTIFICATION_TYPES.CHAT_MESSAGE: return '✉️';
+        case NOTIFICATION_TYPES.CHAT_MENTION: return '📣';
         case NOTIFICATION_TYPES.EVENT_INVITE: return '📅';
         case NOTIFICATION_TYPES.EVENT_REMINDER: return '⏰';
         case NOTIFICATION_TYPES.CELEBRATION_REACTION: return '❤️';

@@ -1,6 +1,7 @@
 <script>
     import Avatar from '../avatar/Avatar.svelte';
     import { currentUser } from '../../stores/auth.js';
+    import { highlightMentions } from '../../lib/utils/mentions.js';
 
     export let message;
     export let showAvatar = true;
@@ -8,10 +9,22 @@
 
     $: isOwn = message.user_id === $currentUser?.user_id;
     $: formattedTime = formatTime(message.timestamp);
+    $: formattedMessage = highlightMentions(escapeHtml(message.message));
 
     function formatTime(timestamp) {
         const date = new Date(timestamp);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Escape HTML to prevent XSS, but allow our mention highlights
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 </script>
 
@@ -36,7 +49,7 @@
                     loading="lazy"
                 />
             {:else}
-                <div class="message-text">{message.message}</div>
+                <div class="message-text">{@html formattedMessage}</div>
             {/if}
             <div class="message-time">{formattedTime}</div>
         </div>
@@ -130,5 +143,19 @@
 
     .message:not(.own) .message-time {
         text-align: right;
+    }
+
+    /* Mention highlighting */
+    :global(.message-text .mention) {
+        background: rgba(45, 90, 71, 0.15);
+        color: var(--primary-dark, #1e4d35);
+        padding: 1px 4px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .message.own :global(.message-text .mention) {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
     }
 </style>

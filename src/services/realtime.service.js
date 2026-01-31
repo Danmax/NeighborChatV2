@@ -166,8 +166,9 @@ export function cleanupLobbyChannel() {
  * Send message to lobby chat
  * @param {string} message - Message content
  * @param {string} channelId - Channel ID
+ * @param {boolean} isGif - Whether the message is a GIF URL
  */
-export async function sendLobbyMessage(message, channelId = 'general') {
+export async function sendLobbyMessage(message, channelId = 'general', isGif = false) {
     const user = get(currentUser);
 
     if (!lobbyChannel || !user) return null;
@@ -178,6 +179,7 @@ export async function sendLobbyMessage(message, channelId = 'general') {
         name: user.name,
         avatar: user.avatar,
         message: message,
+        isGif: isGif,
         channel: channelId,
         timestamp: Date.now()
     };
@@ -262,6 +264,130 @@ export async function sendChatInvite(targetUserId) {
 
     // Cleanup the temporary channel
     targetChannel.unsubscribe();
+}
+
+/**
+ * Send chat invite with response handling
+ * Returns a cleanup function to unsubscribe from the response channel
+ */
+export async function sendChatInviteWithResponse(targetUserId, onResponse) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user) {
+        throw new Error('No user logged in');
+    }
+
+    // Create a unique response channel for this invite
+    const responseChannelName = `invite-response-${user.user_id}-${Date.now()}`;
+    const responseChannel = supabase.channel(responseChannelName);
+
+    // Set up listener for invite response
+    responseChannel
+        .on('broadcast', { event: 'invite-response' }, ({ payload }) => {
+            if (payload.targetUserId === user.user_id && payload.fromUserId === targetUserId) {
+                onResponse?.(payload.accepted, payload.from);
+            }
+        })
+        .subscribe();
+
+    // Send the invite with response channel info
+    const targetChannel = supabase.channel(`invites-${targetUserId}`);
+
+    // Wait for target channel to be subscribed
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            targetChannel.unsubscribe();
+            responseChannel.unsubscribe();
+            reject(new Error('Channel subscription timeout'));
+        }, 5000);
+
+        targetChannel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                resolve();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                clearTimeout(timeout);
+                targetChannel.unsubscribe();
+                responseChannel.unsubscribe();
+                reject(new Error(`Channel error: ${status}`));
+            }
+        });
+    });
+
+    // Send invite with response channel info
+    await targetChannel.send({
+        type: 'broadcast',
+        event: 'chat-invite',
+        payload: {
+            from: {
+                user_id: user.user_id,
+                name: user.name,
+                avatar: user.avatar,
+                interests: user.interests || []
+            },
+            responseChannel: responseChannelName,
+            timestamp: Date.now()
+        }
+    });
+
+    // Cleanup target channel (we only need the response channel now)
+    targetChannel.unsubscribe();
+
+    // Return cleanup function
+    return () => {
+        responseChannel.unsubscribe();
+    };
+}
+
+/**
+ * Send invite response (accept or decline)
+ */
+export async function sendInviteResponse(responseChannelName, accepted, fromUser) {
+    const supabase = getSupabase();
+    const user = get(currentUser);
+
+    if (!user || !responseChannelName) return;
+
+    const responseChannel = supabase.channel(responseChannelName);
+
+    // Wait for channel to be subscribed
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            responseChannel.unsubscribe();
+            reject(new Error('Response channel timeout'));
+        }, 5000);
+
+        responseChannel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                resolve();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                clearTimeout(timeout);
+                reject(new Error(`Channel error: ${status}`));
+            }
+        });
+    });
+
+    // Send response
+    await responseChannel.send({
+        type: 'broadcast',
+        event: 'invite-response',
+        payload: {
+            accepted: accepted,
+            targetUserId: fromUser.user_id,
+            fromUserId: user.user_id,
+            from: {
+                user_id: user.user_id,
+                name: user.name,
+                avatar: user.avatar
+            },
+            timestamp: Date.now()
+        }
+    });
+
+    // Cleanup
+    responseChannel.unsubscribe();
 }
 
 /**

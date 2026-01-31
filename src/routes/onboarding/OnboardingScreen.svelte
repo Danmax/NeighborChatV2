@@ -4,18 +4,43 @@
     import { showTopMenu } from '../../stores/ui.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
-    import { INTERESTS, FUN_NAMES, saveUserProfile } from '../../services/profile.service.js';
+    import { INTERESTS, FUN_NAMES } from '../../services/profile.service.js';
+    import { createUserProfile } from '../../services/auth.service.js';
     import { generateRandomAvatar } from '../../lib/utils/avatar.js';
+    import {
+        generateRandomUsername,
+        generateUsernameSuggestions,
+        validateUsername,
+        sanitizeUsernameInput
+    } from '../../lib/utils/username.js';
 
     let step = 1;
     let displayName = $currentUser?.name || '';
+    let username = '';
+    let usernameError = '';
     let avatar = $currentUser?.avatar || generateRandomAvatar();
     let selectedInterests = [];
     let saving = false;
     let error = '';
+    let usernameSuggestions = generateUsernameSuggestions(3);
 
     function selectFunName(name) {
         displayName = name;
+    }
+
+    function randomizeUsername() {
+        username = generateRandomUsername();
+        usernameError = '';
+    }
+
+    function selectSuggestion(suggestion) {
+        username = suggestion;
+        usernameError = '';
+    }
+
+    function handleUsernameInput(event) {
+        username = sanitizeUsernameInput(event.target.value);
+        usernameError = '';
     }
 
     function toggleInterest(interestId) {
@@ -36,7 +61,19 @@
                 error = 'Please enter a display name';
                 return;
             }
+
+            // Validate username if provided
+            if (username.trim()) {
+                const validation = validateUsername(username);
+                if (!validation.valid) {
+                    usernameError = validation.error;
+                    error = 'Please fix the username error';
+                    return;
+                }
+            }
+
             error = '';
+            usernameError = '';
         }
         step++;
     }
@@ -56,16 +93,34 @@
         error = '';
 
         try {
-            await saveUserProfile({
+            // Prepare profile data
+            const profileData = {
                 name: displayName,
-                avatar,
+                avatar: avatar,
                 interests: selectedInterests
-            });
+            };
 
+            // Add username if provided
+            if (username.trim()) {
+                profileData.username = username.trim().toLowerCase();
+            }
+
+            // Create profile in database with onboarding_completed = true
+            const savedProfile = await createUserProfile($currentUser, profileData);
+
+            console.log('✅ Profile created:', savedProfile);
+
+            // Verify profile was saved
+            if (!savedProfile || !savedProfile.user_id) {
+                throw new Error('Profile creation returned no data');
+            }
+
+            console.log('✅ Onboarding complete! Redirecting to lobby...');
             showTopMenu.set(true);
             push('/');
         } catch (err) {
-            error = err.message;
+            console.error('❌ Onboarding failed:', err);
+            error = 'Failed to save profile: ' + err.message;
         } finally {
             saving = false;
         }
@@ -114,6 +169,35 @@
                             on:click={() => selectFunName(name)}
                         >
                             {name}
+                        </button>
+                    {/each}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Choose Your Username <span class="optional-label">(optional)</span></label>
+                <div class="username-input-row">
+                    <input
+                        type="text"
+                        bind:value={username}
+                        on:input={handleUsernameInput}
+                        placeholder="friendly_neighbor_4285"
+                        maxlength="30"
+                        class="username-input"
+                        class:error={usernameError}
+                    />
+                    <button class="btn btn-icon" on:click={randomizeUsername} title="Generate random username">
+                        🎲
+                    </button>
+                </div>
+                {#if usernameError}
+                    <div class="username-error">{usernameError}</div>
+                {/if}
+                <div class="username-suggestions">
+                    <span class="suggestion-label">Suggestions:</span>
+                    {#each usernameSuggestions as suggestion}
+                        <button class="suggestion-btn" on:click={() => selectSuggestion(suggestion)}>
+                            {suggestion}
                         </button>
                     {/each}
                 </div>
@@ -326,5 +410,64 @@
 
     .step-actions .btn {
         flex: 1;
+    }
+
+    .optional-label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 400;
+    }
+
+    .username-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .username-input {
+        flex: 1;
+        text-transform: lowercase;
+    }
+
+    .username-input.error {
+        border-color: #C62828;
+    }
+
+    .username-error {
+        font-size: 12px;
+        color: #C62828;
+        margin-top: 4px;
+    }
+
+    .username-suggestions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-top: 8px;
+    }
+
+    .suggestion-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    .suggestion-btn {
+        padding: 4px 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        background: white;
+        font-size: 11px;
+        color: var(--primary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .suggestion-btn:hover {
+        border-color: var(--primary);
+        background: rgba(45, 90, 71, 0.05);
     }
 </style>

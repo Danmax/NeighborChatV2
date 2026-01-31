@@ -1,7 +1,6 @@
 // Auth store - User authentication state
 import { writable, derived } from 'svelte/store';
 import { getCachedData, cacheData, removeCachedData, clearAllCachedData } from '../lib/utils/cache.js';
-import { generateRandomAvatar } from '../lib/utils/avatar.js';
 
 /**
  * Current user data
@@ -21,12 +20,6 @@ export const authUser = writable(null);
  */
 export const isAuthenticated = derived(currentUser, $currentUser => !!$currentUser);
 
-/**
- * Whether user is a guest
- * @type {import('svelte/store').Readable<boolean>}
- */
-export const isGuest = derived(currentUser, $currentUser => $currentUser?.isGuest === true);
-
 // Sync currentUser to localStorage
 currentUser.subscribe(value => {
     if (value) {
@@ -40,23 +33,6 @@ currentUser.subscribe(value => {
  */
 export function setCurrentUser(userData) {
     currentUser.set(userData);
-}
-
-/**
- * Create a guest user
- */
-export function createGuestUser() {
-    const guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    const user = {
-        user_id: guestId,
-        name: 'Guest ' + Math.floor(Math.random() * 1000),
-        avatar: generateRandomAvatar(),
-        isGuest: true,
-        loginTime: Date.now()
-    };
-
-    currentUser.set(user);
-    return user;
 }
 
 /**

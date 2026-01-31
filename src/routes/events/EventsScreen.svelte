@@ -49,11 +49,6 @@
     function handleTabChange(tabId) {
         errorMessage = '';
         if (tabId === 'create') {
-            // Check if user is a guest
-            if ($currentUser?.isGuest) {
-                errorMessage = '🔐 Please sign in with your email to create events. Guest users can only view content.';
-                return;
-            }
             showCreateForm = true;
             activeTab = 'upcoming';
         } else {
@@ -71,12 +66,7 @@
             activeTab = 'mine';
         } catch (err) {
             console.error('Failed to create event:', err);
-            // Show user-friendly error message
-            if (err.message?.includes('sign in') || err.message?.includes('Guest')) {
-                errorMessage = '🔐 Please sign in with your email to create events. Guest users can only view content.';
-            } else {
-                errorMessage = 'Failed to create event: ' + (err.message || 'Unknown error');
-            }
+            errorMessage = 'Failed to create event: ' + (err.message || 'Unknown error');
         } finally {
             creating = false;
         }
@@ -134,11 +124,6 @@
             <div class="error-banner">
                 <div class="error-content">
                     <span class="error-text">{errorMessage}</span>
-                    {#if $currentUser?.isGuest}
-                        <button class="btn btn-small btn-primary" on:click={goToSignIn}>
-                            Sign In
-                        </button>
-                    {/if}
                 </div>
                 <button class="error-dismiss" on:click={dismissError}>✕</button>
             </div>
