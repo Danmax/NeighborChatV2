@@ -1,11 +1,12 @@
 <script>
+    import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { currentUser, updateCurrentUser } from '../../stores/auth.js';
+    import { currentUser, updateCurrentUser, isAuthenticated } from '../../stores/auth.js';
     import { showTopMenu } from '../../stores/ui.js';
+    import { getSupabase } from '../../lib/supabase.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
     import { INTERESTS, FUN_NAMES } from '../../services/profile.service.js';
-    import { createUserProfile } from '../../services/auth.service.js';
     import { generateRandomAvatar } from '../../lib/utils/avatar.js';
     import {
         generateRandomUsername,
@@ -23,6 +24,15 @@
     let saving = false;
     let error = '';
     let usernameSuggestions = generateUsernameSuggestions(3);
+
+    // Redirect to auth if not authenticated
+    $: if (!$isAuthenticated) {
+        push('/auth');
+    }
+
+    onMount(() => {
+        console.log('Onboarding mounted - user:', $currentUser?.name);
+    });
 
     function selectFunName(name) {
         displayName = name;
@@ -93,11 +103,22 @@
         error = '';
 
         try {
+            const supabase = getSupabase();
+
+            // Get the authenticated user from Supabase
+            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+            if (authError || !authUser) {
+                throw new Error('User authentication not found. Please log in again.');
+            }
+
             // Prepare profile data
             const profileData = {
-                name: displayName,
+                user_id: authUser.id,
+                display_name: displayName,
                 avatar: avatar,
-                interests: selectedInterests
+                interests: selectedInterests,
+                onboarding_completed: true
             };
 
             // Add username if provided
@@ -105,22 +126,34 @@
                 profileData.username = username.trim().toLowerCase();
             }
 
-            // Create profile in database with onboarding_completed = true
-            const savedProfile = await createUserProfile($currentUser, profileData);
+            // Create profile in database
+            const { data: savedProfile, error: profileError } = await supabase
+                .from('user_profiles')
+                .insert([profileData])
+                .select()
+                .single();
+
+            if (profileError) {
+                throw new Error('Failed to save profile: ' + profileError.message);
+            }
 
             console.log('✅ Profile created:', savedProfile);
 
-            // Verify profile was saved
-            if (!savedProfile || !savedProfile.user_id) {
-                throw new Error('Profile creation returned no data');
-            }
+            // Update local user state
+            updateCurrentUser({
+                name: displayName,
+                avatar: avatar,
+                interests: selectedInterests,
+                username: username.trim() ? username.trim().toLowerCase() : undefined,
+                onboardingCompleted: true
+            });
 
             console.log('✅ Onboarding complete! Redirecting to lobby...');
             showTopMenu.set(true);
             push('/');
         } catch (err) {
             console.error('❌ Onboarding failed:', err);
-            error = 'Failed to save profile: ' + err.message;
+            error = err.message || 'Failed to save profile';
         } finally {
             saving = false;
         }
