@@ -127,7 +127,7 @@
             class:attending={isAttending}
             on:click={handleRsvp}
         >
-            {isAttending ? '✓ Going' : 'RSVP'}
+            {isAttending ? '✓ Joined' : 'Join Event'}
         </button>
     {:else}
         <span class="past-badge">Past</span>

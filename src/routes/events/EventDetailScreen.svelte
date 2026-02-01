@@ -264,11 +264,11 @@
                 </button>
                     </div>
                     <div class="event-actions">
-                        <button class="btn btn-primary" on:click={handleRsvp}>
-                            {isAttending ? 'Leave Event' : 'RSVP'}
-                        </button>
-                    </div>
+                    <button class="btn btn-primary" on:click={handleRsvp}>
+                        {isAttending ? 'Leave Event' : 'Join Event'}
+                    </button>
                 </div>
+            </div>
             </div>
 
             {#if eventData.description}

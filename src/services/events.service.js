@@ -417,6 +417,18 @@ export async function rsvpToEvent(eventId, attending = true) {
     }
 
     try {
+        const { data: membership, error: membershipError } = await supabase
+            .from('instance_memberships')
+            .select('id')
+            .eq('user_id', authUserId)
+            .eq('status', 'active')
+            .limit(1)
+            .single();
+
+        if (membershipError || !membership?.id) {
+            throw new Error('You must join a community before joining events.');
+        }
+
         if (attending) {
             const { error } = await supabase
                 .from('event_participants')
@@ -424,7 +436,7 @@ export async function rsvpToEvent(eventId, attending = true) {
                     {
                         id: crypto.randomUUID(),
                         event_id: eventId,
-                        membership_id: authUserId,
+                        membership_id: membership.id,
                         status: 'registered',
                         role: 'attendee',
                         registered_at: new Date().toISOString()
@@ -437,7 +449,7 @@ export async function rsvpToEvent(eventId, attending = true) {
                 .from('event_participants')
                 .delete()
                 .eq('event_id', eventId)
-                .eq('membership_id', authUserId);
+                .eq('membership_id', membership.id);
             if (error) throw error;
         }
 
