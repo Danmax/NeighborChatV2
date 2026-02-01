@@ -94,6 +94,12 @@
                 console.log('Auth event:', event);
 
                 if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
+                    // Signal that initial auth check is complete AFTER user data is loaded
+                    if (event === 'INITIAL_SESSION') {
+                        authInitialized.set(true);
+                        console.log('🔐 Auth initialization complete');
+                    }
+
                     setupInviteListener();
 
                     if (shouldOnboard) {
@@ -108,20 +114,18 @@
                             push('/');
                         }
                     }
+                } else if (event === 'INITIAL_SESSION' && !user) {
+                    // No session found - mark auth as initialized
+                    authInitialized.set(true);
+                    console.log('🔐 Auth initialization complete (no session)');
                 }
             });
 
             // Check for existing auth
             const user = await checkExistingAuth();
 
-            // Signal that initial auth check is complete
-            authInitialized.set(true);
-            console.log('🔐 Auth initialization complete');
-
-            ready = true;
-            setLoading(false);
-
-            // Check if onboarding needed for existing session
+            // If checkExistingAuth returned a user but INITIAL_SESSION hasn't fired yet,
+            // set authInitialized after a short delay to allow the event to process
             if (user) {
                 if (user.isNewUser || !user.onboardingCompleted) {
                     console.log('Existing session needs onboarding');
@@ -131,10 +135,18 @@
                     showTopMenu.set(true);
                     setupInviteListener();
                 }
+            } else {
+                // No user found, set authInitialized immediately
+                authInitialized.set(true);
+                console.log('🔐 Auth initialization complete (no user)');
             }
+
+            ready = true;
+            setLoading(false);
 
         } catch (error) {
             console.error('App initialization failed:', error);
+            authInitialized.set(true);
             setLoading(false);
             ready = true;
         }
