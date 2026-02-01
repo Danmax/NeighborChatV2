@@ -39,7 +39,7 @@
                 .from('user_profiles')
                 .select('display_name, avatar, interests, username, onboarding_completed')
                 .eq('user_id', authUser.id)
-                .single();
+                .maybeSingle();
 
             if (profile) {
                 displayName = profile.display_name || displayName;

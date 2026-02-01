@@ -223,11 +223,17 @@ export async function checkExistingAuth() {
  */
 export function setupAuthListener(callback) {
     const supabase = getSupabase();
+    let lastHandledUserId = null;
+    let lastHandledEvent = null;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event);
 
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+            const currentUserId = session.user?.id || null;
+            if (event === 'INITIAL_SESSION' && lastHandledUserId === currentUserId && lastHandledEvent === 'SIGNED_IN') {
+                return;
+            }
             // IMPORTANT: Now async!
             const userData = await createUserDataFromSession(session.user);
             setCurrentUser(userData);
@@ -241,6 +247,8 @@ export function setupAuthListener(callback) {
                 user: userData,
                 shouldOnboard // NEW: routing decision
             });
+            lastHandledUserId = currentUserId;
+            lastHandledEvent = event;
         }
 
         if (event === 'SIGNED_OUT') {
@@ -267,7 +275,7 @@ async function createUserDataFromSession(user) {
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
     // Base user data from session
     const baseData = {
