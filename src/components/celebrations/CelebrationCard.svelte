@@ -6,6 +6,7 @@
 
     export let celebration;
     export let interactive = true;
+    export let clickable = true;
 
     const dispatch = createEventDispatcher();
 
@@ -56,9 +57,17 @@
     function handleEdit() {
         dispatch('edit', celebration);
     }
+
+    function handleOpen(event) {
+        if (!clickable) return;
+        if (event?.target?.closest('button, a, input, textarea')) {
+            return;
+        }
+        dispatch('open', celebration);
+    }
 </script>
 
-<div class="celebration-card">
+<div class="celebration-card" class:clickable on:click={handleOpen}>
     <div class="card-header">
         <div class="user-info">
             <Avatar avatar={celebration.user_avatar || celebration.author_avatar || celebration.avatar} size="md" />
@@ -140,7 +149,10 @@
                     <Avatar avatar={comment.user_avatar} size="sm" />
                     <div class="comment-content">
                         <span class="comment-author">{comment.user_name}</span>
-                        <span class="comment-text">{comment.text}</span>
+                        {#if comment.gif_url}
+                            <img class="comment-gif" src={comment.gif_url} alt="Reply GIF" loading="lazy" />
+                        {/if}
+                        <span class="comment-text">{comment.message || comment.text}</span>
                     </div>
                 </div>
             {/each}
@@ -159,6 +171,16 @@
         border-radius: var(--radius-md);
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .celebration-card.clickable {
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .celebration-card.clickable:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     }
 
     .card-header {
@@ -222,11 +244,16 @@
         margin-top: 12px;
         border-radius: var(--radius-sm);
         overflow: hidden;
+        background: #f5f5f5;
+        aspect-ratio: 16 / 9;
+        max-height: 420px;
     }
 
     .celebration-image img {
         width: 100%;
+        height: 100%;
         display: block;
+        object-fit: cover;
     }
 
     .reactions-summary {
@@ -342,6 +369,9 @@
     .comment-content {
         flex: 1;
         font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
     }
 
     .comment-author {
@@ -352,6 +382,13 @@
 
     .comment-text {
         color: var(--text-light);
+    }
+
+    .comment-gif {
+        width: 100%;
+        max-height: 180px;
+        border-radius: 8px;
+        object-fit: cover;
     }
 
     .view-all-comments {

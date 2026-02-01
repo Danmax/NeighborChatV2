@@ -311,6 +311,7 @@
                             on:reaction={handleReaction}
                             on:comment={handleComment}
                             on:edit={handleEdit}
+                            on:open={() => push(`/celebrations/${celebration.id}`)}
                         />
                     {/each}
                 {/if}
@@ -546,6 +547,9 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+        width: 100%;
+        max-width: 760px;
+        margin: 0 auto;
     }
 
     .loading-state, .empty-state {

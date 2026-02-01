@@ -6,6 +6,7 @@ import {
     addCelebration,
     updateCelebration,
     removeCelebration,
+    addComment,
     celebrationsLoading,
     celebrationsError
 } from '../stores/celebrations.js';
@@ -94,6 +95,28 @@ export async function fetchCelebrations(limit = 50) {
     }
 }
 
+/**
+ * Fetch a single celebration by id
+ */
+export async function fetchCelebrationById(celebrationId) {
+    const supabase = getSupabase();
+    try {
+        const { data, error } = await supabase
+            .from('celebrations')
+            .select('*')
+            .eq('id', celebrationId)
+            .single();
+
+        if (error) throw error;
+
+        const celebration = transformCelebrationFromDb(data);
+        updateCelebration(celebrationId, celebration);
+        return celebration;
+    } catch (error) {
+        console.error('Failed to fetch celebration:', error);
+        throw error;
+    }
+}
 /**
  * Create a new celebration
  * Note: RLS requires authenticated Supabase users (auth.uid() = author_id)
@@ -288,22 +311,13 @@ export async function updateReactions(celebrationId, reactions) {
  * Add a comment to a celebration
  * Note: Due to RLS, only the author can update. Comments may need separate handling.
  */
-export async function postComment(celebrationId, commentText) {
+export async function postComment(celebrationId, commentText, gifUrl = null) {
     const supabase = getSupabase();
     const user = get(currentUser);
 
     if (!user) {
         throw new Error('Must be logged in to comment');
     }
-
-    const comment = {
-        id: `${user.user_id}-${Date.now()}`,
-        user_id: user.user_id,
-        user_name: user.name,
-        user_avatar: user.avatar,
-        text: commentText,
-        created_at: new Date().toISOString()
-    };
 
     // Check if user is authenticated
     const authUserId = await getAuthUserId();
@@ -312,33 +326,18 @@ export async function postComment(celebrationId, commentText) {
     }
 
     try {
-        // Get current comments
-        const { data: celebration, error: fetchError } = await supabase
-            .from('celebrations')
-            .select('comments')
-            .eq('id', celebrationId)
-            .single();
+        const { data, error } = await supabase.rpc('add_celebration_reply', {
+            p_celebration_id: celebrationId,
+            p_message: commentText,
+            p_gif_url: gifUrl
+        });
 
-        if (fetchError) throw fetchError;
+        if (error) throw error;
 
-        const comments = [...(celebration.comments || []), comment];
-
-        const { data, error } = await supabase
-            .from('celebrations')
-            .update({ comments })
-            .eq('id', celebrationId)
-            .select()
-            .single();
-
-        if (error) {
-            // RLS may prevent non-authors from updating
-            if (error.code === '42501' || error.message?.includes('policy')) {
-                throw new Error('Unable to add comment. Only the celebration author can modify their post.');
-            }
-            throw error;
+        if (data) {
+            addComment(celebrationId, data);
         }
 
-        updateCelebration(celebrationId, { comments: data.comments });
         return data;
     } catch (error) {
         console.error('Failed to post comment:', error);

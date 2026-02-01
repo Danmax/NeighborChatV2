@@ -138,7 +138,11 @@
                 {#if recentCelebrations.length > 0}
                     <div class="celebrations-preview">
                         {#each recentCelebrations as celebration (celebration.id)}
-                            <CelebrationCard {celebration} interactive={false} />
+                            <CelebrationCard
+                                {celebration}
+                                interactive={false}
+                                on:open={() => push(`/celebrations/${celebration.id}`)}
+                            />
                         {/each}
                     </div>
                 {:else}

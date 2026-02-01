@@ -42,6 +42,7 @@
     import ChatScreen from './routes/chat/ChatScreen.svelte';
     import EventsScreen from './routes/events/EventsScreen.svelte';
     import CelebrationsScreen from './routes/celebrations/CelebrationsScreen.svelte';
+    import CelebrationDetailScreen from './routes/celebrations/CelebrationDetailScreen.svelte';
     import ContactsScreen from './routes/contacts/ContactsScreen.svelte';
     import NotificationsScreen from './routes/notifications/NotificationsScreen.svelte';
     import MessagesScreen from './routes/messages/MessagesScreen.svelte';
@@ -64,6 +65,7 @@
         '/chat/:id': ChatScreen,
         '/events': EventsScreen,
         '/celebrations': CelebrationsScreen,
+        '/celebrations/:id': CelebrationDetailScreen,
         '/contacts': ContactsScreen,
         '/notifications': NotificationsScreen,
         '/messages': MessagesScreen,
