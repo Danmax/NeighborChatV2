@@ -14,7 +14,7 @@ export async function signInWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: `${window.location.origin}/#/`,
+            redirectTo: `${window.location.origin}/`,
             scopes: 'profile email'
         }
     });
@@ -32,7 +32,7 @@ export async function signInWithGitHub() {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-            redirectTo: `${window.location.origin}/#/`,
+            redirectTo: `${window.location.origin}/`,
             scopes: 'read:user user:email'
         }
     });

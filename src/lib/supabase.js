@@ -47,6 +47,8 @@ export async function initSupabase() {
             config.supabase.anonKey
         );
 
+        await handleOAuthRedirect();
+
         console.log('✅ Supabase initialized securely from API');
         return supabaseClient;
 
@@ -85,6 +87,8 @@ async function initLocalConfig() {
         config.supabase.anonKey
     );
 
+    await handleOAuthRedirect();
+
     console.log('✅ Supabase initialized (local mode)');
     return supabaseClient;
 }
@@ -97,6 +101,33 @@ export function getSupabase() {
         throw new Error('Supabase not initialized. Call initSupabase() first.');
     }
     return supabaseClient;
+}
+
+async function handleOAuthRedirect() {
+    if (typeof window === 'undefined' || !supabaseClient) return;
+
+    try {
+        const url = new URL(window.location.href);
+        const hasCode = url.searchParams.get('code');
+
+        if (hasCode) {
+            const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+            if (error) {
+                console.error('❌ OAuth exchange failed:', error);
+            }
+
+            url.searchParams.delete('code');
+            url.searchParams.delete('state');
+            url.searchParams.delete('error');
+            url.searchParams.delete('error_description');
+
+            const search = url.searchParams.toString();
+            const cleaned = `${url.pathname}${search ? `?${search}` : ''}${url.hash}`;
+            window.history.replaceState({}, document.title, cleaned);
+        }
+    } catch (error) {
+        console.error('❌ OAuth redirect handling failed:', error);
+    }
 }
 
 /**
