@@ -23,12 +23,15 @@
     import MessageList from '../../components/chat/MessageList.svelte';
     import MessageInput from '../../components/chat/MessageInput.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
+    import ContactQuickCard from '../../components/contacts/ContactQuickCard.svelte';
+    import { fetchContacts } from '../../services/contacts.service.js';
 
     export let params = {};
 
     let showGifPicker = false;
     let partnerLeft = false;
     let localPartner = null; // Fallback partner info
+    let showContactCard = false;
 
     // Redirect if not authenticated
     $: if ($authInitialized && !$isAuthenticated) {
@@ -52,6 +55,7 @@
     onMount(() => {
         if (partnerId && $isAuthenticated) {
             initializeChat();
+            fetchContacts().catch(() => {});
         }
     });
 
@@ -152,6 +156,16 @@
         handleLeave();
         push('/find-match');
     }
+
+    function openContactCard() {
+        if (partner) {
+            showContactCard = true;
+        }
+    }
+
+    function closeContactCard() {
+        showContactCard = false;
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -162,7 +176,9 @@
 
             {#if partner}
                 <div class="partner-info">
-                    <Avatar avatar={partner.avatar} size="sm" />
+                    <button class="avatar-btn" on:click={openContactCard} title="View contact">
+                        <Avatar avatar={partner.avatar} size="sm" />
+                    </button>
                     <div class="partner-details">
                         <span class="partner-name">{partner.name}</span>
                         <span class="partner-status">
@@ -220,6 +236,13 @@
     </div>
 {/if}
 
+<ContactQuickCard
+    show={showContactCard}
+    user={partner}
+    on:close={closeContactCard}
+    on:saved={closeContactCard}
+/>
+
 <style>
     .chat-screen {
         display: flex;
@@ -272,6 +295,15 @@
         align-items: center;
         gap: 10px;
         min-width: 0; /* Allow text truncation */
+    }
+
+    .avatar-btn {
+        border: none;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
     }
 
     .partner-details {

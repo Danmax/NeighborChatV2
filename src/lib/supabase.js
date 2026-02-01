@@ -133,5 +133,15 @@ export async function checkSupabaseAuth() {
  */
 export async function getAuthUserId() {
     const { authenticated, userId } = await checkSupabaseAuth();
-    return authenticated ? userId : null;
+    if (authenticated && userId) return userId;
+
+    if (!supabaseClient) return null;
+
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        return user?.id || null;
+    } catch (error) {
+        console.error('Failed to fetch auth user:', error);
+        return null;
+    }
 }

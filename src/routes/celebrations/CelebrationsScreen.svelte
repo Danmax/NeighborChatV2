@@ -17,6 +17,7 @@
         postComment
     } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
+    import { showToast } from '../../stores/toasts.js';
 
     // Redirect if not authenticated
     $: if ($authInitialized && !$isAuthenticated) {
@@ -53,8 +54,10 @@
             title = '';
             message = '';
             showCreateForm = false;
+            showToast('Celebration posted!', 'success');
         } catch (err) {
             console.error('Failed to create celebration:', err);
+            showToast(`Failed to post celebration: ${err.message}`, 'error');
         } finally {
             creating = false;
         }

@@ -32,8 +32,41 @@
         push('/auth');
     }
 
-    onMount(() => {
+    onMount(async () => {
         console.log('Onboarding mounted - user:', $currentUser?.name);
+
+        try {
+            const supabase = getSupabase();
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return;
+
+            const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('display_name, avatar, interests, username, onboarding_completed')
+                .eq('user_id', authUser.id)
+                .single();
+
+            if (profile) {
+                displayName = profile.display_name || displayName;
+                avatar = profile.avatar || avatar;
+                selectedInterests = profile.interests || selectedInterests;
+                username = profile.username || username;
+
+                if (profile.onboarding_completed) {
+                    updateCurrentUser({
+                        name: profile.display_name || displayName,
+                        avatar: profile.avatar || avatar,
+                        interests: profile.interests || selectedInterests,
+                        username: profile.username || username,
+                        onboardingCompleted: true
+                    });
+                    showTopMenu.set(true);
+                    push('/');
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to preload profile:', err);
+        }
     });
 
     function selectFunName(name) {
@@ -128,10 +161,10 @@
                 profileData.username = username.trim().toLowerCase();
             }
 
-            // Create profile in database
+            // Upsert profile in database (handles existing users)
             const { data: savedProfile, error: profileError } = await supabase
                 .from('user_profiles')
-                .insert([profileData])
+                .upsert(profileData, { onConflict: 'user_id' })
                 .select()
                 .single();
 
