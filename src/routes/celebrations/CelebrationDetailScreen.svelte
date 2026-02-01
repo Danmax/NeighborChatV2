@@ -97,7 +97,7 @@
                 <p>Loading kudos...</p>
             </div>
         {:else if celebration}
-            <CelebrationCard {celebration} clickable={false} />
+            <CelebrationCard {celebration} clickable={false} showCommentsPreview={false} />
 
             <div class="reply-card">
                 <h3>Replies ({replyCount})</h3>
@@ -143,7 +143,9 @@
                                     {#if reply.gif_url}
                                         <img class="reply-gif" src={reply.gif_url} alt="Reply GIF" loading="lazy" />
                                     {/if}
-                                    <p class="reply-text">{reply.message || reply.text}</p>
+                                    {#if reply.message || reply.text}
+                                        <p class="reply-text">{reply.message || reply.text}</p>
+                                    {/if}
                                 </div>
                             </div>
                         {/each}

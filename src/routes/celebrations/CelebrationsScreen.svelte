@@ -210,7 +210,8 @@
                                 class:selected={category === cat.id}
                                 on:click={() => category = cat.id}
                             >
-                                {cat.emoji}
+                                <span class="category-emoji">{cat.emoji}</span>
+                                <span class="category-label">{cat.label}</span>
                             </button>
                         {/each}
                     </div>
@@ -448,12 +449,15 @@
     }
 
     .category-btn {
-        width: 44px;
-        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
         border: 2px solid var(--cream-dark);
-        border-radius: var(--radius-sm);
+        border-radius: 999px;
         background: white;
-        font-size: 20px;
+        font-size: 13px;
+        font-weight: 600;
         cursor: pointer;
         transition: all 0.15s ease;
     }
@@ -465,6 +469,15 @@
     .category-btn.selected {
         border-color: var(--primary);
         background: var(--cream);
+    }
+
+    .category-emoji {
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .category-label {
+        color: var(--text);
     }
 
     .form-actions {

@@ -7,6 +7,7 @@
     export let celebration;
     export let interactive = true;
     export let clickable = true;
+    export let showCommentsPreview = true;
 
     const dispatch = createEventDispatcher();
 
@@ -16,6 +17,7 @@
     $: totalReactions = Object.values(reactionCounts).reduce((a, b) => a + b, 0);
     $: commentCount = celebration.comments?.length || 0;
     $: formattedTime = formatTime(celebration.created_at);
+    $: mediaUrl = celebration.gif_url || celebration.image || celebration.image_url;
 
     function getReactionCounts(reactions = {}) {
         const counts = {};
@@ -65,6 +67,19 @@
         }
         dispatch('open', celebration);
     }
+
+    let showReactions = false;
+
+    function toggleReactions(event) {
+        event.stopPropagation();
+        showReactions = !showReactions;
+    }
+
+    function pickReaction(emoji, event) {
+        event.stopPropagation();
+        showReactions = false;
+        handleReaction(emoji);
+    }
 </script>
 
 <div class="celebration-card" class:clickable on:click={handleOpen}>
@@ -86,13 +101,17 @@
             <h3 class="celebration-title">{celebration.title}</h3>
         {/if}
 
-        {#if celebration.gif_url}
+        {#if mediaUrl}
             <div class="celebration-image">
-                <img src={celebration.gif_url} alt="GIF" loading="lazy" />
+                <img src={mediaUrl} alt="Celebration media" loading="lazy" />
             </div>
-            <p class="celebration-message">{celebration.message}</p>
+            {#if celebration.message}
+                <p class="celebration-message">{celebration.message}</p>
+            {/if}
         {:else}
-            <p class="celebration-message">{celebration.message}</p>
+            {#if celebration.message}
+                <p class="celebration-message">{celebration.message}</p>
+            {/if}
             {#if celebration.image}
                 <div class="celebration-image">
                     <img src={celebration.image} alt="Celebration" loading="lazy" />
@@ -116,16 +135,23 @@
     {#if interactive}
         <div class="card-actions">
             <div class="reaction-picker">
-                {#each REACTIONS.slice(0, 4) as emoji}
-                    <button
-                        class="reaction-btn"
-                        class:active={hasUserReacted(emoji)}
-                        on:click={() => handleReaction(emoji)}
-                        title={emoji}
-                    >
-                        {emoji}
-                    </button>
-                {/each}
+                <button class="reaction-toggle" on:click={toggleReactions}>
+                    😊 React
+                </button>
+                {#if showReactions}
+                    <div class="reaction-menu">
+                        {#each REACTIONS as emoji}
+                            <button
+                                class="reaction-btn"
+                                class:active={hasUserReacted(emoji)}
+                                on:click={(event) => pickReaction(emoji, event)}
+                                title={emoji}
+                            >
+                                {emoji}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
             </div>
 
             <div class="action-buttons">
@@ -142,7 +168,7 @@
     {/if}
 
     <!-- Comments Preview -->
-    {#if interactive && celebration.comments?.length > 0}
+    {#if interactive && showCommentsPreview && celebration.comments?.length > 0}
         <div class="comments-preview">
             {#each celebration.comments.slice(-2) as comment}
                 <div class="comment-item">
@@ -152,7 +178,9 @@
                         {#if comment.gif_url}
                             <img class="comment-gif" src={comment.gif_url} alt="Reply GIF" loading="lazy" />
                         {/if}
-                        <span class="comment-text">{comment.message || comment.text}</span>
+                        {#if comment.message || comment.text}
+                            <span class="comment-text">{comment.message || comment.text}</span>
+                        {/if}
                     </div>
                 </div>
             {/each}
@@ -288,6 +316,35 @@
     .reaction-picker {
         display: flex;
         gap: 4px;
+        position: relative;
+    }
+
+    .reaction-toggle {
+        padding: 8px 12px;
+        border: none;
+        background: var(--cream);
+        border-radius: 20px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .reaction-toggle:hover {
+        background: var(--cream-dark);
+    }
+
+    .reaction-menu {
+        position: absolute;
+        bottom: 44px;
+        left: 0;
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        background: white;
+        border-radius: 999px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+        border: 1px solid var(--cream-dark);
+        z-index: 10;
     }
 
     .reaction-btn {
