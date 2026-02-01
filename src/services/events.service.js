@@ -12,6 +12,26 @@ import {
 import { events } from '../stores/events.js';
 import { get } from 'svelte/store';
 
+async function getActiveMembershipId() {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return null;
+
+    const { data, error } = await supabase
+        .from('instance_memberships')
+        .select('id')
+        .eq('user_id', authUserId)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+
+    if (error || !data?.id) {
+        return null;
+    }
+
+    return data.id;
+}
+
 // Transform database row to app format
 function transformEventFromDb(row) {
     const eventData = row.event_data || {};
@@ -482,15 +502,15 @@ export async function fetchEventParticipants(eventId) {
     const participantIds = (data || []).map(row => row.membership_id);
     if (participantIds.length === 0) return [];
 
-    const { data: profiles, error: profileError } = await supabase
-        .from('public_profiles')
-        .select('user_id, display_name, avatar, username')
-        .in('user_id', participantIds);
+    const { data: memberships, error: membershipError } = await supabase
+        .from('instance_memberships')
+        .select('id, user_id, display_name, avatar')
+        .in('id', participantIds);
 
-    if (profileError) throw profileError;
+    if (membershipError) throw membershipError;
 
-    const profileMap = (profiles || []).reduce((acc, profile) => {
-        acc[profile.user_id] = profile;
+    const profileMap = (memberships || []).reduce((acc, profile) => {
+        acc[profile.id] = profile;
         return acc;
     }, {});
 
@@ -506,8 +526,8 @@ export async function fetchEventParticipants(eventId) {
 async function attachParticipants(events, partial = false) {
     if (!events || events.length === 0) return [];
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return events;
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) return events;
 
     const eventIds = events.map(e => e.id).filter(Boolean);
     if (eventIds.length === 0) return events;
@@ -531,7 +551,7 @@ async function attachParticipants(events, partial = false) {
         return events.map(event => {
             const attendees = attendeesByEvent[event.id] || event.attendees || [];
             const attendeeCount = attendees.length;
-            const isAttending = attendees.includes(authUserId);
+            const isAttending = attendees.includes(membershipId);
 
             if (partial) {
                 return {

@@ -227,7 +227,7 @@ export function setupAuthListener(callback) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event);
 
-        if (event === 'SIGNED_IN' && session) {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
             // IMPORTANT: Now async!
             const userData = await createUserDataFromSession(session.user);
             setCurrentUser(userData);

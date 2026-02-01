@@ -100,7 +100,7 @@
             authSubscription = setupAuthListener(({ event, user, shouldOnboard }) => {
                 console.log('Auth event:', event);
 
-                if (event === 'SIGNED_IN' && user) {
+                if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
                     setupInviteListener();
 
                     if (shouldOnboard) {

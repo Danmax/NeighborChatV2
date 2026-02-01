@@ -124,7 +124,10 @@
         if (!eventData) return;
         try {
             joining = true;
-            await rsvpToEvent(eventData.id, !isAttending);
+            const updated = await rsvpToEvent(eventData.id, !isAttending);
+            if (updated) {
+                eventData = updated;
+            }
         } catch (err) {
             showToast('Unable to join event. Please try again.', 'error');
         } finally {
