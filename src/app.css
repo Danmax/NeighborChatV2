@@ -1271,6 +1271,44 @@ textarea::placeholder {
     background: var(--cream);
 }
 
+@media (max-width: 768px) {
+    .app-footer {
+        top: auto;
+        right: auto;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        flex-direction: row;
+        padding: 10px 12px;
+        gap: 4px;
+        border-radius: 999px;
+    }
+
+    .app-footer.collapsed {
+        transform: translateX(-50%) translateY(120%);
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .footer-btn {
+        min-width: 44px;
+        padding: 6px 8px;
+    }
+
+    .footer-label {
+        font-size: 9px;
+    }
+
+    .sidebar-toggle {
+        top: auto;
+        right: 12px;
+        bottom: 70px;
+        border-radius: 999px;
+        height: 36px;
+        width: 36px;
+    }
+}
+
 /* ==================== LOBBY BADGES ==================== */
 
 .lobby-badge {

@@ -1,6 +1,8 @@
 <script>
     import { push } from 'svelte-spa-router';
     import { signInWithGitHub, signInWithGoogle } from '../../services/auth.service.js';
+    import { authInitialized } from '../../stores/ui.js';
+    import { isAuthenticated, currentUser } from '../../stores/auth.js';
 
     let loading = false;
     let error = '';
@@ -30,6 +32,14 @@
         } catch (err) {
             error = err.message;
             loading = false;
+        }
+    }
+
+    $: if ($authInitialized && $isAuthenticated) {
+        if ($currentUser && !$currentUser.onboardingCompleted) {
+            push('/onboarding');
+        } else {
+            push('/');
         }
     }
 </script>
