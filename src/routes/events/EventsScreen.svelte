@@ -9,7 +9,7 @@
         pastEvents,
         eventsLoading
     } from '../../stores/events.js';
-    import { fetchEvents, createEvent, rsvpToEvent, uploadEventImage, subscribeToEvents } from '../../services/events.service.js';
+    import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
@@ -99,15 +99,6 @@
         push('/auth');
     }
 
-    async function handleRsvp(event) {
-        const { event: eventData, attending } = event.detail;
-        try {
-            await rsvpToEvent(eventData.id, attending);
-        } catch (err) {
-            console.error('Failed to RSVP:', err);
-            errorMessage = 'Unable to update RSVP. Please try again.';
-        }
-    }
 
     function handleEventClick(event) {
         const eventData = event.detail;
@@ -189,7 +180,6 @@
                         "📜"
                     }
                     on:eventClick={handleEventClick}
-                    on:rsvp={handleRsvp}
                 />
 
                 {#if activeTab === 'upcoming' && currentEvents.length === 0 && !$eventsLoading}

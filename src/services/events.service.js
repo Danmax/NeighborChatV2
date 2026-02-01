@@ -402,78 +402,7 @@ export function subscribeToEvent(eventId, callback) {
  * RSVP to an event
  * Note: Due to RLS, only event creators can update. RSVP may need separate table or function.
  */
-export async function rsvpToEvent(eventId, attending = true) {
-    const supabase = getSupabase();
-    const user = get(currentUser);
-
-    if (!user) {
-        throw new Error('Must be logged in to RSVP');
-    }
-
-    // Check if user is authenticated
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
-        throw new Error('Please sign in with your email to RSVP. Guest users can only view events.');
-    }
-
-    try {
-        const { data: membership, error: membershipError } = await supabase
-            .from('instance_memberships')
-            .select('id')
-            .eq('user_id', authUserId)
-            .eq('status', 'active')
-            .limit(1)
-            .single();
-
-        if (membershipError || !membership?.id) {
-            throw new Error('You must join a community before joining events.');
-        }
-
-        if (attending) {
-            const { error } = await supabase
-                .from('event_participants')
-                .insert([
-                    {
-                        id: crypto.randomUUID(),
-                        event_id: eventId,
-                        membership_id: membership.id,
-                        status: 'registered',
-                        role: 'attendee',
-                        registered_at: new Date().toISOString()
-                    }
-                ]);
-
-            if (error && error.code !== '23505') throw error; // ignore duplicate
-        } else {
-            const { error } = await supabase
-                .from('event_participants')
-                .delete()
-                .eq('event_id', eventId)
-                .eq('membership_id', membership.id);
-            if (error) throw error;
-        }
-
-        const { data: refreshed, error: refreshError } = await supabase
-            .from('community_events')
-            .select('*')
-            .eq('id', eventId)
-            .single();
-
-        if (refreshError) throw refreshError;
-
-        const baseEvent = transformEventFromDb(refreshed);
-        const updated = await attachParticipants([baseEvent]);
-        if (updated.length > 0) {
-            updateEvent(eventId, updated[0]);
-            return updated[0];
-        }
-
-        return baseEvent;
-    } catch (error) {
-        console.error('Failed to RSVP:', error);
-        throw error;
-    }
-}
+// RSVP/Join feature removed
 
 /**
  * Subscribe to event changes in real-time

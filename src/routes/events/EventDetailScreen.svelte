@@ -9,7 +9,6 @@
         fetchEventById,
         updateEventInDb,
         uploadEventImage,
-        rsvpToEvent,
         addEventItem,
         removeEventItem,
         claimEventItem,
@@ -101,14 +100,6 @@
         }
     }
 
-    async function handleRsvp() {
-        if (!eventData) return;
-        try {
-            await rsvpToEvent(eventData.id, !isAttending);
-        } catch (err) {
-            showToast('Unable to update RSVP. Please try again.', 'error');
-        }
-    }
 
     async function handleUpdateEvent(event) {
         try {
@@ -264,8 +255,8 @@
                 </button>
                     </div>
                     <div class="event-actions">
-                    <button class="btn btn-primary" on:click={handleRsvp}>
-                        {isAttending ? 'Leave Event' : 'Join Event'}
+                    <button class="btn btn-primary" on:click={() => push('/contacts')}>
+                        Message Organizer
                     </button>
                 </div>
             </div>

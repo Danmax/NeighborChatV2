@@ -53,10 +53,6 @@
         dispatch('click', event);
     }
 
-    function handleRsvp(e) {
-        e.stopPropagation();
-        dispatch('rsvp', { event, attending: !isAttending });
-    }
 
     function handleHostClick(e) {
         e.stopPropagation();
@@ -121,15 +117,7 @@
         </div>
     </div>
 
-    {#if !isPast}
-        <button
-            class="rsvp-btn"
-            class:attending={isAttending}
-            on:click={handleRsvp}
-        >
-            {isAttending ? '✓ Joined' : 'Join Event'}
-        </button>
-    {:else}
+    {#if isPast}
         <span class="past-badge">Past</span>
     {/if}
 </div>
@@ -273,34 +261,6 @@
     .event-attendees {
         font-size: 12px;
         color: var(--text-muted);
-    }
-
-    .rsvp-btn {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        padding: 8px 16px;
-        border: none;
-        border-radius: 20px;
-        background: var(--primary);
-        color: white;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .rsvp-btn:hover {
-        background: var(--primary-dark);
-    }
-
-    .rsvp-btn.attending {
-        background: #4CAF50;
-    }
-
-    .compact .rsvp-btn {
-        position: static;
-        flex-shrink: 0;
     }
 
     .past-badge {
