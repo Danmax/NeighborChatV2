@@ -6,16 +6,19 @@
     import {
         setupPresenceChannel,
         updatePresenceStatus,
-        sendChatInvite,
+        sendChatInviteWithResponse,
         cleanupChannels
     } from '../../services/realtime.service.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import UserCard from '../../components/users/UserCard.svelte';
     import { INTERESTS } from '../../services/profile.service.js';
+    import { showToast } from '../../stores/toasts.js';
 
     let searching = false;
     let filterInterest = 'all';
     let inviteSent = null;
+    let inviteCleanup = null;
+    let inviteTimeoutId = null;
 
     // Get unique interests from available users
     $: userInterests = [...new Set(
@@ -46,15 +49,45 @@
 
     async function inviteUser(user) {
         try {
-            await sendChatInvite(user.user_id);
             inviteSent = user.user_id;
+            let responded = false;
 
-            // Navigate to chat with this user after a brief delay to show "Invite Sent"
-            setTimeout(() => {
-                push(`/chat/${user.user_id}`);
-            }, 500);
+            inviteCleanup = await sendChatInviteWithResponse(user.user_id, (accepted) => {
+                if (responded) return;
+                responded = true;
+                if (inviteTimeoutId) {
+                    clearTimeout(inviteTimeoutId);
+                    inviteTimeoutId = null;
+                }
+                inviteSent = null;
+                inviteCleanup?.();
+                inviteCleanup = null;
+
+                if (accepted) {
+                    push(`/chat/${user.user_id}`);
+                } else {
+                    showToast('Invite declined.', 'info');
+                }
+            });
+
+            inviteTimeoutId = setTimeout(() => {
+                if (responded) return;
+                responded = true;
+                inviteSent = null;
+                inviteCleanup?.();
+                inviteCleanup = null;
+                showToast('Invite expired. Try again.', 'info');
+            }, 30000);
         } catch (err) {
             console.error('Failed to send invite:', err);
+            inviteSent = null;
+            if (inviteTimeoutId) {
+                clearTimeout(inviteTimeoutId);
+                inviteTimeoutId = null;
+            }
+            inviteCleanup?.();
+            inviteCleanup = null;
+            showToast('Unable to send invite. Please try again.', 'error');
         }
     }
 

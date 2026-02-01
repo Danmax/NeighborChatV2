@@ -8,12 +8,12 @@
 
     const dispatch = createEventDispatcher();
 
-    let remainingTime = 60;
+    let remainingTime = 30;
     let intervalId = null;
 
     // Start countdown when modal shows
     $: if (show && invite) {
-        remainingTime = 60;
+        remainingTime = 30;
 
         // Clear any existing interval
         if (intervalId) {

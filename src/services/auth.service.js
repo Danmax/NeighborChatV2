@@ -3,6 +3,7 @@ import { getSupabase } from '../lib/supabase.js';
 import { currentUser, authUser, setCurrentUser, updateCurrentUser, clearAuth } from '../stores/auth.js';
 import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
+import { getCachedData } from '../lib/utils/cache.js';
 import { InputValidator } from '../lib/security.js';
 
 /**
@@ -350,6 +351,12 @@ async function createUserDataFromSession(user) {
         };
     }
 
+    // Use cached profile to avoid onboarding flash when profile fetch fails/times out
+    const cachedUser = getCachedUserForSession(user);
+    if (cachedUser) {
+        return cachedUser;
+    }
+
     // No profile exists or fetch failed - treat as new user
     return {
         ...baseData,
@@ -367,6 +374,13 @@ function buildBaseUserData(user) {
         avatar: user.user_metadata?.avatar || generateRandomAvatar(),
         loginTime: Date.now()
     };
+}
+
+function getCachedUserForSession(user) {
+    const cached = getCachedData('currentUser', null);
+    if (!cached || !user?.id) return null;
+    if (cached.user_id !== user.id) return null;
+    return cached;
 }
 
 /**
