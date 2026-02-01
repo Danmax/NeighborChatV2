@@ -500,6 +500,7 @@
         text-decoration: underline;
     }
 </style>
+<style>
     .card-content.hero {
         padding: 0 16px 16px;
     }
@@ -548,3 +549,4 @@
     .hero-title {
         font-size: 16px;
     }
+</style>
