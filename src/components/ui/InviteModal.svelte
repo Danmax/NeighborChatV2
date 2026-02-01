@@ -32,6 +32,10 @@
         }, 1000);
     }
 
+    $: if (show && remainingTime <= 0 && invite) {
+        handleDecline();
+    }
+
     // Clean up interval when modal closes
     $: if (!show && intervalId) {
         clearInterval(intervalId);

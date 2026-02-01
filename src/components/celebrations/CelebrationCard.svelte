@@ -236,6 +236,8 @@
         border-radius: var(--radius-md);
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
     }
 
     .celebration-card.clickable {
@@ -516,17 +518,18 @@
         overflow: hidden;
         margin-bottom: 12px;
         background: #f5f5f5;
+        aspect-ratio: 16 / 9;
     }
 
     .hero-media img {
         width: 100%;
         display: block;
-        height: 260px;
+        height: 100%;
         object-fit: cover;
     }
 
     .hero-fallback {
-        height: 200px;
+        height: 100%;
         background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
     }
 
