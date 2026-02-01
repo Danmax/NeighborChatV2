@@ -7,6 +7,7 @@
 
     export let event;
     export let compact = false;
+    export let joining = false;
 
     const dispatch = createEventDispatcher();
 
@@ -127,8 +128,9 @@
             class="rsvp-btn"
             class:attending={isAttending}
             on:click={handleRsvp}
+            disabled={joining}
         >
-            {isAttending ? '✓ Joined' : 'Join Event'}
+            {joining ? 'Joining…' : isAttending ? '✓ Joined' : 'Join Event'}
         </button>
     {:else}
         <span class="past-badge">Past</span>
@@ -309,6 +311,11 @@
 
     .rsvp-btn:hover {
         background: var(--primary-dark);
+    }
+
+    .rsvp-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
     }
 
     .rsvp-btn.attending {

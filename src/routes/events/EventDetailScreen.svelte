@@ -37,6 +37,7 @@
     let notifyMessage = '';
     let notifyTarget = 'attendees';
     let sendingNotify = false;
+    let joining = false;
 
     $: eventId = params?.id;
     $: {
@@ -122,9 +123,12 @@
     async function handleRsvp() {
         if (!eventData) return;
         try {
+            joining = true;
             await rsvpToEvent(eventData.id, !isAttending);
         } catch (err) {
             showToast('Unable to join event. Please try again.', 'error');
+        } finally {
+            joining = false;
         }
     }
 
@@ -265,8 +269,8 @@
                 </button>
                     </div>
                     <div class="event-actions">
-                        <button class="btn btn-primary" on:click={handleRsvp}>
-                            {isAttending ? 'Leave Event' : 'Join Event'}
+                        <button class="btn btn-primary" on:click={handleRsvp} disabled={joining}>
+                            {joining ? 'Updating…' : isAttending ? 'Leave Event' : 'Join Event'}
                         </button>
                         <button class="btn btn-secondary" on:click={() => push('/contacts')}>
                             Message Organizer
@@ -305,7 +309,7 @@
                         {#each participants as participant (participant.user_id)}
                             <div class="attendee-item">
                                 <Avatar avatar={participant.profile?.avatar} size="sm" />
-                                <span>{participant.profile?.display_name || 'Neighbor'}</span>
+                                <span class="attendee-name">{participant.profile?.display_name || 'Neighbor'}</span>
                             </div>
                         {/each}
                     </div>
@@ -507,7 +511,8 @@
 
     .attendee-list {
         display: grid;
-        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
     }
 
     .attendee-item {
@@ -515,6 +520,26 @@
         align-items: center;
         gap: 10px;
         font-size: 14px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        transition: background 0.2s ease;
+    }
+
+    .attendee-item:hover {
+        background: var(--cream);
+    }
+
+    .attendee-name {
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        transition: opacity 0.2s ease, max-width 0.2s ease;
+    }
+
+    .attendee-item:hover .attendee-name {
+        opacity: 1;
+        max-width: 160px;
     }
 
     .item-form {

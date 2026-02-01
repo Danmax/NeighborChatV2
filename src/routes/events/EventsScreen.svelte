@@ -24,6 +24,7 @@
     let showCreateForm = false;
     let creating = false;
     let errorMessage = '';
+    let joiningIds = new Set();
 
     const tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
@@ -102,10 +103,15 @@
     async function handleRsvp(event) {
         const { event: eventData, attending } = event.detail;
         try {
+            joiningIds = new Set(joiningIds);
+            joiningIds.add(eventData.id);
             await rsvpToEvent(eventData.id, attending);
         } catch (err) {
             console.error('Failed to join event:', err);
             errorMessage = 'Unable to join event. Please try again.';
+        } finally {
+            joiningIds = new Set(joiningIds);
+            joiningIds.delete(eventData.id);
         }
     }
 
@@ -190,6 +196,7 @@
                     }
                     on:eventClick={handleEventClick}
                     on:rsvp={handleRsvp}
+                    joinState={joiningIds}
                 />
 
                 {#if activeTab === 'upcoming' && currentEvents.length === 0 && !$eventsLoading}

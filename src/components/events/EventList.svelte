@@ -7,6 +7,7 @@
     export let emptyIcon = '📅';
     export let compact = false;
     export let loading = false;
+    export let joinState = new Set();
 
     const dispatch = createEventDispatcher();
 
@@ -35,6 +36,7 @@
             <EventCard
                 {event}
                 {compact}
+                joining={joinState?.has?.(event.id)}
                 on:click={handleEventClick}
                 on:rsvp={handleRsvp}
             />
