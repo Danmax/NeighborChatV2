@@ -19,6 +19,8 @@
     let inviteSent = null;
     let inviteCleanup = null;
     let inviteTimeoutId = null;
+    let inviteCountdown = 0;
+    let inviteCountdownId = null;
 
     // Get unique interests from available users
     $: userInterests = [...new Set(
@@ -51,6 +53,17 @@
         try {
             inviteSent = user.user_id;
             let responded = false;
+            inviteCountdown = 30;
+            if (inviteCountdownId) {
+                clearInterval(inviteCountdownId);
+            }
+            inviteCountdownId = setInterval(() => {
+                inviteCountdown = Math.max(inviteCountdown - 1, 0);
+                if (inviteCountdown <= 0) {
+                    clearInterval(inviteCountdownId);
+                    inviteCountdownId = null;
+                }
+            }, 1000);
 
             inviteCleanup = await sendChatInviteWithResponse(user.user_id, (accepted) => {
                 if (responded) return;
@@ -59,7 +72,12 @@
                     clearTimeout(inviteTimeoutId);
                     inviteTimeoutId = null;
                 }
+                if (inviteCountdownId) {
+                    clearInterval(inviteCountdownId);
+                    inviteCountdownId = null;
+                }
                 inviteSent = null;
+                inviteCountdown = 0;
                 inviteCleanup?.();
                 inviteCleanup = null;
 
@@ -74,6 +92,11 @@
                 if (responded) return;
                 responded = true;
                 inviteSent = null;
+                inviteCountdown = 0;
+                if (inviteCountdownId) {
+                    clearInterval(inviteCountdownId);
+                    inviteCountdownId = null;
+                }
                 inviteCleanup?.();
                 inviteCleanup = null;
                 showToast('Invite expired. Try again.', 'info');
@@ -81,9 +104,14 @@
         } catch (err) {
             console.error('Failed to send invite:', err);
             inviteSent = null;
+            inviteCountdown = 0;
             if (inviteTimeoutId) {
                 clearTimeout(inviteTimeoutId);
                 inviteTimeoutId = null;
+            }
+            if (inviteCountdownId) {
+                clearInterval(inviteCountdownId);
+                inviteCountdownId = null;
             }
             inviteCleanup?.();
             inviteCleanup = null;
@@ -205,7 +233,9 @@
                                 on:click={() => inviteUser(user)}
                                 disabled={inviteSent === user.user_id}
                             >
-                                {inviteSent === user.user_id ? '✓ Invite Sent' : '💬 Chat'}
+                                {inviteSent === user.user_id
+                                    ? `⏳ ${inviteCountdown}s`
+                                    : '💬 Chat'}
                             </button>
                         </div>
                     {/each}

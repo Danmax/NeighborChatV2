@@ -48,8 +48,14 @@ export async function saveUserProfile(profileData) {
     };
 
     // Core profile fields
-    if (profileData.name !== undefined) upsertData.display_name = profileData.name;
-    if (profileData.username !== undefined) upsertData.username = profileData.username?.toLowerCase();
+    if (profileData.name !== undefined) {
+        upsertData.display_name = profileData.name;
+        upsertData.username = profileData.name?.toLowerCase();
+    }
+    if (profileData.username !== undefined) {
+        upsertData.username = profileData.username?.toLowerCase();
+        upsertData.display_name = profileData.username;
+    }
     if (profileData.avatar !== undefined) upsertData.avatar = profileData.avatar;
     if (profileData.interests !== undefined) upsertData.interests = profileData.interests || [];
     if (profileData.location !== undefined) upsertData.location = profileData.location;
@@ -85,8 +91,14 @@ export async function saveUserProfile(profileData) {
 
     // Update local state with saved data
     const localUpdate = {};
-    if (profileData.name !== undefined) localUpdate.name = profileData.name;
-    if (profileData.username !== undefined) localUpdate.username = profileData.username?.toLowerCase();
+    if (profileData.name !== undefined) {
+        localUpdate.name = profileData.name;
+        localUpdate.username = profileData.name?.toLowerCase();
+    }
+    if (profileData.username !== undefined) {
+        localUpdate.username = profileData.username?.toLowerCase();
+        localUpdate.name = profileData.username;
+    }
     if (profileData.avatar !== undefined) localUpdate.avatar = profileData.avatar;
     if (profileData.interests !== undefined) localUpdate.interests = profileData.interests;
     if (profileData.location !== undefined) localUpdate.location = profileData.location;
@@ -160,33 +172,6 @@ export async function updateInterests(interests) {
 }
 
 /**
- * Update display name
- */
-export async function updateDisplayName(name) {
-    const user = get(currentUser);
-
-    if (!user) {
-        throw new Error('Must be logged in to update display name');
-    }
-
-    const supabase = getSupabase();
-
-    const { error } = await supabase
-        .from('user_profiles')
-        .update({
-            display_name: name,
-            updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.user_id);
-
-    if (error) throw error;
-
-    updateCurrentUser({ name });
-
-    return name;
-}
-
-/**
  * Update username with validation and availability checking
  */
 export async function updateUsername(username) {
@@ -222,6 +207,7 @@ export async function updateUsername(username) {
         .from('user_profiles')
         .update({
             username: sanitized.toLowerCase(),
+            display_name: sanitized,
             updated_at: new Date().toISOString()
         })
         .eq('user_id', user.user_id);
@@ -234,7 +220,7 @@ export async function updateUsername(username) {
         throw error;
     }
 
-    updateCurrentUser({ username: sanitized.toLowerCase() });
+    updateCurrentUser({ username: sanitized.toLowerCase(), name: sanitized });
 
     return sanitized.toLowerCase();
 }
@@ -325,9 +311,9 @@ export const INTERESTS = [
 ];
 
 /**
- * Fun display name suggestions
+ * Username suggestions
  */
-export const FUN_NAMES = [
+export const USERNAME_SUGGESTIONS = [
     'Friendly Neighbor',
     'Coffee Enthusiast',
     'Garden Guru',

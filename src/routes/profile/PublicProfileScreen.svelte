@@ -54,12 +54,12 @@
         try {
             await saveContact({
                 user_id: profile.user_id,
-                name: profile.display_name,
+                name: profile.username || profile.display_name,
                 avatar: profile.avatar,
                 interests: profile.interests || []
             });
             isSaved = true;
-            message = `${profile.display_name} saved to contacts!`;
+            message = `${profile.username || profile.display_name} saved to contacts!`;
             setTimeout(() => message = '', 3000);
         } catch (err) {
             actionError = 'Failed to save contact: ' + err.message;
@@ -73,7 +73,7 @@
         try {
             const timeoutId = setTimeout(() => {
                 updateInviteStatus(profile.user_id, 'expired');
-                actionError = `Invite to ${profile.display_name} expired (no response)`;
+            actionError = `Invite to ${profile.username || profile.display_name} expired (no response)`;
                 setTimeout(() => actionError = '', 3000);
             }, 60000);
 
@@ -82,18 +82,18 @@
             const cleanup = await sendChatInviteWithResponse(profile.user_id, (accepted) => {
                 if (accepted) {
                     updateInviteStatus(profile.user_id, 'accepted');
-                    message = `${profile.display_name} accepted your invite!`;
+                    message = `${profile.username || profile.display_name} accepted your invite!`;
                     setTimeout(() => message = '', 3000);
                     push(`/chat/${profile.user_id}`);
                 } else {
                     updateInviteStatus(profile.user_id, 'declined');
-                    actionError = `${profile.display_name} declined your invite`;
+                    actionError = `${profile.username || profile.display_name} declined your invite`;
                     setTimeout(() => actionError = '', 3000);
                 }
                 cleanup?.();
             });
 
-            message = `Invite sent to ${profile.display_name}. Waiting for response...`;
+            message = `Invite sent to ${profile.username || profile.display_name}. Waiting for response...`;
             setTimeout(() => {
                 if (message.includes('Waiting for response')) {
                     message = '';
@@ -168,10 +168,7 @@
 
         <!-- Profile Info Card -->
         <div class="card profile-info-card">
-            <h2 class="profile-name">{profile.display_name}</h2>
-            {#if profile.username}
-                <p class="profile-username">@{profile.username}</p>
-            {/if}
+            <h2 class="profile-name">@{profile.username || profile.display_name}</h2>
 
             {#if profile.bio}
                 <p class="profile-bio">{profile.bio}</p>

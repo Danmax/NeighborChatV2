@@ -62,14 +62,7 @@ export function isCurrentUserMentioned(message, currentUser) {
 
     const mentions = extractMentions(message);
 
-    // Check both username and display name
     const username = currentUser.username?.toLowerCase();
-    const displayName = currentUser.name?.toLowerCase().replace(/\s+/g, '');
 
-    return mentions.some(mention =>
-        mention === username ||
-        mention === displayName ||
-        // Also check if first name matches
-        mention === currentUser.name?.split(' ')[0]?.toLowerCase()
-    );
+    return mentions.some(mention => mention === username);
 }

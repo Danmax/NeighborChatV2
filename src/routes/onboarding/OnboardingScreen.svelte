@@ -6,7 +6,7 @@
     import { getSupabase } from '../../lib/supabase.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
-    import { INTERESTS, FUN_NAMES } from '../../services/profile.service.js';
+import { INTERESTS } from '../../services/profile.service.js';
     import { generateRandomAvatar } from '../../lib/utils/avatar.js';
     import {
         generateRandomUsername,
@@ -16,8 +16,7 @@
     } from '../../lib/utils/username.js';
 
     let step = 1;
-    let displayName = $currentUser?.name || '';
-    let username = '';
+    let displayName = $currentUser?.username || $currentUser?.name || '';
     let usernameError = '';
     let avatar = $currentUser?.avatar || generateRandomAvatar();
     let selectedInterests = [];
@@ -42,17 +41,16 @@
                 .maybeSingle();
 
             if (profile) {
-                displayName = profile.display_name || displayName;
+                displayName = profile.username || profile.display_name || displayName;
                 avatar = profile.avatar || avatar;
                 selectedInterests = profile.interests || selectedInterests;
-                username = profile.username || username;
 
                 if (profile.onboarding_completed) {
                     updateCurrentUser({
-                        name: profile.display_name || displayName,
+                        name: profile.username || profile.display_name || displayName,
                         avatar: profile.avatar || avatar,
                         interests: profile.interests || selectedInterests,
-                        username: profile.username || username,
+                        username: profile.username || displayName,
                         onboardingCompleted: true
                     });
                     showTopMenu.set(true);
@@ -64,22 +62,18 @@
         }
     });
 
-    function selectFunName(name) {
-        displayName = name;
-    }
-
     function randomizeUsername() {
-        username = generateRandomUsername();
+        displayName = generateRandomUsername();
         usernameError = '';
     }
 
     function selectSuggestion(suggestion) {
-        username = suggestion;
+        displayName = suggestion;
         usernameError = '';
     }
 
     function handleUsernameInput(event) {
-        username = sanitizeUsernameInput(event.target.value);
+        displayName = sanitizeUsernameInput(event.target.value);
         usernameError = '';
     }
 
@@ -98,13 +92,13 @@
     function nextStep() {
         if (step === 1) {
             if (!displayName.trim()) {
-                error = 'Please enter a display name';
+                error = 'Please enter a username';
                 return;
             }
 
-            // Validate username if provided
-            if (username.trim()) {
-                const validation = validateUsername(username);
+            // Validate username
+            if (displayName.trim()) {
+                const validation = validateUsername(displayName);
                 if (!validation.valid) {
                     usernameError = validation.error;
                     error = 'Please fix the username error';
@@ -151,10 +145,8 @@
                 onboarding_completed: true
             };
 
-            // Add username if provided
-            if (username.trim()) {
-                profileData.username = username.trim().toLowerCase();
-            }
+            // Username required (consolidated)
+            profileData.username = displayName.trim().toLowerCase();
 
             // Upsert profile in database (handles existing users)
             const { data: savedProfile, error: profileError } = await supabase
@@ -174,7 +166,7 @@
                 name: displayName,
                 avatar: avatar,
                 interests: selectedInterests,
-                username: username.trim() ? username.trim().toLowerCase() : undefined,
+                username: displayName.trim().toLowerCase(),
                 onboardingCompleted: true
             });
 
@@ -213,38 +205,12 @@
             </h2>
 
             <div class="form-group">
-                <label for="display-name">Your Display Name</label>
-                <input
-                    id="display-name"
-                    type="text"
-                    bind:value={displayName}
-                    placeholder="How should neighbors know you?"
-                    maxlength="50"
-                />
-            </div>
-
-            <fieldset class="form-group">
-                <legend>Or pick a fun name:</legend>
-                <div class="fun-names-grid">
-                    {#each FUN_NAMES.slice(0, 6) as name}
-                        <button
-                            class="fun-name-btn"
-                            class:selected={displayName === name}
-                            on:click={() => selectFunName(name)}
-                        >
-                            {name}
-                        </button>
-                    {/each}
-                </div>
-            </fieldset>
-
-            <div class="form-group">
-                <label for="username-input">Choose Your Username <span class="optional-label">(optional)</span></label>
+                <label for="username-input">Choose Your Username</label>
                 <div class="username-input-row">
                     <input
                         id="username-input"
                         type="text"
-                        bind:value={username}
+                        bind:value={displayName}
                         on:input={handleUsernameInput}
                         placeholder="friendly_neighbor_4285"
                         maxlength="30"

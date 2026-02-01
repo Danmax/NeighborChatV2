@@ -8,7 +8,6 @@
         INTERESTS,
         updateAvatar,
         updateInterests,
-        updateDisplayName,
         updateUsername,
         updateProfileDetails,
         updateBio,
@@ -22,10 +21,8 @@
 
     let activeTab = 'info';
     let editingAvatar = false;
-    let editingName = false;
     let editingUsername = false;
     let editingDetails = false;
-    let tempName = '';
     let tempUsername = '';
     let tempAvatar = null;
     let saving = false;
@@ -59,7 +56,6 @@
     function setTab(tab) {
         activeTab = tab;
         editingAvatar = false;
-        editingName = false;
         editingUsername = false;
         editingBio = false;
         editingBanner = false;
@@ -67,29 +63,8 @@
         usernameError = '';
     }
 
-    function startEditName() {
-        tempName = $currentUser?.name || '';
-        editingName = true;
-    }
-
-    async function saveName() {
-        if (!tempName.trim()) return;
-
-        saving = true;
-        try {
-            await updateDisplayName(tempName);
-            editingName = false;
-            message = 'Name updated!';
-            setTimeout(() => message = '', 2000);
-        } catch (err) {
-            message = 'Failed to save: ' + err.message;
-        } finally {
-            saving = false;
-        }
-    }
-
     function startEditUsername() {
-        tempUsername = $currentUser?.username || '';
+        tempUsername = $currentUser?.username || $currentUser?.name || '';
         usernameError = '';
         editingUsername = true;
     }
@@ -314,26 +289,6 @@
                 <div class="profile-header">
                     <Avatar avatar={$currentUser?.avatar} size="lg" />
                     <div class="profile-header-info">
-                        {#if editingName}
-                            <div class="edit-name-row">
-                                <input
-                                    type="text"
-                                    bind:value={tempName}
-                                    placeholder="Display name"
-                                    maxlength="50"
-                                />
-                                <button class="btn btn-small btn-primary" on:click={saveName} disabled={saving}>
-                                    {saving ? '...' : '✓'}
-                                </button>
-                                <button class="btn btn-small btn-secondary" on:click={() => editingName = false}>
-                                    ✕
-                                </button>
-                            </div>
-                        {:else}
-                            <h3>{$currentUser?.name || 'Guest'}</h3>
-                            <button class="edit-btn" on:click={startEditName}>✏️ Edit</button>
-                        {/if}
-
                         {#if editingUsername}
                             <div class="edit-username-row">
                                 <input
@@ -355,10 +310,8 @@
                                 <p class="username-error">{usernameError}</p>
                             {/if}
                         {:else}
-                            <p class="profile-username">
-                                @{$currentUser?.username || 'not_set'}
-                                <button class="edit-btn" on:click={startEditUsername}>✏️ Edit</button>
-                            </p>
+                            <h3>@{$currentUser?.username || $currentUser?.name || 'not_set'}</h3>
+                            <button class="edit-btn" on:click={startEditUsername}>✏️ Edit</button>
                         {/if}
 
                         <p class="profile-email">
@@ -443,7 +396,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="magic_email">Magic Email</label>
+                            <label for="magic_email">Email</label>
                             <input
                                 type="email"
                                 id="magic_email"
@@ -451,7 +404,7 @@
                                 placeholder="alternate@email.com"
                                 maxlength="255"
                             />
-                            <span class="field-hint">An alternate email for magic link sign-in</span>
+                            <span class="field-hint">Optional alternate email for sign-in</span>
                         </div>
 
                         <div class="form-actions">
@@ -484,7 +437,7 @@
                             <span class="detail-value">{$currentUser?.city || 'Not set'}</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">✉️ Magic Email</span>
+                            <span class="detail-label">✉️ Email</span>
                             <span class="detail-value">{$currentUser?.magic_email || 'Not set'}</span>
                         </div>
                     </div>
@@ -730,14 +683,6 @@
         font-size: 13px;
     }
 
-    .profile-username {
-        color: var(--text-muted);
-        font-size: 12px;
-        margin: 4px 0 0 0;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
 
     .edit-btn {
         background: none;

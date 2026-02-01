@@ -136,18 +136,20 @@ export async function checkEmailExists(email) {
 export async function createUserProfile(userData, onboardingData = {}) {
     const supabase = getSupabase();
 
+    const consolidatedName = onboardingData.username || onboardingData.name || userData.name;
+
     // Prepare profile data
     const profileInsert = {
         user_id: userData.user_id,
-        display_name: onboardingData.name || userData.name,
+        display_name: consolidatedName,
         avatar: onboardingData.avatar || userData.avatar,
         interests: onboardingData.interests || [],
         onboarding_completed: true
     };
 
     // Add username if provided
-    if (onboardingData.username) {
-        profileInsert.username = onboardingData.username.toLowerCase();
+    if (consolidatedName) {
+        profileInsert.username = consolidatedName.toLowerCase();
     }
 
     const { data, error } = await supabase
@@ -163,15 +165,15 @@ export async function createUserProfile(userData, onboardingData = {}) {
 
     // Update local user state with saved data
     const userStateUpdate = {
-        name: onboardingData.name || userData.name,
+        name: consolidatedName,
         avatar: onboardingData.avatar || userData.avatar,
         interests: onboardingData.interests || [],
         onboardingCompleted: true
     };
 
     // Add username if provided
-    if (onboardingData.username) {
-        userStateUpdate.username = onboardingData.username.toLowerCase();
+    if (consolidatedName) {
+        userStateUpdate.username = consolidatedName.toLowerCase();
     }
 
     updateCurrentUser(userStateUpdate);
@@ -327,7 +329,7 @@ async function createUserDataFromSession(user) {
     if (profile && !error) {
         return {
             ...baseData,
-            name: profile.display_name || baseData.name,
+            name: profile.username || profile.display_name || baseData.name,
             username: profile.username,
             avatar: profile.avatar || baseData.avatar,
             interests: profile.interests || [],

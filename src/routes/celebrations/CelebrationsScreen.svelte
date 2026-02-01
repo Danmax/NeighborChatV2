@@ -199,7 +199,7 @@
                     <textarea
                         id="message"
                         bind:value={message}
-                        placeholder="Share a shout-out or thank you... (use @display name to mention)"
+                        placeholder="Share a shout-out or thank you... (use @username to mention)"
                         rows="3"
                         maxlength="500"
                     ></textarea>
