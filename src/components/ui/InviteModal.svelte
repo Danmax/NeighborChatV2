@@ -10,6 +10,7 @@
 
     let remainingTime = 30;
     let intervalId = null;
+    let timeoutId = null;
 
     // Start countdown when modal shows
     $: if (show && invite) {
@@ -18,6 +19,9 @@
         // Clear any existing interval
         if (intervalId) {
             clearInterval(intervalId);
+        }
+        if (timeoutId) {
+            clearTimeout(timeoutId);
         }
 
         // Start countdown
@@ -30,6 +34,10 @@
                 handleDecline(); // Auto-decline on timeout
             }
         }, 1000);
+
+        timeoutId = setTimeout(() => {
+            handleDecline();
+        }, 30000);
     }
 
     $: if (show && remainingTime <= 0 && invite) {
@@ -37,14 +45,23 @@
     }
 
     // Clean up interval when modal closes
-    $: if (!show && intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+    $: if (!show && (intervalId || timeoutId)) {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
     }
 
     onDestroy(() => {
         if (intervalId) {
             clearInterval(intervalId);
+        }
+        if (timeoutId) {
+            clearTimeout(timeoutId);
         }
     });
 

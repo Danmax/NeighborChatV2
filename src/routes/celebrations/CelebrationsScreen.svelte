@@ -6,6 +6,7 @@
         celebrations,
         celebrationsLoading,
         CELEBRATION_CATEGORIES,
+        getCelebrationCategory,
         addReaction,
         removeReaction
     } from '../../stores/celebrations.js';
@@ -17,7 +18,6 @@
         reactToCelebration,
         postComment
     } from '../../services/celebrations.service.js';
-    import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import { showToast } from '../../stores/toasts.js';
 
@@ -272,16 +272,53 @@
                         <p class="empty-hint">Be the first to share a shout-out!</p>
                     </div>
                 {:else}
-                    {#each $celebrations as celebration (celebration.id)}
-                        <CelebrationCard
-                            {celebration}
-                            variant="hero"
-                            on:reaction={handleReaction}
-                            on:comment={handleComment}
-                            on:edit={handleEdit}
-                            on:open={() => push(`/celebrations/${celebration.id}`)}
-                        />
-                    {/each}
+                    <div class="celebrations-grid">
+                        {#each $celebrations as celebration (celebration.id)}
+                            <button
+                                type="button"
+                                class="celebration-feed-card"
+                                on:click={() => push(`/celebrations/${celebration.id}`)}
+                            >
+                                <div class="feed-media">
+                                    {#if celebration.gif_url || celebration.image || celebration.image_url}
+                                        <img
+                                            src={celebration.gif_url || celebration.image || celebration.image_url}
+                                            alt="Celebration media"
+                                            loading="lazy"
+                                        />
+                                    {:else}
+                                        <div class="media-fallback">
+                                            <span>{getCelebrationCategory(celebration.category).emoji}</span>
+                                        </div>
+                                    {/if}
+                                    <div class="feed-type">
+                                        <span class="feed-emoji">{getCelebrationCategory(celebration.category).emoji}</span>
+                                        <span class="feed-type-label">{getCelebrationCategory(celebration.category).label}</span>
+                                    </div>
+                                </div>
+
+                                <div class="feed-body">
+                                    {#if celebration.title}
+                                        <h3 class="feed-title">{celebration.title}</h3>
+                                    {:else}
+                                        <h3 class="feed-title">Kudos</h3>
+                                    {/if}
+
+                                    {#if celebration.message}
+                                        <p class="feed-message">
+                                            {celebration.message}
+                                        </p>
+                                    {/if}
+
+                                    {#if celebration.message && celebration.message.includes('@')}
+                                        <div class="feed-mentions">
+                                            {celebration.message.match(/@[a-zA-Z0-9_-]+/g)?.slice(0, 3).join(' ')}
+                                        </div>
+                                    {/if}
+                                </div>
+                            </button>
+                        {/each}
+                    </div>
                 {/if}
             </div>
         {/if}
@@ -537,12 +574,120 @@
     }
 
     .celebrations-feed {
+        width: 100%;
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .celebrations-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+    }
+
+    .celebration-feed-card {
+        background: white;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid var(--cream-dark);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        text-align: left;
+        padding: 0;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
         display: flex;
         flex-direction: column;
-        gap: 16px;
+    }
+
+    .celebration-feed-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .feed-media {
+        position: relative;
+        aspect-ratio: 4 / 3;
+        background: #f4f4f4;
+        overflow: hidden;
+    }
+
+    .feed-media img {
         width: 100%;
-        max-width: 760px;
-        margin: 0 auto;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .media-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 42px;
+        color: var(--text-muted);
+        background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
+    }
+
+    .feed-type {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.65);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .feed-emoji {
+        font-size: 14px;
+    }
+
+    .feed-body {
+        padding: 14px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .feed-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .feed-message {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-light);
+        line-height: 1.5;
+        max-height: 3.6em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .feed-mentions {
+        font-size: 12px;
+        color: var(--primary);
+        font-weight: 600;
+        display: inline-flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 720px) {
+        .celebrations-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     .loading-state, .empty-state {
