@@ -499,8 +499,6 @@
     .view-all-comments:hover {
         text-decoration: underline;
     }
-</style>
-<style>
     .card-content.hero {
         padding: 0 16px 16px;
     }
