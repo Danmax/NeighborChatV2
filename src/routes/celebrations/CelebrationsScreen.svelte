@@ -17,6 +17,7 @@
         postComment
     } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
+    import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import { showToast } from '../../stores/toasts.js';
 
     // Redirect if not authenticated
@@ -27,6 +28,8 @@
 
     let showCreateForm = false;
     let creating = false;
+    let showGifPicker = false;
+    let selectedGif = null;
 
     // Form fields
     let category = 'milestone';
@@ -47,12 +50,14 @@
             await createCelebration({
                 category,
                 title: title.trim() || null,
-                message: message.trim()
+                message: message.trim(),
+                gif_url: selectedGif?.url || null
             });
             // Reset form
             category = 'milestone';
             title = '';
             message = '';
+            selectedGif = null;
             showCreateForm = false;
             showToast('Celebration posted!', 'success');
         } catch (err) {
@@ -61,6 +66,17 @@
         } finally {
             creating = false;
         }
+    }
+
+    function handleGifSelect(event) {
+        selectedGif = event.detail;
+        showGifPicker = false;
+    }
+
+    function handleShareBoard() {
+        const url = `${window.location.origin}/#/celebrations`;
+        navigator.clipboard?.writeText(url);
+        showToast('Kudos board link copied!', 'success');
     }
 
     async function handleReaction(event) {
@@ -111,8 +127,11 @@
             <button class="back-btn" on:click={() => push('/')}>← Back</button>
             <h2 class="card-title">
                 <span class="icon">🎉</span>
-                Celebration Wall
+                Kudos Board
             </h2>
+            <button class="btn btn-secondary btn-small" on:click={handleShareBoard}>
+                🔗 Share
+            </button>
         </div>
 
         <!-- Create Celebration Button -->
@@ -122,7 +141,7 @@
                 on:click={() => showCreateForm = true}
             >
                 <span class="create-icon">✨</span>
-                Share something to celebrate!
+                Give kudos to your community
             </button>
         {/if}
 
@@ -166,10 +185,26 @@
                     <textarea
                         id="message"
                         bind:value={message}
-                        placeholder="Share your good news..."
+                        placeholder="Share a shout-out or thank you..."
                         rows="3"
                         maxlength="500"
                     ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>GIF (optional)</label>
+                    {#if selectedGif}
+                        <div class="gif-preview">
+                            <img src={selectedGif.url} alt="Selected GIF" />
+                            <button class="btn btn-secondary btn-small" on:click={() => selectedGif = null}>
+                                Remove
+                            </button>
+                        </div>
+                    {:else}
+                        <button class="btn btn-secondary btn-small" on:click={() => showGifPicker = true}>
+                            Choose GIF
+                        </button>
+                    {/if}
                 </div>
 
                 <div class="form-actions">
@@ -185,7 +220,7 @@
                         on:click={handleCreate}
                         disabled={!message.trim() || creating}
                     >
-                        {creating ? 'Posting...' : '🎉 Celebrate!'}
+                        {creating ? 'Posting...' : '🎉 Post Kudos'}
                     </button>
                 </div>
             </div>
@@ -214,6 +249,12 @@
                 {/each}
             {/if}
         </div>
+
+        <GiphyPicker
+            show={showGifPicker}
+            on:select={handleGifSelect}
+            on:close={() => showGifPicker = false}
+        />
     </div>
 {/if}
 
@@ -356,6 +397,20 @@
         display: flex;
         gap: 12px;
         justify-content: flex-end;
+    }
+
+    .gif-preview {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: var(--cream);
+        padding: 10px;
+        border-radius: var(--radius-sm);
+    }
+
+    .gif-preview img {
+        width: 100%;
+        border-radius: 12px;
     }
 
     .btn {

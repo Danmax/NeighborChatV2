@@ -75,7 +75,11 @@
 
         <p class="celebration-message">{celebration.message}</p>
 
-        {#if celebration.image}
+        {#if celebration.gif_url}
+            <div class="celebration-image">
+                <img src={celebration.gif_url} alt="GIF" loading="lazy" />
+            </div>
+        {:else if celebration.image}
             <div class="celebration-image">
                 <img src={celebration.image} alt="Celebration" loading="lazy" />
             </div>

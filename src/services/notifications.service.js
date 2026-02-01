@@ -14,6 +14,7 @@ import {
 import { get } from 'svelte/store';
 
 const STORAGE_KEY = 'neighborChat_notifications';
+const TABLE_MISSING_CODE = 'PGRST205';
 
 // =====================================================
 // localStorage helpers (for guests)
@@ -34,6 +35,10 @@ function saveNotifications(notifications) {
     } catch (e) {
         console.error('Failed to save notifications:', e);
     }
+}
+
+function isTableMissing(error) {
+    return error?.code === TABLE_MISSING_CODE;
 }
 
 // =====================================================
@@ -93,7 +98,17 @@ export async function fetchNotifications(limit = 50) {
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
-            if (error) throw error;
+            if (error) {
+                if (isTableMissing(error)) {
+                    const allNotifications = getStoredNotifications();
+                    const userNotifications = allNotifications
+                        .filter(n => n.user_id === user.user_id)
+                        .slice(0, limit);
+                    setNotifications(userNotifications);
+                    return userNotifications;
+                }
+                throw error;
+            }
 
             const notifications = (data || []).map(transformNotificationFromDb);
             setNotifications(notifications);
@@ -137,7 +152,22 @@ export async function createNotification(notificationData) {
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                if (isTableMissing(error)) {
+                    const notification = {
+                        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        ...notificationData,
+                        read: false,
+                        created_at: new Date().toISOString()
+                    };
+                    const notifications = getStoredNotifications();
+                    notifications.unshift(notification);
+                    saveNotifications(notifications);
+                    addNotification(notification);
+                    return notification;
+                }
+                throw error;
+            }
 
             const notification = transformNotificationFromDb(data);
             addNotification(notification);
@@ -190,6 +220,9 @@ export async function markNotificationRead(notificationId) {
                 .eq('user_id', authUserId);
 
             if (error) {
+                if (isTableMissing(error)) {
+                    return;
+                }
                 console.error('Failed to mark as read in Supabase:', error);
             }
         } else {
@@ -228,6 +261,9 @@ export async function markAllNotificationsRead() {
                 .eq('read', false);
 
             if (error) {
+                if (isTableMissing(error)) {
+                    return;
+                }
                 console.error('Failed to mark all as read in Supabase:', error);
             }
         } else {
@@ -266,6 +302,9 @@ export async function deleteNotification(notificationId) {
                 .eq('user_id', authUserId);
 
             if (error) {
+                if (isTableMissing(error)) {
+                    return;
+                }
                 console.error('Failed to delete from Supabase:', error);
             }
         } else {
@@ -301,6 +340,9 @@ export async function clearAllNotifications() {
                 .eq('user_id', authUserId);
 
             if (error) {
+                if (isTableMissing(error)) {
+                    return;
+                }
                 console.error('Failed to clear from Supabase:', error);
             }
         } else {
