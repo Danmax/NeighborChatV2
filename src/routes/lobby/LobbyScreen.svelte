@@ -2,7 +2,7 @@
     import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push, location } from 'svelte-spa-router';
-    import { isAuthenticated, currentUser } from '../../stores/auth.js';
+    import { isAuthenticated, currentUser, authUser } from '../../stores/auth.js';
     import { onlineUsersList, onlineContactsList, isAvailable } from '../../stores/presence.js';
     import { upcomingEvents } from '../../stores/events.js';
     import { celebrations } from '../../stores/celebrations.js';
@@ -21,7 +21,7 @@
     import ContactList from '../../components/contacts/ContactList.svelte';
 
     // Redirect to auth if not authenticated (only after auth initialization)
-    $: if ($authInitialized && !$isAuthenticated && $location !== '/auth') {
+    $: if ($authInitialized && !$isAuthenticated && !$authUser && $location !== '/auth') {
         console.log('🔐 Home: Not authenticated, redirecting to /auth');
         push('/auth');
     }
