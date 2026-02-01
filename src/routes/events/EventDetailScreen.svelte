@@ -258,10 +258,10 @@
                                 <span>📍 {eventData.location}</span>
                             {/if}
                         </div>
-                        <div class="event-host">
-                            <Avatar avatar={eventData.creator_avatar} size="sm" />
-                            <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
-                        </div>
+                <button class="event-host" type="button" on:click={() => !isOwner && eventData.created_by && push(`/profile/view/${eventData.created_by}`)}>
+                    <Avatar avatar={eventData.creator_avatar} size="sm" />
+                    <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
+                </button>
                     </div>
                     <div class="event-actions">
                         <button class="btn btn-primary" on:click={handleRsvp}>

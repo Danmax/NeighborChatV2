@@ -282,6 +282,7 @@
                     {#each $celebrations as celebration (celebration.id)}
                         <CelebrationCard
                             {celebration}
+                            variant="hero"
                             on:reaction={handleReaction}
                             on:comment={handleComment}
                             on:edit={handleEdit}

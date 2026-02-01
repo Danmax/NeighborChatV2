@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { push } from 'svelte-spa-router';
     import Avatar from '../avatar/Avatar.svelte';
     import { getCelebrationCategory, REACTIONS } from '../../stores/celebrations.js';
     import { currentUser } from '../../stores/auth.js';
@@ -8,6 +9,7 @@
     export let interactive = true;
     export let clickable = true;
     export let showCommentsPreview = true;
+    export let variant = 'default';
 
     const dispatch = createEventDispatcher();
 
@@ -18,6 +20,7 @@
     $: commentCount = celebration.comments?.length || 0;
     $: formattedTime = formatTime(celebration.created_at);
     $: mediaUrl = celebration.gif_url || celebration.image || celebration.image_url;
+    $: authorId = celebration.authorId || celebration.user_id;
 
     function getReactionCounts(reactions = {}) {
         const counts = {};
@@ -68,6 +71,12 @@
         dispatch('open', celebration);
     }
 
+    function handleProfileClick(event) {
+        event.stopPropagation();
+        if (!authorId || isOwn) return;
+        push(`/profile/view/${authorId}`);
+    }
+
     let showReactions = false;
 
     function toggleReactions(event) {
@@ -84,38 +93,59 @@
 
 <div class="celebration-card" class:clickable on:click={handleOpen}>
     <div class="card-header">
-        <div class="user-info">
+        <button class="user-info" type="button" on:click={handleProfileClick}>
             <Avatar avatar={celebration.user_avatar || celebration.author_avatar || celebration.avatar} size="md" />
             <div class="user-details">
                 <span class="user-name">{isOwn ? 'You' : (celebration.user_name || celebration.authorName || 'Neighbor')}</span>
                 <span class="post-time">{formattedTime}</span>
             </div>
-        </div>
+        </button>
         <div class="category-badge" style="background: {category.emoji === '🎂' ? '#FFB74D' : 'var(--primary)'}">
             {category.emoji}
         </div>
     </div>
 
-    <div class="card-content">
-        {#if celebration.title}
-            <h3 class="celebration-title">{celebration.title}</h3>
-        {/if}
-
-        {#if mediaUrl}
-            <div class="celebration-image">
-                <img src={mediaUrl} alt="Celebration media" loading="lazy" />
+    <div class="card-content" class:hero={variant === 'hero'}>
+        {#if variant === 'hero'}
+            <div class="hero-media">
+                {#if mediaUrl}
+                    <img src={mediaUrl} alt="Celebration media" loading="lazy" />
+                {:else}
+                    <div class="hero-fallback"></div>
+                {/if}
+                <div class="hero-overlay">
+                    <div class="hero-meta">
+                        <span class="hero-emoji">{category.emoji}</span>
+                        {#if celebration.title}
+                            <span class="hero-title">{celebration.title}</span>
+                        {/if}
+                    </div>
+                </div>
             </div>
             {#if celebration.message}
                 <p class="celebration-message">{celebration.message}</p>
             {/if}
         {:else}
-            {#if celebration.message}
-                <p class="celebration-message">{celebration.message}</p>
+            {#if celebration.title}
+                <h3 class="celebration-title">{celebration.title}</h3>
             {/if}
-            {#if celebration.image}
+
+            {#if mediaUrl}
                 <div class="celebration-image">
-                    <img src={celebration.image} alt="Celebration" loading="lazy" />
+                    <img src={mediaUrl} alt="Celebration media" loading="lazy" />
                 </div>
+                {#if celebration.message}
+                    <p class="celebration-message">{celebration.message}</p>
+                {/if}
+            {:else}
+                {#if celebration.message}
+                    <p class="celebration-message">{celebration.message}</p>
+                {/if}
+                {#if celebration.image}
+                    <div class="celebration-image">
+                        <img src={celebration.image} alt="Celebration" loading="lazy" />
+                    </div>
+                {/if}
             {/if}
         {/if}
     </div>
@@ -222,6 +252,11 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
     }
 
     .user-details {
@@ -465,3 +500,51 @@
         text-decoration: underline;
     }
 </style>
+    .card-content.hero {
+        padding: 0 16px 16px;
+    }
+
+    .hero-media {
+        position: relative;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        margin-bottom: 12px;
+        background: #f5f5f5;
+    }
+
+    .hero-media img {
+        width: 100%;
+        display: block;
+        height: 260px;
+        object-fit: cover;
+    }
+
+    .hero-fallback {
+        height: 200px;
+        background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
+    }
+
+    .hero-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
+        display: flex;
+        align-items: flex-end;
+        padding: 14px;
+    }
+
+    .hero-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: white;
+        font-weight: 600;
+    }
+
+    .hero-emoji {
+        font-size: 20px;
+    }
+
+    .hero-title {
+        font-size: 16px;
+    }

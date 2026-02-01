@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { push } from 'svelte-spa-router';
     import Avatar from '../avatar/Avatar.svelte';
     import { getEventType } from '../../stores/events.js';
     import { currentUser } from '../../stores/auth.js';
@@ -56,6 +57,12 @@
         e.stopPropagation();
         dispatch('rsvp', { event, attending: !isAttending });
     }
+
+    function handleHostClick(e) {
+        e.stopPropagation();
+        if (isCreator || !event.created_by) return;
+        push(`/profile/view/${event.created_by}`);
+    }
 </script>
 
 <div
@@ -103,10 +110,10 @@
         {/if}
 
         <div class="event-footer">
-            <div class="event-host">
+            <button class="event-host" type="button" on:click={handleHostClick}>
                 <Avatar avatar={event.creator_avatar} size="sm" />
                 <span>{isCreator ? 'You' : event.creator_name}</span>
-            </div>
+            </button>
 
             <div class="event-attendees">
                 <span class="attendee-count">👥 {attendeeCount}</span>
@@ -256,6 +263,11 @@
         gap: 8px;
         font-size: 12px;
         color: var(--text-muted);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
     }
 
     .event-attendees {
