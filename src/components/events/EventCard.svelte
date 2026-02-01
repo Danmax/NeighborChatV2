@@ -11,8 +11,8 @@
 
     $: eventType = getEventType(event.type);
     $: isCreator = event.created_by === $currentUser?.user_id;
-    $: isAttending = event.attendees?.includes($currentUser?.user_id);
-    $: attendeeCount = event.attendees?.length || 0;
+    $: isAttending = event.isAttending ?? event.attendees?.includes($currentUser?.user_id);
+    $: attendeeCount = (event.attendeeCount ?? event.attendees?.length) || 0;
     $: formattedDate = formatDate(event.date);
     $: formattedTime = formatTime(event.time);
     $: isPast = new Date(event.date) < new Date();
@@ -89,6 +89,10 @@
 
         {#if !compact && event.description}
             <p class="event-description">{event.description}</p>
+        {/if}
+
+        {#if !compact && isCreator && event.invited_user_ids?.length}
+            <div class="event-invites">Invited {event.invited_user_ids.length} contacts</div>
         {/if}
 
         <div class="event-footer">
@@ -210,6 +214,12 @@
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+    }
+
+    .event-invites {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 10px;
     }
 
     .event-footer {

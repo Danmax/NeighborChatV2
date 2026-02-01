@@ -5,7 +5,7 @@
     import { initSupabase } from './lib/supabase.js';
     import { checkExistingAuth, setupAuthListener } from './services/auth.service.js';
     import { isAuthenticated, currentUser } from './stores/auth.js';
-    import { isLoading, setLoading, showTopMenu } from './stores/ui.js';
+    import { isLoading, setLoading, showTopMenu, authInitialized } from './stores/ui.js';
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
     import { userStatus, isAvailable } from './stores/presence.js';
@@ -43,6 +43,8 @@
     import CelebrationsScreen from './routes/celebrations/CelebrationsScreen.svelte';
     import ContactsScreen from './routes/contacts/ContactsScreen.svelte';
     import NotificationsScreen from './routes/notifications/NotificationsScreen.svelte';
+    import MessagesScreen from './routes/messages/MessagesScreen.svelte';
+    import ThreadScreen from './routes/messages/ThreadScreen.svelte';
     import OnboardingScreen from './routes/onboarding/OnboardingScreen.svelte';
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
@@ -63,6 +65,8 @@
         '/celebrations': CelebrationsScreen,
         '/contacts': ContactsScreen,
         '/notifications': NotificationsScreen,
+        '/messages': MessagesScreen,
+        '/messages/:id': ThreadScreen,
         '/onboarding': OnboardingScreen,
         '/profile': ProfileScreen,
         '/profile/view/:userId': PublicProfileScreen,
@@ -82,6 +86,10 @@
 
             // Check for existing auth
             const user = await checkExistingAuth();
+
+            // Signal that initial auth check is complete
+            authInitialized.set(true);
+            console.log('🔐 Auth initialization complete');
 
             // Set up auth state listener with onboarding routing
             authSubscription = setupAuthListener(({ event, user, shouldOnboard }) => {
@@ -183,6 +191,12 @@
 
     // Hide footer when in chat mode
     $: isInChatMode = $location?.startsWith('/chat') || $location === '/lobby-chat';
+
+    // Enforce onboarding before access
+    $: if ($isAuthenticated && $currentUser && !$currentUser.onboardingCompleted && $location !== '/onboarding') {
+        showTopMenu.set(false);
+        push('/onboarding');
+    }
 </script>
 
 {#if $isLoading || !ready}
@@ -267,6 +281,10 @@
             <a href="#/" class="footer-btn active">
                 <span class="footer-icon">🏠</span>
                 <span class="footer-label">Home</span>
+            </a>
+            <a href="#/messages" class="footer-btn">
+                <span class="footer-icon">✉️</span>
+                <span class="footer-label">Messages</span>
             </a>
             <a href="#/events" class="footer-btn">
                 <span class="footer-icon">📅</span>

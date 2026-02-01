@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
@@ -20,7 +21,8 @@
     import NotificationItem from '../../components/notifications/NotificationItem.svelte';
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 NotificationsScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 
@@ -54,9 +56,15 @@
         // Navigate based on type
         switch (notification.type) {
             case NOTIFICATION_TYPES.CHAT_INVITE:
-            case NOTIFICATION_TYPES.CHAT_MESSAGE:
                 if (notification.data?.from_user_id) {
                     push(`/chat/${notification.data.from_user_id}`);
+                }
+                break;
+            case NOTIFICATION_TYPES.CHAT_MESSAGE:
+                if (notification.data?.from_user_id) {
+                    push(`/messages/${notification.data.from_user_id}`);
+                } else {
+                    push('/messages');
                 }
                 break;
             case NOTIFICATION_TYPES.EVENT_INVITE:

@@ -349,7 +349,7 @@ export async function loadPublicProfile(userId) {
     const supabase = getSupabase();
 
     const { data, error } = await supabase
-        .from('user_profiles')
+        .from('public_profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
@@ -362,7 +362,7 @@ export async function loadPublicProfile(userId) {
         return null;
     }
 
-    // Filter fields by privacy settings
+    // View already applies privacy settings
     return {
         user_id: data.user_id,
         display_name: data.display_name,
@@ -371,11 +371,10 @@ export async function loadPublicProfile(userId) {
         bio: data.bio,
         banner_color: data.banner_color,
         banner_pattern: data.banner_pattern,
-        interests: data.show_interests ? data.interests : [],
-        city: data.show_city ? data.city : null,
-        phone: data.show_phone ? data.phone : null,
-        birthday: data.show_birthday ? data.birthday : null,
-        // Don't include email even if show_email is true (for security)
+        interests: data.interests || [],
+        city: data.city || null,
+        phone: data.phone || null,
+        birthday: data.birthday || null,
         created_at: data.created_at
     };
 }

@@ -210,6 +210,9 @@ export async function checkExistingAuth() {
 
         return null;
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            return null;
+        }
         console.error('Auth check failed:', error);
         return null;
     }

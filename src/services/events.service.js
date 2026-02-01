@@ -29,6 +29,7 @@ function transformEventFromDb(row) {
         visibility: row.visibility || 'public',
         archived: row.archived || false,
         created_at: row.created_at,
+        invited_user_ids: eventData.invited_user_ids || [],
         ...eventData
     };
 }
@@ -38,7 +39,8 @@ function transformEventToDb(eventData, user, authUserId) {
     const extraData = {
         time: eventData.time,
         creator_avatar: user?.avatar,
-        location: eventData.location
+        location: eventData.location,
+        invited_user_ids: eventData.invited_user_ids || []
     };
 
     return {
@@ -75,9 +77,13 @@ export async function fetchEvents() {
         if (error) throw error;
 
         const events = (data || []).map(transformEventFromDb);
-        setEvents(events);
-        return events;
+        const decorated = await attachParticipants(events);
+        setEvents(decorated);
+        return decorated;
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            return [];
+        }
         console.error('Failed to fetch events:', error);
         eventsError.set(error.message);
         return [];
@@ -206,46 +212,45 @@ export async function rsvpToEvent(eventId, attending = true) {
     }
 
     try {
-        // First get current participants
-        const { data: event, error: fetchError } = await supabase
-            .from('community_events')
-            .select('participants')
-            .eq('id', eventId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        let participants = event.participants || [];
-
         if (attending) {
-            if (!participants.includes(authUserId)) {
-                participants = [...participants, authUserId];
-            }
+            const { error } = await supabase
+                .from('event_participants')
+                .insert([
+                    {
+                        event_id: eventId,
+                        membership_id: authUserId,
+                        status: 'registered',
+                        role: 'attendee',
+                        registered_at: new Date().toISOString()
+                    }
+                ]);
+
+            if (error && error.code !== '23505') throw error; // ignore duplicate
         } else {
-            participants = participants.filter(id => id !== authUserId);
+            const { error } = await supabase
+                .from('event_participants')
+                .delete()
+                .eq('event_id', eventId)
+                .eq('membership_id', authUserId);
+            if (error) throw error;
         }
 
-        const { data, error } = await supabase
+        const { data: refreshed, error: refreshError } = await supabase
             .from('community_events')
-            .update({ participants })
+            .select('*')
             .eq('id', eventId)
-            .select()
             .single();
 
-        if (error) {
-            // RLS may prevent non-creators from updating, provide local fallback
-            if (error.code === '42501' || error.message?.includes('policy')) {
-                // Update local store only
-                updateEvent(eventId, { attendees: participants });
-                console.warn('RLS: RSVP saved locally only (consider adding separate RSVP table)');
-                return { attendees: participants };
-            }
-            throw error;
+        if (refreshError) throw refreshError;
+
+        const baseEvent = transformEventFromDb(refreshed);
+        const updated = await attachParticipants([baseEvent]);
+        if (updated.length > 0) {
+            updateEvent(eventId, updated[0]);
+            return updated[0];
         }
 
-        const transformedEvent = transformEventFromDb(data);
-        updateEvent(eventId, transformedEvent);
-        return transformedEvent;
+        return baseEvent;
     } catch (error) {
         console.error('Failed to RSVP:', error);
         throw error;
@@ -276,4 +281,89 @@ export function subscribeToEvents(callback) {
         .subscribe();
 
     return subscription;
+}
+
+export async function fetchEventParticipants(eventId) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('event_participants')
+        .select('membership_id, status, role, registered_at')
+        .eq('event_id', eventId);
+
+    if (error) throw error;
+
+    const participantIds = (data || []).map(row => row.membership_id);
+    if (participantIds.length === 0) return [];
+
+    const { data: profiles, error: profileError } = await supabase
+        .from('public_profiles')
+        .select('user_id, display_name, avatar, username')
+        .in('user_id', participantIds);
+
+    if (profileError) throw profileError;
+
+    const profileMap = (profiles || []).reduce((acc, profile) => {
+        acc[profile.user_id] = profile;
+        return acc;
+    }, {});
+
+    return (data || []).map(row => ({
+        user_id: row.membership_id,
+        status: row.status,
+        role: row.role,
+        registered_at: row.registered_at,
+        profile: profileMap[row.membership_id]
+    }));
+}
+
+async function attachParticipants(events, partial = false) {
+    if (!events || events.length === 0) return [];
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return events;
+
+    const eventIds = events.map(e => e.id).filter(Boolean);
+    if (eventIds.length === 0) return events;
+
+    try {
+        const { data, error } = await supabase
+            .from('event_participants')
+            .select('event_id, membership_id')
+            .in('event_id', eventIds);
+
+        if (error) throw error;
+
+        const attendeesByEvent = {};
+        (data || []).forEach(row => {
+            if (!attendeesByEvent[row.event_id]) {
+                attendeesByEvent[row.event_id] = [];
+            }
+            attendeesByEvent[row.event_id].push(row.membership_id);
+        });
+
+        return events.map(event => {
+            const attendees = attendeesByEvent[event.id] || event.attendees || [];
+            const attendeeCount = attendees.length;
+            const isAttending = attendees.includes(authUserId);
+
+            if (partial) {
+                return {
+                    ...event,
+                    attendees,
+                    attendeeCount,
+                    isAttending
+                };
+            }
+
+            return {
+                ...event,
+                attendees,
+                attendeeCount,
+                isAttending
+            };
+        });
+    } catch (error) {
+        console.warn('Failed to attach participants:', error);
+        return events;
+    }
 }

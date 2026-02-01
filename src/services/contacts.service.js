@@ -1,5 +1,5 @@
 // Contacts service - Supabase operations for saved contacts
-import { getSupabase } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId } from '../lib/supabase.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setContacts,
@@ -52,6 +52,11 @@ export async function fetchContacts() {
 
     if (!user) return [];
 
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to view contacts.');
+    }
+
     contactsLoading.set(true);
     contactsError.set(null);
 
@@ -59,7 +64,7 @@ export async function fetchContacts() {
         const { data, error } = await supabase
             .from('saved_contacts')
             .select('*')
-            .eq('owner_id', user.user_id)
+            .eq('owner_id', authUserId)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -68,6 +73,9 @@ export async function fetchContacts() {
         setContacts(contacts);
         return contacts;
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            return [];
+        }
         console.error('Failed to fetch contacts:', error);
         contactsError.set(error.message);
         return [];
@@ -87,7 +95,12 @@ export async function saveContact(contactData) {
         throw new Error('Must be logged in to save contacts');
     }
 
-    const dbContact = transformContactToDb(contactData, user.user_id);
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to save contacts.');
+    }
+
+    const dbContact = transformContactToDb(contactData, authUserId);
 
     try {
         const { data, error } = await supabase
@@ -116,6 +129,11 @@ export async function updateContactInDb(userId, updates) {
 
     if (!user) return;
 
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to update contacts.');
+    }
+
     // Transform updates to DB format
     const dbUpdates = {};
     if (updates.name) dbUpdates.contact_name = updates.name;
@@ -128,7 +146,7 @@ export async function updateContactInDb(userId, updates) {
         const { data, error } = await supabase
             .from('saved_contacts')
             .update(dbUpdates)
-            .eq('owner_id', user.user_id)
+            .eq('owner_id', authUserId)
             .eq('contact_user_id', userId)
             .select()
             .single();
@@ -153,11 +171,16 @@ export async function deleteContact(userId) {
 
     if (!user) return;
 
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to remove contacts.');
+    }
+
     try {
         const { error } = await supabase
             .from('saved_contacts')
             .delete()
-            .eq('owner_id', user.user_id)
+            .eq('owner_id', authUserId)
             .eq('contact_user_id', userId);
 
         if (error) throw error;

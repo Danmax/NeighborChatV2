@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -8,12 +9,15 @@
         pastEvents,
         eventsLoading
     } from '../../stores/events.js';
-    import { fetchEvents, createEvent, rsvpToEvent } from '../../services/events.service.js';
+    import { fetchEvents, createEvent, rsvpToEvent, fetchEventParticipants } from '../../services/events.service.js';
+    import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
+    import EventParticipantsModal from '../../components/events/EventParticipantsModal.svelte';
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 EventsScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 
@@ -21,6 +25,10 @@
     let showCreateForm = false;
     let creating = false;
     let errorMessage = '';
+    let showParticipantsModal = false;
+    let selectedEvent = null;
+    let participants = [];
+    let participantsLoading = false;
 
     const tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
@@ -43,6 +51,7 @@
     onMount(() => {
         if ($isAuthenticated) {
             fetchEvents();
+            fetchContacts();
         }
     });
 
@@ -86,12 +95,36 @@
             await rsvpToEvent(eventData.id, attending);
         } catch (err) {
             console.error('Failed to RSVP:', err);
+            errorMessage = 'Unable to update RSVP. Please try again.';
         }
     }
 
     function handleEventClick(event) {
-        // Could navigate to event detail page
-        console.log('Event clicked:', event.detail);
+        const eventData = event.detail;
+        const isCreator = eventData.created_by === $currentUser?.user_id;
+        if (!isCreator) return;
+
+        selectedEvent = eventData;
+        loadParticipants(eventData.id);
+    }
+
+    async function loadParticipants(eventId) {
+        showParticipantsModal = true;
+        participantsLoading = true;
+        try {
+            participants = await fetchEventParticipants(eventId);
+        } catch (err) {
+            console.error('Failed to load participants:', err);
+            participants = [];
+        } finally {
+            participantsLoading = false;
+        }
+    }
+
+    function closeParticipantsModal() {
+        showParticipantsModal = false;
+        selectedEvent = null;
+        participants = [];
     }
 </script>
 
@@ -184,6 +217,14 @@
             </div>
         {/if}
     </div>
+
+    <EventParticipantsModal
+        show={showParticipantsModal}
+        event={selectedEvent}
+        participants={participants}
+        loading={participantsLoading}
+        on:close={closeParticipantsModal}
+    />
 {/if}
 
 <style>

@@ -5,11 +5,12 @@
     import { currentUser } from '../../stores/auth.js';
 
     export let celebration;
+    export let interactive = true;
 
     const dispatch = createEventDispatcher();
 
     $: category = getCelebrationCategory(celebration.category);
-    $: isOwn = celebration.user_id === $currentUser?.user_id;
+    $: isOwn = celebration.user_id === $currentUser?.user_id || celebration.authorId === $currentUser?.user_id;
     $: reactionCounts = getReactionCounts(celebration.reactions);
     $: totalReactions = Object.values(reactionCounts).reduce((a, b) => a + b, 0);
     $: commentCount = celebration.comments?.length || 0;
@@ -56,9 +57,9 @@
 <div class="celebration-card">
     <div class="card-header">
         <div class="user-info">
-            <Avatar avatar={celebration.user_avatar} size="md" />
+            <Avatar avatar={celebration.user_avatar || celebration.author_avatar || celebration.avatar} size="md" />
             <div class="user-details">
-                <span class="user-name">{isOwn ? 'You' : celebration.user_name}</span>
+                <span class="user-name">{isOwn ? 'You' : (celebration.user_name || celebration.authorName || 'Neighbor')}</span>
                 <span class="post-time">{formattedTime}</span>
             </div>
         </div>
@@ -93,27 +94,29 @@
     {/if}
 
     <!-- Action Buttons -->
-    <div class="card-actions">
-        <div class="reaction-picker">
-            {#each REACTIONS.slice(0, 4) as emoji}
-                <button
-                    class="reaction-btn"
-                    class:active={hasUserReacted(emoji)}
-                    on:click={() => handleReaction(emoji)}
-                    title={emoji}
-                >
-                    {emoji}
-                </button>
-            {/each}
-        </div>
+    {#if interactive}
+        <div class="card-actions">
+            <div class="reaction-picker">
+                {#each REACTIONS.slice(0, 4) as emoji}
+                    <button
+                        class="reaction-btn"
+                        class:active={hasUserReacted(emoji)}
+                        on:click={() => handleReaction(emoji)}
+                        title={emoji}
+                    >
+                        {emoji}
+                    </button>
+                {/each}
+            </div>
 
-        <button class="comment-btn" on:click={handleComment}>
-            💬 {commentCount > 0 ? commentCount : ''}
-        </button>
-    </div>
+            <button class="comment-btn" on:click={handleComment}>
+                💬 {commentCount > 0 ? commentCount : ''}
+            </button>
+        </div>
+    {/if}
 
     <!-- Comments Preview -->
-    {#if celebration.comments?.length > 0}
+    {#if interactive && celebration.comments?.length > 0}
         <div class="comments-preview">
             {#each celebration.comments.slice(-2) as comment}
                 <div class="comment-item">

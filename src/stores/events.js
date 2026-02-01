@@ -9,13 +9,13 @@ export const eventsError = writable(null);
 // Event types
 export const EVENT_TYPES = [
     { id: 'meetup', label: 'Casual Meetup', emoji: '☕', color: '#8D6E63' },
+    { id: 'social', label: 'Social', emoji: '🥂', color: '#FFB74D' },
+    { id: 'dev-meetup', label: 'Dev Meetup', emoji: '💻', color: '#5C6BC0' },
     { id: 'potluck', label: 'Potluck', emoji: '🍲', color: '#FF7043' },
-    { id: 'workshop', label: 'Workshop', emoji: '🛠️', color: '#5C6BC0' },
-    { id: 'game-night', label: 'Game Night', emoji: '🎮', color: '#66BB6A' },
-    { id: 'book-club', label: 'Book Club', emoji: '📚', color: '#AB47BC' },
-    { id: 'fitness', label: 'Fitness', emoji: '🏃', color: '#26A69A' },
     { id: 'secret-santa', label: 'Secret Santa', emoji: '🎅', color: '#EF5350' },
-    { id: 'other', label: 'Other', emoji: '📅', color: '#78909C' }
+    { id: 'workshop', label: 'Workshop', emoji: '🛠️', color: '#26A69A' },
+    { id: 'meeting', label: 'Meeting', emoji: '🗓️', color: '#78909C' },
+    { id: 'other', label: 'Other', emoji: '📌', color: '#90A4AE' }
 ];
 
 // Derived: upcoming events (future dates, sorted)

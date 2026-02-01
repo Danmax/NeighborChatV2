@@ -89,7 +89,7 @@
     </div>
 
     <div class="contact-actions">
-        <button class="action-btn chat-btn" on:click={handleChat} title="Chat">
+        <button class="action-btn chat-btn" on:click={handleChat} title="Message">
             💬
         </button>
     </div>
@@ -102,7 +102,7 @@
             <div class="contact-menu">
                 <button class="menu-item" on:click={handleChat}>
                     <span class="menu-icon">💬</span>
-                    Chat
+                    Message
                 </button>
                 <button class="menu-item" on:click={handleEdit}>
                     <span class="menu-icon">✏️</span>

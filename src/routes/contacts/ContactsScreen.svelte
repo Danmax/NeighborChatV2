@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
@@ -13,7 +14,8 @@
     import EditContactModal from '../../components/contacts/EditContactModal.svelte';
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 ContactsScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 
@@ -73,7 +75,7 @@
 
     async function handleChat(event) {
         const contact = event.detail;
-        push(`/chat/${contact.user_id}`);
+        push(`/messages/${contact.user_id}`);
     }
 
     async function handleToggleFavorite(event) {
@@ -209,6 +211,7 @@
                         emptyMessage="No saved contacts yet"
                         emptyIcon="👥"
                         showInterests={true}
+                        on:click={handleChat}
                         on:chat={handleChat}
                         on:edit={(e) => openEditModal(e.detail)}
                         on:toggleFavorite={handleToggleFavorite}

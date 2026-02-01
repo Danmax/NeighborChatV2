@@ -9,6 +9,7 @@
 
     $: isOwn = message.user_id === $currentUser?.user_id;
     $: formattedTime = formatTime(message.timestamp);
+    $: showRead = isOwn && message.read;
     $: formattedMessage = highlightMentions(escapeHtml(message.message));
 
     function formatTime(timestamp) {
@@ -51,7 +52,12 @@
             {:else}
                 <div class="message-text">{@html formattedMessage}</div>
             {/if}
-            <div class="message-time">{formattedTime}</div>
+            <div class="message-time">
+                {formattedTime}
+                {#if showRead}
+                    <span class="message-read">Read</span>
+                {/if}
+            </div>
         </div>
     </div>
 </div>
@@ -135,6 +141,12 @@
         opacity: 1;
         text-align: right;
         margin-top: 2px;
+    }
+
+    .message-read {
+        margin-left: 8px;
+        font-size: 11px;
+        opacity: 0.8;
     }
 
     .message.own .message-time {

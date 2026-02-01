@@ -38,6 +38,12 @@ export const modal = writable({ type: null, data: null });
 export const showTopMenu = writable(false);
 
 /**
+ * Whether initial auth check has completed
+ * @type {import('svelte/store').Writable<boolean>}
+ */
+export const authInitialized = writable(false);
+
+/**
  * Set loading state
  */
 export function setLoading(loading, message = 'Loading...') {

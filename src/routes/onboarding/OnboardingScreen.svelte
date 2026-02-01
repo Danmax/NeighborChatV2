@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { currentUser, updateCurrentUser, isAuthenticated } from '../../stores/auth.js';
@@ -25,8 +26,9 @@
     let error = '';
     let usernameSuggestions = generateUsernameSuggestions(3);
 
-    // Redirect to auth if not authenticated
-    $: if (!$isAuthenticated) {
+    // Redirect to auth if not authenticated (only after auth initialization)
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 OnboardingScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 

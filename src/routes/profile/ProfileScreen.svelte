@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { push } from 'svelte-spa-router';
     import { currentUser, isAuthenticated, signOut } from '../../stores/auth.js';
     import { currentTheme, setTheme, THEMES } from '../../stores/theme.js';
@@ -21,7 +22,8 @@
     import ProfilePrivacySettings from '../../components/profile/ProfilePrivacySettings.svelte';
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 ProfileScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 

@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { EVENT_TYPES } from '../../stores/events.js';
+    import { savedContacts } from '../../stores/contacts.js';
 
     export let event = null; // For editing existing events
     export let loading = false;
@@ -14,6 +15,7 @@
     let location = event?.location || '';
     let description = event?.description || '';
     let maxAttendees = event?.max_attendees || '';
+    let invitedUserIds = event?.invited_user_ids || [];
 
     // Get tomorrow's date as minimum
     const tomorrow = new Date();
@@ -32,7 +34,8 @@
             time: time || null,
             location: location.trim() || null,
             description: description.trim() || null,
-            max_attendees: maxAttendees ? parseInt(maxAttendees) : null
+            max_attendees: maxAttendees ? parseInt(maxAttendees) : null,
+            invited_user_ids: invitedUserIds
         };
 
         dispatch('submit', eventData);
@@ -40,6 +43,14 @@
 
     function handleCancel() {
         dispatch('cancel');
+    }
+
+    function toggleInvite(userId) {
+        if (invitedUserIds.includes(userId)) {
+            invitedUserIds = invitedUserIds.filter(id => id !== userId);
+        } else {
+            invitedUserIds = [...invitedUserIds, userId];
+        }
     }
 </script>
 
@@ -117,6 +128,24 @@
             maxlength="500"
         ></textarea>
     </div>
+
+    {#if $savedContacts.length > 0}
+        <div class="form-group">
+            <label>Invite Contacts (optional)</label>
+            <div class="invite-list">
+                {#each $savedContacts as contact}
+                    <label class="invite-item">
+                        <input
+                            type="checkbox"
+                            checked={invitedUserIds.includes(contact.user_id)}
+                            on:change={() => toggleInvite(contact.user_id)}
+                        />
+                        <span>{contact.name}</span>
+                    </label>
+                {/each}
+            </div>
+        </div>
+    {/if}
 
     <div class="form-group">
         <label for="event-max">Max Attendees (optional)</label>
@@ -237,6 +266,23 @@
         gap: 12px;
         justify-content: flex-end;
         margin-top: 8px;
+    }
+
+    .invite-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 8px;
+        background: var(--cream);
+        padding: 12px;
+        border-radius: var(--radius-sm);
+    }
+
+    .invite-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text);
     }
 
     .btn {

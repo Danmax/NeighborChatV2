@@ -114,7 +114,7 @@ export async function checkUsernameAvailability(username, supabase, currentUserI
 
         // Query with case-insensitive match
         let query = supabase
-            .from('user_profiles')
+            .from('public_profiles')
             .select('username, user_id')
             .ilike('username', trimmed)
             .limit(1);

@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -18,7 +19,8 @@
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 CelebrationsScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 

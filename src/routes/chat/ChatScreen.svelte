@@ -1,4 +1,5 @@
 <script>
+    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push, querystring } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -30,7 +31,8 @@
     let localPartner = null; // Fallback partner info
 
     // Redirect if not authenticated
-    $: if (!$isAuthenticated) {
+    $: if ($authInitialized && !$isAuthenticated) {
+        console.log('🔐 ChatScreen: Not authenticated, redirecting to /auth');
         push('/auth');
     }
 

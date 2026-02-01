@@ -76,6 +76,9 @@ export async function fetchCelebrations(limit = 50) {
         setCelebrations(celebrations);
         return celebrations;
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            return [];
+        }
         console.error('Failed to fetch celebrations:', error);
         celebrationsError.set(error.message);
         return [];
@@ -138,10 +141,7 @@ export async function updateReactions(celebrationId, reactions) {
     // Check if user is authenticated
     const authUserId = await getAuthUserId();
     if (!authUserId) {
-        // For guests, just update the local store (optimistic UI)
-        updateCelebration(celebrationId, { reactions });
-        console.warn('Guest user: reactions saved locally only');
-        return { reactions };
+        throw new Error('Please sign in to react to celebrations.');
     }
 
     try {
@@ -153,12 +153,6 @@ export async function updateReactions(celebrationId, reactions) {
             .single();
 
         if (error) {
-            // RLS may prevent non-authors from updating, fallback to local
-            if (error.code === '42501' || error.message?.includes('policy')) {
-                updateCelebration(celebrationId, { reactions });
-                console.warn('RLS: reactions saved locally only');
-                return { reactions };
-            }
             throw error;
         }
 

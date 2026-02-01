@@ -11,6 +11,8 @@ export const CELEBRATION_CATEGORIES = [
     { id: 'milestone', label: 'Milestone', emoji: '🏆' },
     { id: 'birthday', label: 'Birthday', emoji: '🎂' },
     { id: 'achievement', label: 'Achievement', emoji: '⭐' },
+    { id: 'kudos', label: 'Kudos', emoji: '👏' },
+    { id: 'recognition', label: 'Recognition', emoji: '🎖️' },
     { id: 'welcome', label: 'Welcome', emoji: '👋' },
     { id: 'gratitude', label: 'Gratitude', emoji: '🙏' },
     { id: 'good-news', label: 'Good News', emoji: '📰' },
