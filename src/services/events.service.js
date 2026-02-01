@@ -9,6 +9,7 @@ import {
     eventsLoading,
     eventsError
 } from '../stores/events.js';
+import { events } from '../stores/events.js';
 import { get } from 'svelte/store';
 
 // Transform database row to app format
@@ -25,6 +26,9 @@ function transformEventFromDb(row) {
         created_by: row.created_by_id,
         creator_name: row.created_by,
         creator_avatar: eventData.creator_avatar,
+        cover_image_url: eventData.cover_image_url,
+        attachments: eventData.attachments || [],
+        items: eventData.items || [],
         attendees: row.participants || [],
         visibility: row.visibility || 'public',
         archived: row.archived || false,
@@ -40,7 +44,10 @@ function transformEventToDb(eventData, user, authUserId) {
         time: eventData.time,
         creator_avatar: user?.avatar,
         location: eventData.location,
-        invited_user_ids: eventData.invited_user_ids || []
+        invited_user_ids: eventData.invited_user_ids || [],
+        items: eventData.items || [],
+        cover_image_url: eventData.cover_image_url || null,
+        attachments: eventData.attachments || []
     };
 
     return {
@@ -93,6 +100,55 @@ export async function fetchEvents() {
 }
 
 /**
+ * Upload a cover image to Supabase Storage and return public URL
+ */
+export async function uploadEventImage(file) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to upload images.');
+    }
+
+    const safeName = file.name.replace(/\s+/g, '_');
+    const path = `${authUserId}/${Date.now()}_${safeName}`;
+
+    const { error } = await supabase.storage
+        .from('event-images')
+        .upload(path, file, { upsert: false });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+        .from('event-images')
+        .getPublicUrl(path);
+
+    return data.publicUrl;
+}
+
+/**
+ * Fetch a single event by id
+ */
+export async function fetchEventById(eventId) {
+    const supabase = getSupabase();
+
+    try {
+        const { data, error } = await supabase
+            .from('community_events')
+            .select('*')
+            .eq('id', eventId)
+            .single();
+
+        if (error) throw error;
+
+        const event = transformEventFromDb(data);
+        updateEvent(eventId, event);
+        return event;
+    } catch (error) {
+        console.error('Failed to fetch event:', error);
+        throw error;
+    }
+}
+/**
  * Create a new event
  * Note: RLS requires authenticated Supabase users (auth.uid() = created_by_id)
  */
@@ -141,16 +197,34 @@ export async function createEvent(eventData) {
  */
 export async function updateEventInDb(eventId, updates) {
     const supabase = getSupabase();
+    const existing = get(events).find(event => event.id === eventId);
 
     // Transform updates to DB format
     const dbUpdates = {};
-    if (updates.title) dbUpdates.name = updates.title;
-    if (updates.date) dbUpdates.date = updates.date;
-    if (updates.description) dbUpdates.description = updates.description;
-    if (updates.location) dbUpdates.location = updates.location;
-    if (updates.attendees) dbUpdates.participants = updates.attendees;
-    if (updates.visibility) dbUpdates.visibility = updates.visibility;
+    if (updates.title !== undefined) dbUpdates.name = updates.title;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.location !== undefined) dbUpdates.location = updates.location;
+    if (updates.attendees !== undefined) dbUpdates.participants = updates.attendees;
+    if (updates.visibility !== undefined) dbUpdates.visibility = updates.visibility;
     if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
+    if (
+        updates.time !== undefined ||
+        updates.invited_user_ids !== undefined ||
+        updates.items !== undefined ||
+        updates.cover_image_url !== undefined ||
+        updates.attachments !== undefined
+    ) {
+        dbUpdates.event_data = {
+            time: updates.time !== undefined ? updates.time : existing?.time || null,
+            creator_avatar: existing?.creator_avatar || null,
+            location: updates.location !== undefined ? updates.location : existing?.location || null,
+            invited_user_ids: updates.invited_user_ids !== undefined ? updates.invited_user_ids : (existing?.invited_user_ids || []),
+            items: updates.items !== undefined ? updates.items : (existing?.items || []),
+            cover_image_url: updates.cover_image_url !== undefined ? updates.cover_image_url : (existing?.cover_image_url || null),
+            attachments: updates.attachments !== undefined ? updates.attachments : (existing?.attachments || [])
+        };
+    }
 
     try {
         const { data, error } = await supabase
@@ -191,6 +265,137 @@ export async function deleteEvent(eventId) {
         console.error('Failed to delete event:', error);
         throw error;
     }
+}
+
+/**
+ * Add an item to a potluck event (owner only)
+ */
+export async function addEventItem(eventId, name) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to add items.');
+    }
+
+    const { data, error } = await supabase.rpc('add_event_item', {
+        p_event_id: eventId,
+        p_name: name
+    });
+
+    if (error) throw error;
+
+    updateEvent(eventId, { items: data || [] });
+    return data;
+}
+
+/**
+ * Remove an item from a potluck event (owner only)
+ */
+export async function removeEventItem(eventId, itemId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to remove items.');
+    }
+
+    const { data, error } = await supabase.rpc('remove_event_item', {
+        p_event_id: eventId,
+        p_item_id: itemId
+    });
+
+    if (error) throw error;
+
+    updateEvent(eventId, { items: data || [] });
+    return data;
+}
+
+/**
+ * Claim or unclaim an event item (toggle)
+ */
+export async function claimEventItem(eventId, itemId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to claim items.');
+    }
+
+    const { data, error } = await supabase.rpc('claim_event_item', {
+        p_event_id: eventId,
+        p_item_id: itemId
+    });
+
+    if (error) throw error;
+
+    updateEvent(eventId, { items: data || [] });
+    return data;
+}
+
+/**
+ * Assign an event item to a contact (owner only)
+ */
+export async function assignEventItem(eventId, itemId, userId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to assign items.');
+    }
+
+    const { data, error } = await supabase.rpc('assign_event_item', {
+        p_event_id: eventId,
+        p_item_id: itemId,
+        p_user_id: userId
+    });
+
+    if (error) throw error;
+
+    updateEvent(eventId, { items: data || [] });
+    return data;
+}
+
+/**
+ * Send an event notification to attendees/contacts
+ */
+export async function sendEventNotification(eventId, message, userIds = null) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to send notifications.');
+    }
+
+    const { data, error } = await supabase.rpc('send_event_notification', {
+        p_event_id: eventId,
+        p_message: message,
+        p_user_ids: userIds
+    });
+
+    if (error) throw error;
+
+    return data;
+}
+
+/**
+ * Subscribe to a single event changes
+ */
+export function subscribeToEvent(eventId, callback) {
+    const supabase = getSupabase();
+    const subscription = supabase
+        .channel(`event-${eventId}`)
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'community_events', filter: `id=eq.${eventId}` },
+            (payload) => {
+                if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                    const updated = transformEventFromDb(payload.new);
+                    updateEvent(updated.id, updated);
+                    callback?.(updated);
+                } else if (payload.eventType === 'DELETE') {
+                    removeEvent(payload.old.id);
+                    callback?.(null);
+                }
+            }
+        )
+        .subscribe();
+
+    return subscription;
 }
 
 /**

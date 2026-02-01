@@ -15,6 +15,7 @@
         createCelebration,
         updateCelebrationInDb,
         updateReactions,
+        reactToCelebration,
         postComment
     } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
@@ -127,36 +128,8 @@
     }
 
     async function handleReaction(event) {
-        const { celebration, emoji, remove } = event.detail;
-
-        if (remove) {
-            removeReaction(celebration.id, emoji);
-        } else {
-            addReaction(celebration.id, emoji);
-        }
-
-        // Sync to database
-        const updatedReactions = { ...(celebration.reactions || {}) };
-        const userId = $currentUser.user_id;
-
-        if (remove) {
-            if (updatedReactions[emoji]) {
-                updatedReactions[emoji] = updatedReactions[emoji].filter(id => id !== userId);
-                if (updatedReactions[emoji].length === 0) {
-                    delete updatedReactions[emoji];
-                }
-            }
-        } else {
-            if (!updatedReactions[emoji]) {
-                updatedReactions[emoji] = [];
-            }
-            if (!updatedReactions[emoji].includes(userId)) {
-                updatedReactions[emoji] = [...updatedReactions[emoji], userId];
-            }
-        }
-
         try {
-            await updateReactions(celebration.id, updatedReactions);
+            await reactToCelebration(celebration.id, emoji);
         } catch (err) {
             console.error('Failed to update reactions:', err);
         }

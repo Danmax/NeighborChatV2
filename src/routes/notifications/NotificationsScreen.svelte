@@ -28,10 +28,10 @@
 
     let subscription = null;
 
-    onMount(() => {
+    onMount(async () => {
         if ($isAuthenticated) {
             fetchNotifications();
-            subscription = subscribeToNotifications((notification) => {
+            subscription = await subscribeToNotifications((notification) => {
                 // Could show toast notification here
                 console.log('New notification:', notification);
             });
@@ -39,7 +39,7 @@
     });
 
     onDestroy(() => {
-        if (subscription) {
+        if (subscription && typeof subscription.unsubscribe === 'function') {
             subscription.unsubscribe();
         }
     });
@@ -69,7 +69,18 @@
                 break;
             case NOTIFICATION_TYPES.EVENT_INVITE:
             case NOTIFICATION_TYPES.EVENT_REMINDER:
-                push('/events');
+                if (notification.data?.event_id) {
+                    push(`/events/${notification.data.event_id}`);
+                } else {
+                    push('/events');
+                }
+                break;
+            case NOTIFICATION_TYPES.EVENT_UPDATE:
+                if (notification.data?.event_id) {
+                    push(`/events/${notification.data.event_id}`);
+                } else {
+                    push('/events');
+                }
                 break;
             case NOTIFICATION_TYPES.CELEBRATION_REACTION:
             case NOTIFICATION_TYPES.CELEBRATION_COMMENT:

@@ -273,15 +273,14 @@
         border-radius: var(--radius-sm);
         overflow: hidden;
         background: #f5f5f5;
-        aspect-ratio: 16 / 9;
-        max-height: 420px;
     }
 
     .celebration-image img {
         width: 100%;
-        height: 100%;
+        height: auto;
+        max-height: 420px;
         display: block;
-        object-fit: cover;
+        object-fit: contain;
     }
 
     .reactions-summary {

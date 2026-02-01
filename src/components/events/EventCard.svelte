@@ -16,6 +16,7 @@
     $: formattedDate = formatDate(event.date);
     $: formattedTime = formatTime(event.time);
     $: isPast = new Date(event.date) < new Date();
+    $: coverImage = event.cover_image_url || event.image_url || event.image;
 
     function formatDate(dateStr) {
         const date = new Date(dateStr);
@@ -72,6 +73,12 @@
             <span class="type-label">{eventType.label}</span>
         {/if}
     </div>
+
+    {#if coverImage && !compact}
+        <div class="event-cover">
+            <img src={coverImage} alt="Event cover" loading="lazy" />
+        </div>
+    {/if}
 
     <div class="event-content">
         <h4 class="event-title">{event.title}</h4>
@@ -167,6 +174,20 @@
 
     .type-emoji {
         font-size: 16px;
+    }
+
+    .event-cover {
+        width: 100%;
+        background: #f5f5f5;
+        max-height: 220px;
+        overflow: hidden;
+    }
+
+    .event-cover img {
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: cover;
     }
 
     .event-content {

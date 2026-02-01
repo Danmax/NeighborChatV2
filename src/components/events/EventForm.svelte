@@ -16,6 +16,10 @@
     let description = event?.description || '';
     let maxAttendees = event?.max_attendees || '';
     let invitedUserIds = event?.invited_user_ids || [];
+    let coverImageUrl = event?.cover_image_url || '';
+    let attachments = (event?.attachments || []).join('\n');
+    let coverImageFile = null;
+    let coverImagePreview = event?.cover_image_url || '';
 
     // Get tomorrow's date as minimum
     const tomorrow = new Date();
@@ -35,7 +39,13 @@
             location: location.trim() || null,
             description: description.trim() || null,
             max_attendees: maxAttendees ? parseInt(maxAttendees) : null,
-            invited_user_ids: invitedUserIds
+            invited_user_ids: invitedUserIds,
+            cover_image_url: coverImageUrl.trim() || null,
+            attachments: attachments
+                .split('\n')
+                .map(item => item.trim())
+                .filter(Boolean),
+            cover_image_file: coverImageFile || null
         };
 
         dispatch('submit', eventData);
@@ -126,6 +136,45 @@
             placeholder="Tell people what to expect..."
             rows="3"
             maxlength="500"
+        ></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="event-cover">Cover Image URL (optional)</label>
+        <input
+            id="event-cover"
+            type="url"
+            bind:value={coverImageUrl}
+            placeholder="https://example.com/cover.jpg"
+        />
+    </div>
+
+    <div class="form-group">
+        <label for="event-cover-file">Or Upload Cover Image</label>
+        <input
+            id="event-cover-file"
+            type="file"
+            accept="image/*"
+            on:change={(e) => {
+                const file = e.currentTarget.files?.[0];
+                coverImageFile = file || null;
+                if (file) {
+                    coverImagePreview = URL.createObjectURL(file);
+                }
+            }}
+        />
+        {#if coverImagePreview}
+            <img class="cover-preview" src={coverImagePreview} alt="Cover preview" />
+        {/if}
+    </div>
+
+    <div class="form-group">
+        <label for="event-attachments">Attachments (one URL per line)</label>
+        <textarea
+            id="event-attachments"
+            bind:value={attachments}
+            placeholder="https://example.com/agenda.pdf"
+            rows="3"
         ></textarea>
     </div>
 
@@ -259,6 +308,14 @@
         font-size: 12px;
         font-weight: 500;
         color: var(--text);
+    }
+
+    .cover-preview {
+        width: 100%;
+        margin-top: 8px;
+        border-radius: var(--radius-sm);
+        display: block;
+        object-fit: cover;
     }
 
     .form-actions {

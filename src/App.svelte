@@ -41,6 +41,7 @@
     import LobbyChatScreen from './routes/lobby/LobbyChatScreen.svelte';
     import ChatScreen from './routes/chat/ChatScreen.svelte';
     import EventsScreen from './routes/events/EventsScreen.svelte';
+    import EventDetailScreen from './routes/events/EventDetailScreen.svelte';
     import CelebrationsScreen from './routes/celebrations/CelebrationsScreen.svelte';
     import CelebrationDetailScreen from './routes/celebrations/CelebrationDetailScreen.svelte';
     import ContactsScreen from './routes/contacts/ContactsScreen.svelte';
@@ -64,6 +65,7 @@
         '/lobby-chat': LobbyChatScreen,
         '/chat/:id': ChatScreen,
         '/events': EventsScreen,
+        '/events/:id': EventDetailScreen,
         '/celebrations': CelebrationsScreen,
         '/celebrations/:id': CelebrationDetailScreen,
         '/contacts': ContactsScreen,

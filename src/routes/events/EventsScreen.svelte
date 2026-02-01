@@ -1,6 +1,6 @@
 <script>
     import { authInitialized } from '../../stores/ui.js';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import {
@@ -9,11 +9,11 @@
         pastEvents,
         eventsLoading
     } from '../../stores/events.js';
-    import { fetchEvents, createEvent, rsvpToEvent, fetchEventParticipants } from '../../services/events.service.js';
+    import { fetchEvents, createEvent, rsvpToEvent, uploadEventImage, subscribeToEvents } from '../../services/events.service.js';
+    import { onDestroy } from 'svelte';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
-    import EventParticipantsModal from '../../components/events/EventParticipantsModal.svelte';
 
     // Redirect if not authenticated
     $: if ($authInitialized && !$isAuthenticated) {
@@ -25,10 +25,6 @@
     let showCreateForm = false;
     let creating = false;
     let errorMessage = '';
-    let showParticipantsModal = false;
-    let selectedEvent = null;
-    let participants = [];
-    let participantsLoading = false;
 
     const tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
@@ -48,10 +44,19 @@
         }
     }
 
+    let subscription = null;
+
     onMount(() => {
         if ($isAuthenticated) {
             fetchEvents();
             fetchContacts();
+            subscription = subscribeToEvents();
+        }
+    });
+
+    onDestroy(() => {
+        if (subscription && typeof subscription.unsubscribe === 'function') {
+            subscription.unsubscribe();
         }
     });
 
@@ -70,7 +75,13 @@
         creating = true;
         errorMessage = '';
         try {
-            await createEvent(event.detail);
+            const payload = { ...event.detail };
+            if (payload.cover_image_file) {
+                payload.cover_image_url = await uploadEventImage(payload.cover_image_file);
+            }
+            delete payload.cover_image_file;
+
+            await createEvent(payload);
             showCreateForm = false;
             activeTab = 'mine';
         } catch (err) {
@@ -101,30 +112,7 @@
 
     function handleEventClick(event) {
         const eventData = event.detail;
-        const isCreator = eventData.created_by === $currentUser?.user_id;
-        if (!isCreator) return;
-
-        selectedEvent = eventData;
-        loadParticipants(eventData.id);
-    }
-
-    async function loadParticipants(eventId) {
-        showParticipantsModal = true;
-        participantsLoading = true;
-        try {
-            participants = await fetchEventParticipants(eventId);
-        } catch (err) {
-            console.error('Failed to load participants:', err);
-            participants = [];
-        } finally {
-            participantsLoading = false;
-        }
-    }
-
-    function closeParticipantsModal() {
-        showParticipantsModal = false;
-        selectedEvent = null;
-        participants = [];
+        push(`/events/${eventData.id}`);
     }
 </script>
 
@@ -218,13 +206,6 @@
         {/if}
     </div>
 
-    <EventParticipantsModal
-        show={showParticipantsModal}
-        event={selectedEvent}
-        participants={participants}
-        loading={participantsLoading}
-        on:close={closeParticipantsModal}
-    />
 {/if}
 
 <style>

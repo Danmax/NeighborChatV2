@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPES = {
     CHAT_MENTION: 'chat_mention',
     EVENT_INVITE: 'event_invite',
     EVENT_REMINDER: 'event_reminder',
+    EVENT_UPDATE: 'event_update',
     CELEBRATION_REACTION: 'celebration_reaction',
     CELEBRATION_COMMENT: 'celebration_comment',
     CELEBRATION_MENTION: 'celebration_mention',
@@ -82,6 +83,7 @@ export function getNotificationIcon(type) {
         case NOTIFICATION_TYPES.CHAT_MENTION: return '📣';
         case NOTIFICATION_TYPES.EVENT_INVITE: return '📅';
         case NOTIFICATION_TYPES.EVENT_REMINDER: return '⏰';
+        case NOTIFICATION_TYPES.EVENT_UPDATE: return '📣';
         case NOTIFICATION_TYPES.CELEBRATION_REACTION: return '❤️';
         case NOTIFICATION_TYPES.CELEBRATION_COMMENT: return '💬';
         case NOTIFICATION_TYPES.CELEBRATION_MENTION: return '📣';

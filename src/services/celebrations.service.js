@@ -308,6 +308,35 @@ export async function updateReactions(celebrationId, reactions) {
 }
 
 /**
+ * React to a celebration (single reaction per user)
+ */
+export async function reactToCelebration(celebrationId, emoji) {
+    const supabase = getSupabase();
+
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to react to celebrations.');
+    }
+
+    try {
+        const { data, error } = await supabase.rpc('add_celebration_reaction', {
+            p_celebration_id: celebrationId,
+            p_emoji: emoji
+        });
+
+        if (error) throw error;
+
+        if (data) {
+            updateCelebration(celebrationId, { reactions: data });
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Failed to react to celebration:', error);
+        throw error;
+    }
+}
+/**
  * Add a comment to a celebration
  * Note: Due to RLS, only the author can update. Comments may need separate handling.
  */
