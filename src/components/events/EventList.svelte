@@ -44,13 +44,20 @@
 
 <style>
     .event-list {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 16px;
     }
 
     .event-list.compact {
+        display: flex;
+        flex-direction: column;
         gap: 8px;
+    }
+
+    .loading-state,
+    .empty-state {
+        grid-column: 1 / -1;
     }
 
     .loading-state, .empty-state {
