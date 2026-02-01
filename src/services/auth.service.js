@@ -192,17 +192,36 @@ export async function signOut() {
     return { success: true };
 }
 
+function withTimeout(promise, timeoutMs, label) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(`${label} timed out`));
+        }, timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
 /**
  * Check for existing session on app load
  */
 export async function checkExistingAuth() {
     try {
         const supabase = getSupabase();
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await withTimeout(
+            supabase.auth.getSession(),
+            6000,
+            'getSession'
+        );
 
         if (session && session.user) {
             // Await async createUserDataFromSession
-            const userData = await createUserDataFromSession(session.user);
+            const userData = await withTimeout(
+                createUserDataFromSession(session.user),
+                8000,
+                'createUserDataFromSession'
+            );
             setCurrentUser(userData);
             authUser.set(session.user);
             return userData;
@@ -234,8 +253,19 @@ export function setupAuthListener(callback) {
             if (event === 'INITIAL_SESSION' && lastHandledUserId === currentUserId && lastHandledEvent === 'SIGNED_IN') {
                 return;
             }
-            // IMPORTANT: Now async!
-            const userData = await createUserDataFromSession(session.user);
+            let userData = null;
+            try {
+                // IMPORTANT: Now async!
+                userData = await withTimeout(
+                    createUserDataFromSession(session.user),
+                    8000,
+                    'createUserDataFromSession'
+                );
+            } catch (err) {
+                console.error('Auth profile load failed:', err);
+                userData = buildBaseUserData(session.user);
+            }
+
             setCurrentUser(userData);
             authUser.set(session.user);
 
@@ -271,20 +301,27 @@ async function createUserDataFromSession(user) {
     const supabase = getSupabase();
 
     // Load profile from database
-    const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    let profile = null;
+    let error = null;
+
+    try {
+        const result = await withTimeout(
+            supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('user_id', user.id)
+                .maybeSingle(),
+            6000,
+            'fetchUserProfile'
+        );
+        profile = result?.data || null;
+        error = result?.error || null;
+    } catch (err) {
+        error = err;
+    }
 
     // Base user data from session
-    const baseData = {
-        user_id: user.id,
-        email: user.email,
-        name: user.user_metadata?.display_name || user.email.split('@')[0],
-        avatar: user.user_metadata?.avatar || generateRandomAvatar(),
-        loginTime: Date.now()
-    };
+    const baseData = buildBaseUserData(user);
 
     // If profile exists, merge database data
     if (profile && !error) {
@@ -313,11 +350,22 @@ async function createUserDataFromSession(user) {
         };
     }
 
-    // No profile exists - this is a NEW USER
+    // No profile exists or fetch failed - treat as new user
     return {
         ...baseData,
         onboardingCompleted: false,
         isNewUser: true
+    };
+}
+
+function buildBaseUserData(user) {
+    const emailFallback = user?.email ? user.email.split('@')[0] : 'User';
+    return {
+        user_id: user.id,
+        email: user.email,
+        name: user.user_metadata?.display_name || emailFallback,
+        avatar: user.user_metadata?.avatar || generateRandomAvatar(),
+        loginTime: Date.now()
     };
 }
 

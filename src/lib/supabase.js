@@ -13,7 +13,7 @@ export async function initSupabase() {
     try {
         console.log('🔄 Fetching config from API...');
 
-        const response = await fetch('/api/config');
+        const response = await fetch('/api/config', { cache: 'no-store' });
 
         if (!response.ok) {
             throw new Error(`API returned ${response.status}: ${response.statusText}`);
