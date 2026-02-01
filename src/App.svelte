@@ -22,6 +22,7 @@
     ];
 
     let showStatusMenu = false;
+    let showSidebar = true;
 
     function getStatusInfo(status) {
         return STATUS_OPTIONS.find(s => s.id === status) || STATUS_OPTIONS[4];
@@ -190,7 +191,12 @@
     }
 
     // Hide footer when in chat mode
-    $: isInChatMode = $location?.startsWith('/chat') || $location === '/lobby-chat';
+    $: isInChatMode = $location?.startsWith('/chat') || $location === '/lobby-chat' || $location?.startsWith('/messages/');
+    $: if (isInChatMode) {
+        showSidebar = false;
+    } else {
+        showSidebar = true;
+    }
 
     // Enforce onboarding before access
     $: if ($isAuthenticated && $currentUser && !$currentUser.onboardingCompleted && $location !== '/onboarding') {
@@ -276,8 +282,8 @@
     </div>
 
     <!-- Footer Navigation (hidden in chat mode) -->
-    {#if $isAuthenticated && !isInChatMode}
-        <footer class="app-footer">
+    {#if $isAuthenticated}
+        <footer class="app-footer" class:collapsed={isInChatMode && !showSidebar}>
             <a href="#/" class="footer-btn active">
                 <span class="footer-icon">🏠</span>
                 <span class="footer-label">Home</span>
@@ -303,6 +309,11 @@
                 <span class="footer-label">Profile</span>
             </a>
         </footer>
+        {#if isInChatMode}
+            <button class="sidebar-toggle" on:click={() => showSidebar = !showSidebar} title="Toggle menu">
+                {showSidebar ? '⮞' : '⮜'}
+            </button>
+        {/if}
     {/if}
 
     <!-- Chat Invite Modal -->

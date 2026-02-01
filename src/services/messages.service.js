@@ -138,7 +138,7 @@ export async function fetchThread(otherUserId) {
     }
 }
 
-export async function sendMessageToUser(otherUserId, body) {
+export async function sendMessageToUser(otherUserId, body, isGif = false, gifUrl = null) {
     const authUserId = await getAuthUserId();
     if (!authUserId) {
         throw new Error('You must be signed in to send messages.');
@@ -149,8 +149,9 @@ export async function sendMessageToUser(otherUserId, body) {
         sender_id: authUserId,
         recipient_id: otherUserId,
         body: body.trim(),
-        message_type: 'direct',
-        read: false
+        message_type: isGif ? 'gif' : 'direct',
+        read: false,
+        metadata: isGif && gifUrl ? { gif_url: gifUrl } : {}
     };
 
     const { data, error } = await supabase

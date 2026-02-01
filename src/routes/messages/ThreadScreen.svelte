@@ -14,12 +14,14 @@
     import Avatar from '../../components/avatar/Avatar.svelte';
     import MessageList from '../../components/chat/MessageList.svelte';
     import MessageInput from '../../components/chat/MessageInput.svelte';
+    import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
 
     export let params = {};
 
     let recipientProfile = null;
     let loadingProfile = true;
     let subscription = null;
+    let showGifPicker = false;
 
     $: otherUserId = params.id;
 
@@ -37,7 +39,9 @@
             name: isOwn ? $currentUser?.name : recipientProfile?.name || 'Neighbor',
             avatar: isOwn ? $currentUser?.avatar : recipientProfile?.avatar,
             message: msg.body,
-            isGif: false,
+            isGif: msg.message_type === 'gif',
+            gif_url: msg.metadata?.gif_url,
+            caption: msg.body,
             timestamp: msg.created_at,
             read: msg.read
         };
@@ -69,9 +73,16 @@
     });
 
     async function handleSendMessage(event) {
-        const { message } = event.detail;
+        const { message, isGif } = event.detail;
         if (!message.trim()) return;
-        await sendMessageToUser(otherUserId, message);
+        await sendMessageToUser(otherUserId, message, isGif);
+    }
+
+    async function handleGifSelect(event) {
+        const gif = event.detail;
+        const caption = gif.message ? gif.message.trim() : '';
+        await sendMessageToUser(otherUserId, caption, true, gif.url);
+        showGifPicker = false;
     }
 </script>
 
@@ -97,9 +108,16 @@
             <MessageList messages={mappedMessages} />
         </div>
 
+        <GiphyPicker
+            show={showGifPicker}
+            on:select={handleGifSelect}
+            on:close={() => showGifPicker = false}
+        />
+
         <MessageInput
             placeholder={`Message ${recipientProfile?.name || 'neighbor'}...`}
             on:send={handleSendMessage}
+            on:openGif={() => showGifPicker = !showGifPicker}
         />
     </div>
 {/if}

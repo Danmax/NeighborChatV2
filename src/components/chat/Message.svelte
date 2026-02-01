@@ -11,6 +11,8 @@
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;
     $: formattedMessage = highlightMentions(escapeHtml(message.message));
+    $: gifUrl = message.gif_url || (message.isGif ? message.message : null);
+    $: caption = message.caption || (message.gif_url ? message.message : '');
 
     function formatTime(timestamp) {
         const date = new Date(timestamp);
@@ -44,11 +46,14 @@
         <div class="message-bubble">
             {#if message.isGif}
                 <img
-                    src={message.message}
+                    src={gifUrl}
                     alt="GIF"
                     class="message-gif"
                     loading="lazy"
                 />
+                {#if caption}
+                    <div class="message-text">{@html highlightMentions(escapeHtml(caption))}</div>
+                {/if}
             {:else}
                 <div class="message-text">{@html formattedMessage}</div>
             {/if}
