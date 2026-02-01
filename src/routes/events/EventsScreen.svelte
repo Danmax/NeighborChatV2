@@ -99,6 +99,15 @@
         push('/auth');
     }
 
+    async function handleRsvp(event) {
+        const { event: eventData, attending } = event.detail;
+        try {
+            await rsvpToEvent(eventData.id, attending);
+        } catch (err) {
+            console.error('Failed to join event:', err);
+            errorMessage = 'Unable to join event. Please try again.';
+        }
+    }
 
     function handleEventClick(event) {
         const eventData = event.detail;
@@ -369,12 +378,3 @@
         width: fit-content;
     }
 </style>
-    async function handleRsvp(event) {
-        const { event: eventData, attending } = event.detail;
-        try {
-            await rsvpToEvent(eventData.id, attending);
-        } catch (err) {
-            console.error('Failed to join event:', err);
-            errorMessage = 'Unable to join event. Please try again.';
-        }
-    }

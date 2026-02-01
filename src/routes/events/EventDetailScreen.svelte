@@ -274,7 +274,6 @@
                     </div>
                 </div>
             </div>
-            </div>
 
             {#if eventData.description}
                 <div class="card">

@@ -291,7 +291,7 @@
     .compact .past-badge {
         position: static;
     }
-</style>
+
     .rsvp-btn {
         position: absolute;
         top: 12px;
@@ -319,3 +319,4 @@
         position: static;
         flex-shrink: 0;
     }
+</style>
