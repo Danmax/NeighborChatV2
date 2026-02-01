@@ -179,6 +179,28 @@
             sendingNotify = false;
         }
     }
+
+    function formatEventDate(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }
+
+    function formatEventTime(timeStr) {
+        if (!timeStr) return '';
+        const [hours, minutes] = timeStr.split(':');
+        const date = new Date();
+        date.setHours(parseInt(hours, 10), parseInt(minutes || '0', 10));
+        return date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+        }).toLowerCase();
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -201,26 +223,26 @@
         {:else if eventData}
             <div class="card event-card">
                 <h3 class="event-title">{eventData.title}</h3>
+                {#if eventData.description}
+                    <p class="event-description">{eventData.description}</p>
+                {/if}
                 {#if eventData.cover_image_url}
                     <div class="event-image">
                         <img src={eventData.cover_image_url} alt="Event cover" />
                     </div>
                 {/if}
                 <div class="event-meta">
-                    <span>📅 {eventData.date}</span>
+                    <span>📅 {formatEventDate(eventData.date)}</span>
                     {#if eventData.time}
-                        <span>🕐 {eventData.time}</span>
+                        <span>🕐 {formatEventTime(eventData.time)}</span>
                     {/if}
                     {#if eventData.location}
                         <span>📍 {eventData.location}</span>
                     {/if}
                 </div>
-                {#if eventData.description}
-                    <p class="event-description">{eventData.description}</p>
-                {/if}
                 <div class="event-host">
                     <Avatar avatar={eventData.creator_avatar} size="sm" />
-                    <span>{isOwner ? 'You' : eventData.creator_name}</span>
+                    <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
                 </div>
                 <div class="event-actions">
                     <button class="btn btn-primary" on:click={handleRsvp}>
@@ -290,7 +312,7 @@
                                         {/if}
                                     </div>
                                     <div class="item-actions">
-                                        <button class="btn btn-secondary btn-small" on:click={() => handleClaimItem(item.id)}>
+                                        <button class="btn btn-claim btn-small" on:click={() => handleClaimItem(item.id)}>
                                             {item.claimed_by_id === $currentUser?.user_id ? 'Unclaim' : 'Claim'}
                                         </button>
                                         {#if isOwner}
@@ -300,7 +322,7 @@
                                                     <option value={contact.user_id}>{contact.name}</option>
                                                 {/each}
                                             </select>
-                                            <button class="btn btn-secondary btn-small" on:click={() => handleRemoveItem(item.id)}>
+                                            <button class="btn btn-remove btn-small" on:click={() => handleRemoveItem(item.id)}>
                                                 Remove
                                             </button>
                                         {/if}
@@ -408,7 +430,7 @@
     }
 
     .event-description {
-        margin-top: 12px;
+        margin-top: 6px;
         font-size: 14px;
         color: var(--text);
     }
@@ -544,6 +566,24 @@
     .btn-secondary {
         background: var(--cream);
         color: var(--text);
+    }
+
+    .btn-claim {
+        background: #E8F5E9;
+        color: #2E7D32;
+    }
+
+    .btn-claim:hover {
+        background: #C8E6C9;
+    }
+
+    .btn-remove {
+        background: #FFEBEE;
+        color: #C62828;
+    }
+
+    .btn-remove:hover {
+        background: #FFCDD2;
     }
 
     .btn-small {

@@ -422,6 +422,7 @@ export async function rsvpToEvent(eventId, attending = true) {
                 .from('event_participants')
                 .insert([
                     {
+                        id: crypto.randomUUID(),
                         event_id: eventId,
                         membership_id: authUserId,
                         status: 'registered',
