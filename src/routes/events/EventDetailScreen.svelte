@@ -39,6 +39,12 @@
     let sendingNotify = false;
 
     $: eventId = params?.id;
+    $: {
+        const fromStore = $events.find(item => item.id === eventId);
+        if (fromStore) {
+            eventData = fromStore;
+        }
+    }
     $: isOwner = eventData?.created_by === $currentUser?.user_id;
     $: isAttending = eventData?.attendees?.includes($currentUser?.user_id);
     $: items = eventData?.items || [];
@@ -123,10 +129,21 @@
 
     async function handleAddItem() {
         if (!newItemName.trim()) return;
+        const itemsToAdd = newItemName
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+
+        if (itemsToAdd.length === 0) return;
+
         try {
-            await addEventItem(eventData.id, newItemName.trim());
+            let updatedItems = eventData.items || [];
+            for (const item of itemsToAdd) {
+                updatedItems = await addEventItem(eventData.id, item);
+            }
+            eventData = { ...eventData, items: updatedItems || [] };
             newItemName = '';
-            showToast('Item added!', 'success');
+            showToast(itemsToAdd.length > 1 ? 'Items added!' : 'Item added!', 'success');
         } catch (err) {
             showToast(`Failed to add item: ${err.message}`, 'error');
         }
@@ -134,7 +151,8 @@
 
     async function handleRemoveItem(itemId) {
         try {
-            await removeEventItem(eventData.id, itemId);
+            const updatedItems = await removeEventItem(eventData.id, itemId);
+            eventData = { ...eventData, items: updatedItems || [] };
             showToast('Item removed.', 'success');
         } catch (err) {
             showToast(`Failed to remove: ${err.message}`, 'error');
@@ -143,7 +161,8 @@
 
     async function handleClaimItem(itemId) {
         try {
-            await claimEventItem(eventData.id, itemId);
+            const updatedItems = await claimEventItem(eventData.id, itemId);
+            eventData = { ...eventData, items: updatedItems || [] };
         } catch (err) {
             showToast(err.message || 'Unable to claim item', 'error');
         }
@@ -221,35 +240,43 @@
                 <p>Loading event...</p>
             </div>
         {:else if eventData}
-            <div class="card event-card">
-                <h3 class="event-title">{eventData.title}</h3>
-                {#if eventData.description}
-                    <p class="event-description">{eventData.description}</p>
-                {/if}
+            <div class="event-hero">
                 {#if eventData.cover_image_url}
-                    <div class="event-image">
-                        <img src={eventData.cover_image_url} alt="Event cover" />
-                    </div>
+                    <img class="event-hero-image" src={eventData.cover_image_url} alt="Event cover" />
+                {:else}
+                    <div class="event-hero-placeholder"></div>
                 {/if}
-                <div class="event-meta">
-                    <span>📅 {formatEventDate(eventData.date)}</span>
-                    {#if eventData.time}
-                        <span>🕐 {formatEventTime(eventData.time)}</span>
-                    {/if}
-                    {#if eventData.location}
-                        <span>📍 {eventData.location}</span>
-                    {/if}
-                </div>
-                <div class="event-host">
-                    <Avatar avatar={eventData.creator_avatar} size="sm" />
-                    <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
-                </div>
-                <div class="event-actions">
-                    <button class="btn btn-primary" on:click={handleRsvp}>
-                        {isAttending ? 'Leave Event' : 'RSVP'}
-                    </button>
+                <div class="event-hero-overlay">
+                    <div class="event-hero-content">
+                        <h3 class="event-title">{eventData.title}</h3>
+                        <div class="event-meta">
+                            <span>📅 {formatEventDate(eventData.date)}</span>
+                            {#if eventData.time}
+                                <span>🕐 {formatEventTime(eventData.time)}</span>
+                            {/if}
+                            {#if eventData.location}
+                                <span>📍 {eventData.location}</span>
+                            {/if}
+                        </div>
+                        <div class="event-host">
+                            <Avatar avatar={eventData.creator_avatar} size="sm" />
+                            <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
+                        </div>
+                    </div>
+                    <div class="event-actions">
+                        <button class="btn btn-primary" on:click={handleRsvp}>
+                            {isAttending ? 'Leave Event' : 'RSVP'}
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {#if eventData.description}
+                <div class="card">
+                    <h3 class="card-title">About this event</h3>
+                    <p class="event-description">{eventData.description}</p>
+                </div>
+            {/if}
 
             {#if isEditing}
                 <div class="card">
@@ -402,8 +429,45 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
+    .event-hero {
+        position: relative;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        margin-bottom: 16px;
+        background: #f5f5f5;
+        min-height: 220px;
+    }
+
+    .event-hero-image {
+        width: 100%;
+        height: 320px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .event-hero-placeholder {
+        width: 100%;
+        height: 240px;
+        background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
+    }
+
+    .event-hero-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 20px;
+        gap: 12px;
+    }
+
+    .event-hero-content {
+        color: white;
+    }
+
     .event-title {
-        font-size: 20px;
+        font-size: 24px;
         font-weight: 700;
         margin: 0 0 8px;
     }
@@ -413,20 +477,7 @@
         flex-wrap: wrap;
         gap: 12px;
         font-size: 13px;
-        color: var(--text-muted);
-    }
-
-    .event-image {
-        margin: 12px 0;
-        border-radius: var(--radius-sm);
-        overflow: hidden;
-        background: #f5f5f5;
-    }
-
-    .event-image img {
-        width: 100%;
-        display: block;
-        object-fit: cover;
+        color: rgba(255, 255, 255, 0.9);
     }
 
     .event-description {
@@ -439,15 +490,15 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-top: 12px;
+        margin-top: 8px;
         font-size: 13px;
-        color: var(--text-muted);
+        color: rgba(255, 255, 255, 0.9);
     }
 
     .event-actions {
-        margin-top: 16px;
         display: flex;
         gap: 12px;
+        align-items: center;
     }
 
     .attendee-list {
