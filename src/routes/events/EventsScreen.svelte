@@ -10,7 +10,6 @@
         eventsLoading
     } from '../../stores/events.js';
     import { fetchEvents, createEvent, rsvpToEvent, uploadEventImage, subscribeToEvents } from '../../services/events.service.js';
-    import { onDestroy } from 'svelte';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
