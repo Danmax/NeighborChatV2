@@ -75,13 +75,18 @@
     <div
         class="modal-backdrop"
         on:click={handleBackdropClick}
-        on:keypress={(e) => e.key === 'Escape' && handleDecline()}
-        role="dialog"
-        aria-modal="true"
-        tabindex="-1"
+        on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && handleDecline()}
+        role="button"
+        aria-label="Close invite dialog"
+        tabindex="0"
         transition:fade={{ duration: 200 }}
     >
-        <div class="modal-content" transition:scale={{ duration: 200, start: 0.95 }}>
+        <div
+            class="modal-content"
+            role="dialog"
+            aria-modal="true"
+            transition:scale={{ duration: 200, start: 0.95 }}
+        >
             <div class="invite-header">
                 <span class="invite-icon">💬</span>
                 <h3>Chat Invite</h3>

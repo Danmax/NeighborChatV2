@@ -179,9 +179,9 @@
     </div>
 
     {#if $savedContacts.length > 0}
-        <div class="form-group">
-            <label>Invite Contacts (optional)</label>
-            <div class="invite-list">
+        <fieldset class="form-group">
+            <legend>Invite Contacts (optional)</legend>
+            <div class="invite-list" role="group" aria-label="Invite Contacts">
                 {#each $savedContacts as contact}
                     <label class="invite-item">
                         <input
@@ -193,7 +193,7 @@
                     </label>
                 {/each}
             </div>
-        </div>
+        </fieldset>
     {/if}
 
     <div class="form-group">
@@ -238,6 +238,19 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+    }
+
+    fieldset.form-group {
+        border: 0;
+        padding: 0;
+        margin: 0;
+    }
+
+    fieldset.form-group legend {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+        margin-bottom: 4px;
     }
 
     .form-group label {

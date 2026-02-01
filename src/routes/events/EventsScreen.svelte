@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -13,12 +12,6 @@
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 EventsScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let activeTab = 'upcoming';
     let showCreateForm = false;
@@ -379,9 +372,4 @@
         opacity: 1;
     }
 
-    .btn-small {
-        padding: 8px 16px;
-        font-size: 13px;
-        width: fit-content;
-    }
 </style>

@@ -23,37 +23,68 @@
     $: sizeStyles = sizes[size] || sizes.md;
 </script>
 
-<div
-    class="avatar {classes}"
-    class:clickable
-    style="
-        background: {style.background};
-        width: {sizeStyles.width};
-        height: {sizeStyles.height};
-        font-size: {sizeStyles.fontSize};
-        {style.border ? `border: ${style.border};` : ''}
-        {style.backgroundImage ? `background-image: ${style.backgroundImage};` : ''}
-        {style.backgroundSize ? `background-size: ${style.backgroundSize};` : ''}
-    "
-    on:click
-    on:keypress
-    role={clickable ? 'button' : 'img'}
-    tabindex={clickable ? 0 : -1}
->
-    <span class="avatar-emoji">{emoji}</span>
+{#if clickable}
+    <button
+        type="button"
+        class="avatar {classes}"
+        class:clickable
+        style="
+            background: {style.background};
+            width: {sizeStyles.width};
+            height: {sizeStyles.height};
+            font-size: {sizeStyles.fontSize};
+            {style.border ? `border: ${style.border};` : ''}
+            {style.backgroundImage ? `background-image: ${style.backgroundImage};` : ''}
+            {style.backgroundSize ? `background-size: ${style.backgroundSize};` : ''}
+        "
+        on:click
+        on:keypress
+        aria-label="User avatar"
+    >
+        <span class="avatar-emoji">{emoji}</span>
 
-    {#if emoji2}
-        <span class="avatar-emoji-2">{emoji2}</span>
-    {/if}
+        {#if emoji2}
+            <span class="avatar-emoji-2">{emoji2}</span>
+        {/if}
 
-    {#if emoji3}
-        <span class="avatar-emoji-3">{emoji3}</span>
-    {/if}
+        {#if emoji3}
+            <span class="avatar-emoji-3">{emoji3}</span>
+        {/if}
 
-    {#if showPresence}
-        <span class="presence-indicator" class:online></span>
-    {/if}
-</div>
+        {#if showPresence}
+            <span class="presence-indicator" class:online></span>
+        {/if}
+    </button>
+{:else}
+    <div
+        class="avatar {classes}"
+        style="
+            background: {style.background};
+            width: {sizeStyles.width};
+            height: {sizeStyles.height};
+            font-size: {sizeStyles.fontSize};
+            {style.border ? `border: ${style.border};` : ''}
+            {style.backgroundImage ? `background-image: ${style.backgroundImage};` : ''}
+            {style.backgroundSize ? `background-size: ${style.backgroundSize};` : ''}
+        "
+        role="img"
+        aria-label="User avatar"
+    >
+        <span class="avatar-emoji">{emoji}</span>
+
+        {#if emoji2}
+            <span class="avatar-emoji-2">{emoji2}</span>
+        {/if}
+
+        {#if emoji3}
+            <span class="avatar-emoji-3">{emoji3}</span>
+        {/if}
+
+        {#if showPresence}
+            <span class="presence-indicator" class:online></span>
+        {/if}
+    </div>
+{/if}
 
 <style>
     .avatar {
@@ -64,6 +95,8 @@
         position: relative;
         flex-shrink: 0;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        padding: 0;
     }
 
     .avatar.clickable {

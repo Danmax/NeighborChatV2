@@ -91,7 +91,14 @@
     }
 </script>
 
-<div class="celebration-card" class:clickable on:click={handleOpen}>
+<div
+    class="celebration-card"
+    class:clickable
+    on:click={handleOpen}
+    on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleOpen(e)}
+    role="button"
+    tabindex={clickable ? 0 : -1}
+>
     <div class="card-header">
         <button class="user-info" type="button" on:click={handleProfileClick}>
             <Avatar avatar={celebration.user_avatar || celebration.author_avatar || celebration.avatar} size="md" />

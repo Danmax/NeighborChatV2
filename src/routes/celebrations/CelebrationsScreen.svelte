@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -21,12 +20,6 @@
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import { showToast } from '../../stores/toasts.js';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 CelebrationsScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let showCreateForm = false;
     let creating = false;
@@ -173,9 +166,9 @@
                     New Kudos
                 </h3>
 
-                <div class="form-group">
-                    <label>Category</label>
-                    <div class="category-selector">
+                <fieldset class="form-group">
+                    <legend>Category</legend>
+                    <div class="category-selector" role="group" aria-label="Category">
                         {#each CELEBRATION_CATEGORIES as cat}
                             <button
                                 type="button"
@@ -188,7 +181,7 @@
                             </button>
                         {/each}
                     </div>
-                </div>
+                </fieldset>
 
                 <div class="form-group">
                     <label for="title">Title (optional)</label>
@@ -224,8 +217,8 @@
                     </div>
                 {/if}
 
-                <div class="form-group">
-                    <label>GIF (optional)</label>
+                <fieldset class="form-group">
+                    <legend>GIF (optional)</legend>
                     {#if selectedGif}
                         <div class="gif-preview">
                             <img src={selectedGif.url} alt="Selected GIF" />
@@ -238,7 +231,7 @@
                             Add GIF
                         </button>
                     {/if}
-                </div>
+                </fieldset>
 
                 <div class="form-actions">
                     <button
@@ -294,7 +287,13 @@
         {/if}
 
         {#if showGifPicker}
-            <div class="gif-modal" on:click|self={() => showGifPicker = false}>
+            <div
+                class="gif-modal"
+                role="button"
+                tabindex="0"
+                on:click|self={() => showGifPicker = false}
+                on:keydown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (showGifPicker = false)}
+            >
                 <div class="gif-modal-content">
                     <GiphyPicker
                         show={showGifPicker}
@@ -388,6 +387,13 @@
 
     .form-group label {
         display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 8px;
+    }
+
+    .form-group legend {
         font-size: 13px;
         font-weight: 600;
         color: var(--text);

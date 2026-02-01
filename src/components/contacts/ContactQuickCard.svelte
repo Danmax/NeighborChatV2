@@ -38,7 +38,14 @@
 </script>
 
 {#if show && user}
-    <div class="modal-overlay" on:click|self={close}>
+    <div
+        class="modal-overlay"
+        on:click|self={close}
+        on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && close()}
+        role="button"
+        tabindex="0"
+        aria-label="Close contact card"
+    >
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Contact</h3>

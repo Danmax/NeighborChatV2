@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -13,12 +12,6 @@
     import Avatar from '../../components/avatar/Avatar.svelte';
     import UserCard from '../../components/users/UserCard.svelte';
     import { INTERESTS } from '../../services/profile.service.js';
-
-    // Redirect to auth if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 FindMatchScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let searching = false;
     let filterInterest = 'all';

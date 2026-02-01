@@ -4,7 +4,7 @@
     import Router, { push, location } from 'svelte-spa-router';
     import { initSupabase } from './lib/supabase.js';
     import { checkExistingAuth, setupAuthListener } from './services/auth.service.js';
-    import { isAuthenticated, currentUser } from './stores/auth.js';
+    import { isAuthenticated, currentUser, authUser } from './stores/auth.js';
     import { isLoading, setLoading, showTopMenu, authInitialized } from './stores/ui.js';
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
@@ -90,56 +90,18 @@
             await initSupabase();
 
             // Set up auth state listener first so INITIAL_SESSION is handled
-            authSubscription = setupAuthListener(({ event, user, shouldOnboard }) => {
+            authSubscription = setupAuthListener(({ event, user }) => {
                 console.log('Auth event:', event);
 
                 if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
-                    // Signal that initial auth check is complete AFTER user data is loaded
-                    if (event === 'INITIAL_SESSION') {
-                        authInitialized.set(true);
-                        console.log('🔐 Auth initialization complete');
-                    }
-
                     setupInviteListener();
-
-                    if (shouldOnboard) {
-                        console.log('New user detected - redirecting to onboarding');
-                        showTopMenu.set(false);
-                        push('/onboarding');
-                    } else {
-                        console.log('Returning user - showing lobby');
-                        showTopMenu.set(true);
-                        // Only navigate if currently on auth screen
-                        if ($location === '/auth') {
-                            push('/');
-                        }
-                    }
-                } else if (event === 'INITIAL_SESSION' && !user) {
-                    // No session found - mark auth as initialized
-                    authInitialized.set(true);
-                    console.log('🔐 Auth initialization complete (no session)');
                 }
             });
 
             // Check for existing auth
-            const user = await checkExistingAuth();
-
-            // If checkExistingAuth returned a user but INITIAL_SESSION hasn't fired yet,
-            // set authInitialized after a short delay to allow the event to process
-            if (user) {
-                if (user.isNewUser || !user.onboardingCompleted) {
-                    console.log('Existing session needs onboarding');
-                    showTopMenu.set(false);
-                    push('/onboarding');
-                } else {
-                    showTopMenu.set(true);
-                    setupInviteListener();
-                }
-            } else {
-                // No user found, set authInitialized immediately
-                authInitialized.set(true);
-                console.log('🔐 Auth initialization complete (no user)');
-            }
+            await checkExistingAuth();
+            authInitialized.set(true);
+            console.log('🔐 Auth initialization complete');
 
             ready = true;
             setLoading(false);
@@ -214,10 +176,24 @@
         showSidebar = true;
     }
 
-    // Enforce onboarding before access
-    $: if ($isAuthenticated && $currentUser && !$currentUser.onboardingCompleted && $location !== '/onboarding') {
-        showTopMenu.set(false);
-        push('/onboarding');
+    // Centralized routing guard
+    $: if ($authInitialized) {
+        if (!$authUser) {
+            showTopMenu.set(false);
+            if ($location !== '/auth') {
+                push('/auth');
+            }
+        } else if ($currentUser && !$currentUser.onboardingCompleted) {
+            showTopMenu.set(false);
+            if ($location !== '/onboarding') {
+                push('/onboarding');
+            }
+        } else if ($currentUser && $currentUser.onboardingCompleted) {
+            showTopMenu.set(true);
+            if ($location === '/auth' || $location === '/onboarding') {
+                push('/');
+            }
+        }
     }
 </script>
 

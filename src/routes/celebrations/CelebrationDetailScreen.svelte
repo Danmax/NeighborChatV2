@@ -2,7 +2,6 @@
     import { onMount } from 'svelte';
     import { get } from 'svelte/store';
     import { push } from 'svelte-spa-router';
-    import { authInitialized } from '../../stores/ui.js';
     import { isAuthenticated } from '../../stores/auth.js';
     import { celebrations } from '../../stores/celebrations.js';
     import { fetchCelebrationById, postComment } from '../../services/celebrations.service.js';
@@ -26,10 +25,6 @@
         if (fromStore) {
             celebration = fromStore;
         }
-    }
-
-    $: if ($authInitialized && !$isAuthenticated) {
-        push('/auth');
     }
 
     onMount(async () => {
@@ -163,7 +158,13 @@
         {/if}
 
         {#if showGifPicker}
-            <div class="gif-modal" on:click|self={() => showGifPicker = false}>
+            <div
+                class="gif-modal"
+                role="button"
+                tabindex="0"
+                on:click|self={() => showGifPicker = false}
+                on:keydown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (showGifPicker = false)}
+            >
                 <div class="gif-modal-content">
                     <GiphyPicker
                         show={showGifPicker}

@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -24,12 +23,6 @@
     let showGifPicker = false;
 
     $: otherUserId = params.id;
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 ThreadScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     $: mappedMessages = ($threadMessages || []).map(msg => {
         const isOwn = msg.sender_id === $currentUser?.user_id;

@@ -1,7 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { authInitialized } from '../../stores/ui.js';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import { events } from '../../stores/events.js';
     import { savedContacts } from '../../stores/contacts.js';
@@ -49,10 +48,6 @@
     $: isOwner = eventData?.created_by === $currentUser?.user_id;
     $: isAttending = eventData?.attendees?.includes($currentUser?.user_id);
     $: items = eventData?.items || [];
-
-    $: if ($authInitialized && !$isAuthenticated) {
-        push('/auth');
-    }
 
     onMount(async () => {
         if (!$isAuthenticated || !eventId) return;

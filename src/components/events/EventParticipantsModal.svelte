@@ -15,7 +15,14 @@
 </script>
 
 {#if show}
-    <div class="modal-overlay" on:click|self={handleClose}>
+    <div
+        class="modal-overlay"
+        on:click|self={handleClose}
+        on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && handleClose()}
+        role="button"
+        tabindex="0"
+        aria-label="Close participants dialog"
+    >
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Participants{event?.title ? ` · ${event.title}` : ''}</h2>

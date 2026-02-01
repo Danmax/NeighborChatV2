@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
@@ -23,12 +22,6 @@
 
     const STORAGE_KEY = 'neighbor_chat_lobby_messages';
     const MAX_MESSAGES_PER_CHANNEL = 50;
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 LobbyChatScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let currentChannel = CHANNELS[0];
     let lobbyChannel = null;

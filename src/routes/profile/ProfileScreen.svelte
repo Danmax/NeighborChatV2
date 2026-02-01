@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { push } from 'svelte-spa-router';
     import { currentUser, isAuthenticated, signOut } from '../../stores/auth.js';
     import { currentTheme, setTheme, THEMES } from '../../stores/theme.js';
@@ -20,12 +19,6 @@
     } from '../../services/profile.service.js';
     import { formatPhoneNumber } from '../../lib/utils/phone.js';
     import ProfilePrivacySettings from '../../components/profile/ProfilePrivacySettings.svelte';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 ProfileScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let activeTab = 'info';
     let editingAvatar = false;
@@ -374,9 +367,9 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>My Interests</label>
-                    <div class="interests-container">
+                <fieldset class="form-group">
+                    <legend>My Interests</legend>
+                    <div class="interests-container" role="group" aria-label="My Interests">
                         {#each INTERESTS as interest}
                             <button
                                 class="interest-tag"
@@ -388,7 +381,7 @@
                             </button>
                         {/each}
                     </div>
-                </div>
+                </fieldset>
             </div>
 
             <!-- Personal Details Card -->
@@ -581,8 +574,8 @@
                     <div class="banner-edit">
                         <div class="banner-preview" style="background-color: {tempBannerColor}; height: 120px; border-radius: var(--radius-sm); margin-bottom: 16px;"></div>
 
-                        <div class="form-group">
-                            <label>Banner Color</label>
+                        <fieldset class="form-group">
+                            <legend>Banner Color</legend>
                             <div class="color-picker">
                                 {#each BANNER_COLORS as color}
                                     <button
@@ -594,10 +587,10 @@
                                     ></button>
                                 {/each}
                             </div>
-                        </div>
+                        </fieldset>
 
-                        <div class="form-group">
-                            <label>Pattern</label>
+                        <fieldset class="form-group">
+                            <legend>Pattern</legend>
                             <div class="pattern-picker">
                                 {#each BANNER_PATTERNS as pattern}
                                     <button
@@ -611,7 +604,7 @@
                                     </button>
                                 {/each}
                             </div>
-                        </div>
+                        </fieldset>
 
                         <div class="edit-actions">
                             <button class="btn btn-secondary" on:click={() => editingBanner = false}>
@@ -809,6 +802,19 @@
 
     .avatar-actions .btn {
         flex: 1;
+    }
+
+    fieldset.form-group {
+        border: 0;
+        padding: 0;
+        margin: 0;
+    }
+
+    fieldset.form-group legend {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+        margin-bottom: 8px;
     }
 
     .theme-selector {

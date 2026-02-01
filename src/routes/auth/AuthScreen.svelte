@@ -1,8 +1,6 @@
 <script>
     import { push } from 'svelte-spa-router';
     import { signInWithGitHub, signInWithGoogle } from '../../services/auth.service.js';
-    import { authInitialized } from '../../stores/ui.js';
-    import { isAuthenticated, currentUser } from '../../stores/auth.js';
 
     let loading = false;
     let error = '';
@@ -35,13 +33,7 @@
         }
     }
 
-    $: if ($authInitialized && $isAuthenticated) {
-        if ($currentUser && !$currentUser.onboardingCompleted) {
-            push('/onboarding');
-        } else {
-            push('/');
-        }
-    }
+    // Auth routing handled centrally in App.svelte
 </script>
 
 <div class="auth-screen">

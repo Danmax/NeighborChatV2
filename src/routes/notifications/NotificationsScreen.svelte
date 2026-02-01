@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
@@ -19,12 +18,6 @@
         subscribeToNotifications
     } from '../../services/notifications.service.js';
     import NotificationItem from '../../components/notifications/NotificationItem.svelte';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 NotificationsScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let subscription = null;
 

@@ -1,8 +1,7 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { currentUser, updateCurrentUser, isAuthenticated } from '../../stores/auth.js';
+    import { currentUser, updateCurrentUser } from '../../stores/auth.js';
     import { showTopMenu } from '../../stores/ui.js';
     import { getSupabase } from '../../lib/supabase.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
@@ -26,11 +25,7 @@
     let error = '';
     let usernameSuggestions = generateUsernameSuggestions(3);
 
-    // Redirect to auth if not authenticated (only after auth initialization)
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 OnboardingScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
+    // Auth routing handled centrally in App.svelte
 
     onMount(async () => {
         console.log('Onboarding mounted - user:', $currentUser?.name);
@@ -218,8 +213,9 @@
             </h2>
 
             <div class="form-group">
-                <label>Your Display Name</label>
+                <label for="display-name">Your Display Name</label>
                 <input
+                    id="display-name"
                     type="text"
                     bind:value={displayName}
                     placeholder="How should neighbors know you?"
@@ -227,8 +223,8 @@
                 />
             </div>
 
-            <div class="form-group">
-                <label>Or pick a fun name:</label>
+            <fieldset class="form-group">
+                <legend>Or pick a fun name:</legend>
                 <div class="fun-names-grid">
                     {#each FUN_NAMES.slice(0, 6) as name}
                         <button
@@ -240,12 +236,13 @@
                         </button>
                     {/each}
                 </div>
-            </div>
+            </fieldset>
 
             <div class="form-group">
-                <label>Choose Your Username <span class="optional-label">(optional)</span></label>
+                <label for="username-input">Choose Your Username <span class="optional-label">(optional)</span></label>
                 <div class="username-input-row">
                     <input
+                        id="username-input"
                         type="text"
                         bind:value={username}
                         on:input={handleUsernameInput}

@@ -66,8 +66,8 @@
     </div>
 
     <!-- Emoji Selection -->
-    <div class="avatar-control-group">
-        <label class="control-label">Main Emoji</label>
+    <fieldset class="avatar-control-group">
+        <legend class="control-legend">Main Emoji</legend>
         <div class="emoji-selector">
             {#each AVATAR_EMOJIS as emoji}
                 <button
@@ -79,12 +79,12 @@
                 </button>
             {/each}
         </div>
-    </div>
+    </fieldset>
 
     {#if !compact}
         <!-- Secondary Emoji -->
-        <div class="avatar-control-group">
-            <label class="control-label">Accessory (top-right)</label>
+        <fieldset class="avatar-control-group">
+            <legend class="control-legend">Accessory (top-right)</legend>
             <div class="emoji-selector">
                 <button
                     class="emoji-select-btn"
@@ -103,11 +103,11 @@
                     </button>
                 {/each}
             </div>
-        </div>
+        </fieldset>
 
         <!-- Third Emoji -->
-        <div class="avatar-control-group">
-            <label class="control-label">Flair (bottom-left)</label>
+        <fieldset class="avatar-control-group">
+            <legend class="control-legend">Flair (bottom-left)</legend>
             <div class="emoji-selector">
                 <button
                     class="emoji-select-btn"
@@ -126,12 +126,12 @@
                     </button>
                 {/each}
             </div>
-        </div>
+        </fieldset>
     {/if}
 
     <!-- Background Color -->
-    <div class="avatar-control-group">
-        <label class="control-label">Background Color</label>
+    <fieldset class="avatar-control-group">
+        <legend class="control-legend">Background Color</legend>
         <div class="background-selector">
             {#each AVATAR_BACKGROUNDS as color}
                 <button
@@ -142,12 +142,12 @@
                 ></button>
             {/each}
         </div>
-    </div>
+    </fieldset>
 
     {#if !compact}
         <!-- Border Style -->
-        <div class="avatar-control-group">
-            <label class="control-label">Border Style</label>
+        <fieldset class="avatar-control-group">
+            <legend class="control-legend">Border Style</legend>
             <div class="border-selector">
                 {#each AVATAR_BORDERS as border}
                     <button
@@ -159,11 +159,11 @@
                     </button>
                 {/each}
             </div>
-        </div>
+        </fieldset>
 
         <!-- Pattern Style -->
-        <div class="avatar-control-group">
-            <label class="control-label">Pattern</label>
+        <fieldset class="avatar-control-group">
+            <legend class="control-legend">Pattern</legend>
             <div class="pattern-selector">
                 {#each AVATAR_PATTERNS as pattern}
                     <button
@@ -175,7 +175,7 @@
                     </button>
                 {/each}
             </div>
-        </div>
+        </fieldset>
     {/if}
 </div>
 
@@ -208,14 +208,19 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        min-width: 0;
     }
 
-    .control-label {
+    .control-legend {
         font-size: 12px;
         font-weight: 600;
         color: var(--text-light);
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        margin-bottom: 2px;
     }
 
     .emoji-selector {

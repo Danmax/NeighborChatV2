@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
@@ -7,12 +6,6 @@
     import { fetchInbox, subscribeToInbox } from '../../services/messages.service.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import { getTimeAgo } from '../../lib/utils/time.js';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 MessagesScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let subscription = null;
 

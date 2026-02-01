@@ -1,5 +1,4 @@
 <script>
-    import { authInitialized } from '../../stores/ui.js';
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
@@ -12,12 +11,6 @@
     } from '../../services/contacts.service.js';
     import ContactList from '../../components/contacts/ContactList.svelte';
     import EditContactModal from '../../components/contacts/EditContactModal.svelte';
-
-    // Redirect if not authenticated
-    $: if ($authInitialized && !$isAuthenticated) {
-        console.log('🔐 ContactsScreen: Not authenticated, redirecting to /auth');
-        push('/auth');
-    }
 
     let showEditModal = false;
     let selectedContact = null;

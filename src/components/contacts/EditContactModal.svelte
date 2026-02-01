@@ -32,8 +32,20 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if show && contact}
-    <div class="modal-overlay" on:click={close}>
-        <div class="modal" on:click|stopPropagation>
+    <div
+        class="modal-overlay"
+        on:click|self={close}
+        on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && close()}
+        role="button"
+        tabindex="0"
+        aria-label="Close edit contact dialog"
+    >
+        <div
+            class="modal"
+            role="dialog"
+            aria-modal="true"
+            tabindex="-1"
+        >
             <div class="modal-header">
                 <h3>Edit Contact Notes</h3>
                 <button class="close-btn" on:click={close}>✕</button>
