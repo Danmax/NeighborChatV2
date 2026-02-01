@@ -15,7 +15,6 @@
     import { fetchEvents } from '../../services/events.service.js';
     import { fetchCelebrations } from '../../services/celebrations.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
-    import { getTimeAgo } from '../../lib/utils/time.js';
     import OnlineCount from '../../components/users/OnlineCount.svelte';
     import EventCard from '../../components/events/EventCard.svelte';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
@@ -34,43 +33,6 @@
     $: recentCelebrations = ($celebrations || []).slice(0, 3);
     $: recentConnections = ($savedContacts || []).slice(0, 3);
 
-    $: recentActivities = buildRecentActivities();
-
-    function buildRecentActivities() {
-        const activities = [];
-        const celebrationsList = recentCelebrations || [];
-        const eventsList = publicUpcomingEvents || [];
-        const connectionsList = recentConnections || [];
-
-        celebrationsList.forEach(celebration => {
-            activities.push({
-                id: `celebration-${celebration.id}`,
-                label: `${celebration.authorName || 'A neighbor'} shared a celebration`,
-                time: celebration.created_at
-            });
-        });
-
-        eventsList.forEach(event => {
-            activities.push({
-                id: `event-${event.id}`,
-                label: `${event.title || event.name} is coming up`,
-                time: event.created_at || event.date
-            });
-        });
-
-        connectionsList.forEach(contact => {
-            activities.push({
-                id: `contact-${contact.id}`,
-                label: `You connected with ${contact.name}`,
-                time: contact.created_at
-            });
-        });
-
-        return activities
-            .filter(item => item.time)
-            .sort((a, b) => new Date(b.time) - new Date(a.time))
-            .slice(0, 5);
-    }
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -215,30 +177,6 @@
                 </a>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span class="icon">🕒</span>
-                        Recent Activity
-                    </h3>
-                </div>
-
-                {#if recentActivities.length > 0}
-                    <ul class="activity-list">
-                        {#each recentActivities as item (item.id)}
-                            <li>
-                                <span class="activity-label">{item.label}</span>
-                                <span class="activity-time">{getTimeAgo(item.time)}</span>
-                            </li>
-                        {/each}
-                    </ul>
-                {:else}
-                    <div class="empty-state">
-                        <div class="empty-state-icon">✨</div>
-                        <p class="empty-state-text">No activity yet</p>
-                    </div>
-                {/if}
-            </div>
         </div>
     </div>
 {/if}
@@ -398,35 +336,6 @@
         font-size: 14px;
     }
 
-    .activity-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .activity-list li {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px;
-        border: 1px solid var(--cream-dark);
-        border-radius: 12px;
-        background: var(--cream);
-        font-size: 13px;
-    }
-
-    .activity-label {
-        color: var(--text);
-        font-weight: 600;
-    }
-
-    .activity-time {
-        color: var(--text-muted);
-        white-space: nowrap;
-    }
 
     .btn {
         display: inline-flex;

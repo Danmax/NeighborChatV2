@@ -9,7 +9,7 @@
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
     import { userStatus, isAvailable } from './stores/presence.js';
-    import { setupInviteChannel, updatePresenceStatus, sendInviteResponse } from './services/realtime.service.js';
+    import { setupInviteChannel, updatePresenceStatus, sendInviteResponse, cleanupInviteChannel } from './services/realtime.service.js';
     import { setPendingInvite, pendingInvite, clearPendingInvite } from './stores/chat.js';
 
     // Status options
@@ -140,7 +140,7 @@
             authSubscription.unsubscribe();
         }
         if (inviteChannel) {
-            inviteChannel.unsubscribe();
+            cleanupInviteChannel();
         }
     });
 
@@ -331,6 +331,9 @@
         position: sticky;
         top: 0;
         z-index: 100;
+        border-radius: var(--radius-md, 16px);
+        margin: 0 0 16px;
+        box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
     }
 
     .nav-left, .nav-right {

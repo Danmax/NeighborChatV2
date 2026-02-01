@@ -520,12 +520,15 @@ export function cleanupChannels() {
         lobbyChannel.unsubscribe();
         lobbyChannel = null;
     }
-    if (inviteChannel) {
-        inviteChannel.unsubscribe();
-        inviteChannel = null;
-    }
     if (chatChannel) {
         chatChannel.unsubscribe();
         chatChannel = null;
+    }
+}
+
+export function cleanupInviteChannel() {
+    if (inviteChannel) {
+        inviteChannel.unsubscribe();
+        inviteChannel = null;
     }
 }
