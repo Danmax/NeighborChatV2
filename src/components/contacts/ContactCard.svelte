@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { push } from 'svelte-spa-router';
     import Avatar from '../avatar/Avatar.svelte';
     import { INTERESTS } from '../../services/profile.service.js';
 
@@ -23,6 +24,12 @@
 
     function handleClick() {
         dispatch('click', contact);
+    }
+
+    function handleProfileClick(e) {
+        e.stopPropagation();
+        if (!contact?.user_id) return;
+        push(`/profile/view/${contact.user_id}`);
     }
 
     function toggleMenu(e) {
@@ -69,15 +76,15 @@
     role="button"
     tabindex="0"
 >
-    <div class="contact-avatar">
+    <button class="contact-avatar" type="button" on:click={handleProfileClick}>
         <Avatar avatar={contact.avatar} size="sm" />
         {#if contact.favorite}
             <div class="favorite-badge">⭐</div>
         {/if}
-    </div>
+    </button>
 
     <div class="contact-info">
-        <div class="contact-name">{contact.name}</div>
+        <button class="contact-name" type="button" on:click={handleProfileClick}>{contact.name}</button>
         {#if contact.notes}
             <div class="contact-notes">{contact.notes}</div>
         {/if}
@@ -152,6 +159,10 @@
     .contact-avatar {
         position: relative;
         flex-shrink: 0;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
     }
 
     .favorite-badge {
@@ -173,6 +184,11 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
     }
 
     .compact .contact-name {

@@ -1,5 +1,6 @@
 <script>
     import Avatar from '../avatar/Avatar.svelte';
+    import { push } from 'svelte-spa-router';
     import { currentUser } from '../../stores/auth.js';
     import { highlightMentions } from '../../lib/utils/mentions.js';
 
@@ -33,14 +34,25 @@
 
 <div class="message" class:own={isOwn} class:compact>
     {#if showAvatar && !isOwn}
-        <div class="message-avatar">
+        <button
+            class="message-avatar"
+            type="button"
+            on:click={() => message.user_id && push(`/profile/view/${message.user_id}`)}
+            aria-label="View profile"
+        >
             <Avatar avatar={message.avatar} size="sm" />
-        </div>
+        </button>
     {/if}
 
     <div class="message-content">
         {#if !isOwn && !compact}
-            <div class="message-sender">{message.name}</div>
+            <button
+                class="message-sender"
+                type="button"
+                on:click={() => message.user_id && push(`/profile/view/${message.user_id}`)}
+            >
+                {message.name}
+            </button>
         {/if}
 
         <div class="message-bubble">
@@ -85,6 +97,10 @@
 
     .message-avatar {
         flex-shrink: 0;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
     }
 
     .message-content {
@@ -103,6 +119,11 @@
         color: var(--text-muted);
         margin-bottom: 4px;
         margin-left: 4px;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
     }
 
     .message-bubble {

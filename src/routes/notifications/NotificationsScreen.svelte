@@ -153,6 +153,7 @@
                             on:click={handleNotificationClick}
                             on:action={handleNotificationAction}
                             on:dismiss={handleDismiss}
+                            on:profile={(event) => push(`/profile/view/${event.detail}`)}
                         />
                     {/each}
                 </div>

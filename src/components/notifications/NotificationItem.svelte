@@ -10,6 +10,7 @@
     $: icon = getNotificationIcon(notification.type);
     $: formattedTime = formatTime(notification.created_at);
     $: hasAvatar = notification.data?.from_user_avatar;
+    $: fromUserId = notification.data?.from_user_id;
 
     function formatTime(timestamp) {
         const date = new Date(timestamp);
@@ -49,13 +50,18 @@
     role="button"
     tabindex="0"
 >
-    <div class="notification-icon">
+    <button
+        class="notification-icon"
+        type="button"
+        on:click|stopPropagation={() => fromUserId && dispatch('profile', fromUserId)}
+        aria-label="View profile"
+    >
         {#if hasAvatar}
             <Avatar avatar={notification.data.from_user_avatar} size="sm" />
         {:else}
             <span class="icon-emoji">{icon}</span>
         {/if}
-    </div>
+    </button>
 
     <div class="notification-content">
         <div class="notification-title">{notification.title}</div>
@@ -113,6 +119,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        border: none;
+        cursor: pointer;
+        padding: 0;
     }
 
     .icon-emoji {

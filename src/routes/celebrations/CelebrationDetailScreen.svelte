@@ -134,10 +134,14 @@
                     <div class="reply-list">
                         {#each celebration.comments as reply (reply.id)}
                             <div class="reply-item">
-                                <Avatar avatar={reply.user_avatar} size="sm" />
+                                <button class="reply-avatar" type="button" on:click={() => reply.user_id && push(`/profile/view/${reply.user_id}`)}>
+                                    <Avatar avatar={reply.user_avatar} size="sm" />
+                                </button>
                                 <div class="reply-content">
                                     <div class="reply-meta">
-                                        <span class="reply-author">{reply.user_name || 'Neighbor'}</span>
+                                        <button class="reply-author" type="button" on:click={() => reply.user_id && push(`/profile/view/${reply.user_id}`)}>
+                                            {reply.user_name || 'Neighbor'}
+                                        </button>
                                         <span class="reply-time">{formatTime(reply.created_at)}</span>
                                     </div>
                                     {#if reply.gif_url}
@@ -252,6 +256,17 @@
     .reply-author {
         font-weight: 600;
         color: var(--text);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+    }
+
+    .reply-avatar {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
     }
 
     .reply-gif {

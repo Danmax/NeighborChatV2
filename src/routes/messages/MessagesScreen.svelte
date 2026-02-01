@@ -70,15 +70,26 @@
                 <div class="thread-list">
                     {#each $inboxThreads as thread}
                         <button class="thread-item" on:click={() => openThread(thread)}>
-                            <div class="thread-avatar">
+                            <button
+                                class="thread-avatar"
+                                type="button"
+                                on:click|stopPropagation={() => push(`/profile/view/${thread.user_id}`)}
+                                aria-label="View profile"
+                            >
                                 <Avatar avatar={thread.profile?.avatar} size="sm" />
                                 {#if thread.unread_count > 0}
                                     <span class="unread-badge">{thread.unread_count}</span>
                                 {/if}
-                            </div>
+                            </button>
                             <div class="thread-body">
                                 <div class="thread-top">
-                                    <span class="thread-name">{thread.profile?.name || 'Neighbor'}</span>
+                                    <button
+                                        class="thread-name"
+                                        type="button"
+                                        on:click|stopPropagation={() => push(`/profile/view/${thread.user_id}`)}
+                                    >
+                                        {thread.profile?.name || 'Neighbor'}
+                                    </button>
                                     <span class="thread-time">{getTimeAgo(thread.last_at)}</span>
                                 </div>
                                 <div class="thread-preview">{thread.last_message}</div>
@@ -151,6 +162,10 @@
     .thread-avatar {
         position: relative;
         flex-shrink: 0;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
     }
 
     .unread-badge {
@@ -189,6 +204,11 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
     }
 
     .thread-time {
