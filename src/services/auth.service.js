@@ -3,7 +3,6 @@ import { getSupabase } from '../lib/supabase.js';
 import { currentUser, authUser, setCurrentUser, updateCurrentUser, clearAuth } from '../stores/auth.js';
 import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
-import { getCachedData } from '../lib/utils/cache.js';
 import { InputValidator } from '../lib/security.js';
 
 /**
