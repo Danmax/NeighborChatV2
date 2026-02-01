@@ -10,6 +10,7 @@ import {
     celebrationsError
 } from '../stores/celebrations.js';
 import { get } from 'svelte/store';
+import { extractMentions } from '../lib/utils/mentions.js';
 
 // Transform database row to app format
 function transformCelebrationFromDb(row) {
@@ -23,6 +24,7 @@ function transformCelebrationFromDb(row) {
         recipientId: row.recipient_id,
         message: row.message,
         gif_url: row.gif_url,
+        celebration_date: row.celebration_date,
         emoji: row.emoji || '🎂',
         authorId: row.author_id,
         authorName: row.author_name,
@@ -42,6 +44,7 @@ function transformCelebrationToDb(celebrationData, user, authUserId) {
         type: celebrationData.category || celebrationData.type || 'birthday',
         message: celebrationData.message,
         gif_url: celebrationData.gif_url || null,
+        celebration_date: celebrationData.celebration_date || null,
         honoree: celebrationData.title || celebrationData.honoree || null,
         recipient_name: celebrationData.recipientName || celebrationData.title || null,
         recipient_id: celebrationData.recipientId || null,
@@ -74,7 +77,9 @@ export async function fetchCelebrations(limit = 50) {
 
         if (error) throw error;
 
-        const celebrations = (data || []).map(transformCelebrationFromDb);
+        let celebrations = (data || []).map(transformCelebrationFromDb);
+        celebrations = await applyArchiveRules(celebrations);
+        celebrations = celebrations.filter(c => !c.archived);
         setCelebrations(celebrations);
         return celebrations;
     } catch (error) {
@@ -126,10 +131,123 @@ export async function createCelebration(celebrationData) {
 
         const celebration = transformCelebrationFromDb(data);
         addCelebration(celebration);
+        await sendCelebrationMentions(celebration, celebrationData.message);
         return celebration;
     } catch (error) {
         console.error('Failed to create celebration:', error);
         throw error;
+    }
+}
+
+/**
+ * Update an existing celebration
+ */
+export async function updateCelebrationInDb(celebrationId, updates) {
+    const supabase = getSupabase();
+
+    const dbUpdates = {};
+    if (updates.message !== undefined) dbUpdates.message = updates.message;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.category !== undefined) dbUpdates.type = updates.category;
+    if (updates.title !== undefined) dbUpdates.honoree = updates.title;
+    if (updates.gif_url !== undefined) dbUpdates.gif_url = updates.gif_url;
+    if (updates.celebration_date !== undefined) dbUpdates.celebration_date = updates.celebration_date;
+    if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
+
+    try {
+        const { data, error } = await supabase
+            .from('celebrations')
+            .update(dbUpdates)
+            .eq('id', celebrationId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        updateCelebration(celebrationId, transformCelebrationFromDb(data));
+        return data;
+    } catch (error) {
+        console.error('Failed to update celebration:', error);
+        throw error;
+    }
+}
+
+async function applyArchiveRules(celebrations) {
+    if (!celebrations.length) return celebrations;
+    const now = new Date();
+    const authUserId = await getAuthUserId();
+    const supabase = getSupabase();
+
+    const updates = celebrations.map(async (celebration) => {
+        if (!celebration.celebration_date) return celebration;
+
+        const celebrationDate = new Date(celebration.celebration_date);
+        const expiresAt = new Date(celebrationDate);
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        if (now > expiresAt && !celebration.archived) {
+            if (authUserId && celebration.authorId === authUserId) {
+                try {
+                    await supabase
+                        .from('celebrations')
+                        .update({ archived: true })
+                        .eq('id', celebration.id);
+                } catch (err) {
+                    console.warn('Failed to archive celebration:', err);
+                }
+            }
+            return { ...celebration, archived: true };
+        }
+
+        return celebration;
+    });
+
+    return Promise.all(updates);
+}
+
+async function sendCelebrationMentions(celebration, message) {
+    if (!message) return;
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return;
+
+    const mentions = extractMentions(message);
+    if (mentions.length === 0) return;
+
+    const supabase = getSupabase();
+
+    for (const mention of mentions) {
+        const normalized = mention.toLowerCase();
+        let target = null;
+
+        const { data: byUsername } = await supabase
+            .from('public_profiles')
+            .select('user_id, display_name, username')
+            .ilike('username', normalized)
+            .limit(1);
+
+        if (byUsername && byUsername.length > 0) {
+            target = byUsername[0];
+        } else {
+            const displayQuery = normalized.replace(/_/g, ' ');
+            const { data: byDisplay } = await supabase
+                .from('public_profiles')
+                .select('user_id, display_name, username')
+                .ilike('display_name', displayQuery)
+                .limit(1);
+
+            if (byDisplay && byDisplay.length > 0) {
+                target = byDisplay[0];
+            }
+        }
+
+        if (target && target.user_id !== authUserId) {
+            await supabase.rpc('send_celebration_mention_notification', {
+                target_user_id: target.user_id,
+                from_user_id: authUserId,
+                celebration_id: celebration.id,
+                mention_message: message
+            });
+        }
     }
 }
 

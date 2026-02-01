@@ -73,6 +73,7 @@
                 break;
             case NOTIFICATION_TYPES.CELEBRATION_REACTION:
             case NOTIFICATION_TYPES.CELEBRATION_COMMENT:
+            case NOTIFICATION_TYPES.CELEBRATION_MENTION:
                 push('/celebrations');
                 break;
         }

@@ -13,6 +13,7 @@
     import {
         fetchCelebrations,
         createCelebration,
+        updateCelebrationInDb,
         updateReactions,
         postComment
     } from '../../services/celebrations.service.js';
@@ -30,11 +31,13 @@
     let creating = false;
     let showGifPicker = false;
     let selectedGif = null;
+    let editingCelebration = null;
 
     // Form fields
     let category = 'milestone';
     let title = '';
     let message = '';
+    let celebrationDate = '';
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -44,25 +47,40 @@
 
     async function handleCreate() {
         if (!message.trim() || creating) return;
+        if ((category === 'birthday' || category === 'anniversary') && !celebrationDate) {
+            showToast('Please select a date for this celebration.', 'error');
+            return;
+        }
 
         creating = true;
         try {
-            await createCelebration({
+            const payload = {
                 category,
                 title: title.trim() || null,
                 message: message.trim(),
-                gif_url: selectedGif?.url || null
-            });
+                gif_url: selectedGif?.url || null,
+                celebration_date: celebrationDate || null
+            };
+
+            if (editingCelebration) {
+                await updateCelebrationInDb(editingCelebration.id, payload);
+                showToast('Kudos updated!', 'success');
+            } else {
+                await createCelebration(payload);
+                showToast('Kudos posted!', 'success');
+            }
+
             // Reset form
             category = 'milestone';
             title = '';
             message = '';
+            celebrationDate = '';
             selectedGif = null;
+            editingCelebration = null;
             showCreateForm = false;
-            showToast('Celebration posted!', 'success');
         } catch (err) {
             console.error('Failed to create celebration:', err);
-            showToast(`Failed to post celebration: ${err.message}`, 'error');
+            showToast(`Failed to post kudos: ${err.message}`, 'error');
         } finally {
             creating = false;
         }
@@ -70,7 +88,36 @@
 
     function handleGifSelect(event) {
         selectedGif = event.detail;
+        if (!message.trim() && selectedGif?.message) {
+            message = selectedGif.message;
+        }
         showGifPicker = false;
+    }
+
+    function handleEdit(event) {
+        const celebration = event.detail;
+        editingCelebration = celebration;
+        category = celebration.category || celebration.type || 'milestone';
+        title = celebration.title || '';
+        message = celebration.message || '';
+        celebrationDate = celebration.celebration_date || '';
+        selectedGif = celebration.gif_url ? { url: celebration.gif_url } : null;
+        showCreateForm = true;
+    }
+
+    async function handleArchive() {
+        if (!editingCelebration) return;
+        creating = true;
+        try {
+            await updateCelebrationInDb(editingCelebration.id, { archived: true });
+            showToast('Kudos archived', 'success');
+            editingCelebration = null;
+            showCreateForm = false;
+        } catch (err) {
+            showToast(`Failed to archive: ${err.message}`, 'error');
+        } finally {
+            creating = false;
+        }
     }
 
     function handleShareBoard() {
@@ -150,7 +197,7 @@
             <div class="card create-form">
                 <h3 class="card-title">
                     <span class="icon">✨</span>
-                    New Celebration
+                    New Kudos
                 </h3>
 
                 <div class="form-group">
@@ -185,11 +232,23 @@
                     <textarea
                         id="message"
                         bind:value={message}
-                        placeholder="Share a shout-out or thank you..."
+                        placeholder="Share a shout-out or thank you... (use @display name to mention)"
                         rows="3"
                         maxlength="500"
                     ></textarea>
                 </div>
+
+                {#if category === 'birthday' || category === 'anniversary'}
+                    <div class="form-group">
+                        <label for="celebration-date">Date *</label>
+                        <input
+                            id="celebration-date"
+                            type="date"
+                            bind:value={celebrationDate}
+                            required
+                        />
+                    </div>
+                {/if}
 
                 <div class="form-group">
                     <label>GIF (optional)</label>
@@ -202,7 +261,7 @@
                         </div>
                     {:else}
                         <button class="btn btn-secondary btn-small" on:click={() => showGifPicker = true}>
-                            Choose GIF
+                            Add GIF
                         </button>
                     {/if}
                 </div>
@@ -215,46 +274,60 @@
                     >
                         Cancel
                     </button>
+                    {#if editingCelebration}
+                        <button class="btn btn-secondary" on:click={handleArchive} disabled={creating}>
+                            Archive
+                        </button>
+                    {/if}
                     <button
                         class="btn btn-primary"
                         on:click={handleCreate}
                         disabled={!message.trim() || creating}
                     >
-                        {creating ? 'Posting...' : '🎉 Post Kudos'}
+                        {creating ? 'Posting...' : editingCelebration ? 'Save' : '🎉 Post Kudos'}
                     </button>
                 </div>
             </div>
         {/if}
 
         <!-- Celebrations Feed -->
-        <div class="celebrations-feed">
-            {#if $celebrationsLoading}
-                <div class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Loading celebrations...</p>
-                </div>
-            {:else if $celebrations.length === 0}
-                <div class="empty-state">
-                    <div class="empty-icon">🎊</div>
-                    <p>No celebrations yet</p>
-                    <p class="empty-hint">Be the first to share something to celebrate!</p>
-                </div>
-            {:else}
-                {#each $celebrations as celebration (celebration.id)}
-                    <CelebrationCard
-                        {celebration}
-                        on:reaction={handleReaction}
-                        on:comment={handleComment}
-                    />
-                {/each}
-            {/if}
-        </div>
+        {#if !showCreateForm}
+            <div class="celebrations-feed">
+                {#if $celebrationsLoading}
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading kudos...</p>
+                    </div>
+                {:else if $celebrations.length === 0}
+                    <div class="empty-state">
+                        <div class="empty-icon">🎊</div>
+                        <p>No kudos yet</p>
+                        <p class="empty-hint">Be the first to share a shout-out!</p>
+                    </div>
+                {:else}
+                    {#each $celebrations as celebration (celebration.id)}
+                        <CelebrationCard
+                            {celebration}
+                            on:reaction={handleReaction}
+                            on:comment={handleComment}
+                            on:edit={handleEdit}
+                        />
+                    {/each}
+                {/if}
+            </div>
+        {/if}
 
-        <GiphyPicker
-            show={showGifPicker}
-            on:select={handleGifSelect}
-            on:close={() => showGifPicker = false}
-        />
+        {#if showGifPicker}
+            <div class="gif-modal" on:click|self={() => showGifPicker = false}>
+                <div class="gif-modal-content">
+                    <GiphyPicker
+                        show={showGifPicker}
+                        on:select={handleGifSelect}
+                        on:close={() => showGifPicker = false}
+                    />
+                </div>
+            </div>
+        {/if}
     </div>
 {/if}
 
@@ -444,6 +517,29 @@
 
     .btn-secondary:hover:not(:disabled) {
         background: var(--cream-dark);
+    }
+
+    .gif-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    .gif-modal-content {
+        width: 100%;
+        max-width: 420px;
+        background: white;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
     }
 
     .celebrations-feed {

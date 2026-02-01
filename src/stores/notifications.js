@@ -13,6 +13,7 @@ export const NOTIFICATION_TYPES = {
     EVENT_REMINDER: 'event_reminder',
     CELEBRATION_REACTION: 'celebration_reaction',
     CELEBRATION_COMMENT: 'celebration_comment',
+    CELEBRATION_MENTION: 'celebration_mention',
     SYSTEM: 'system'
 };
 
@@ -83,6 +84,7 @@ export function getNotificationIcon(type) {
         case NOTIFICATION_TYPES.EVENT_REMINDER: return '⏰';
         case NOTIFICATION_TYPES.CELEBRATION_REACTION: return '❤️';
         case NOTIFICATION_TYPES.CELEBRATION_COMMENT: return '💬';
+        case NOTIFICATION_TYPES.CELEBRATION_MENTION: return '📣';
         case NOTIFICATION_TYPES.SYSTEM: return '🔔';
         default: return '🔔';
     }

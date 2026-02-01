@@ -52,6 +52,10 @@
     function handleComment() {
         dispatch('comment', celebration);
     }
+
+    function handleEdit() {
+        dispatch('edit', celebration);
+    }
 </script>
 
 <div class="celebration-card">
@@ -73,16 +77,18 @@
             <h3 class="celebration-title">{celebration.title}</h3>
         {/if}
 
-        <p class="celebration-message">{celebration.message}</p>
-
         {#if celebration.gif_url}
             <div class="celebration-image">
                 <img src={celebration.gif_url} alt="GIF" loading="lazy" />
             </div>
-        {:else if celebration.image}
-            <div class="celebration-image">
-                <img src={celebration.image} alt="Celebration" loading="lazy" />
-            </div>
+            <p class="celebration-message">{celebration.message}</p>
+        {:else}
+            <p class="celebration-message">{celebration.message}</p>
+            {#if celebration.image}
+                <div class="celebration-image">
+                    <img src={celebration.image} alt="Celebration" loading="lazy" />
+                </div>
+            {/if}
         {/if}
     </div>
 
@@ -113,9 +119,16 @@
                 {/each}
             </div>
 
-            <button class="comment-btn" on:click={handleComment}>
-                💬 {commentCount > 0 ? commentCount : ''}
-            </button>
+            <div class="action-buttons">
+                <button class="comment-btn" on:click={handleComment}>
+                    💬 {commentCount > 0 ? commentCount : ''}
+                </button>
+                {#if isOwn}
+                    <button class="edit-btn" on:click={handleEdit}>
+                        ✏️ Edit
+                    </button>
+                {/if}
+            </div>
         </div>
     {/if}
 
@@ -284,6 +297,29 @@
     }
 
     .comment-btn:hover {
+        background: var(--cream-dark);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .edit-btn {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border: none;
+        background: var(--cream);
+        border-radius: 20px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .edit-btn:hover {
         background: var(--cream-dark);
     }
 

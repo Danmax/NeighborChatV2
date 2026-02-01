@@ -10,6 +10,7 @@ export const celebrationsError = writable(null);
 export const CELEBRATION_CATEGORIES = [
     { id: 'milestone', label: 'Milestone', emoji: '🏆' },
     { id: 'birthday', label: 'Birthday', emoji: '🎂' },
+    { id: 'anniversary', label: 'Anniversary', emoji: '💍' },
     { id: 'achievement', label: 'Achievement', emoji: '⭐' },
     { id: 'kudos', label: 'Kudos', emoji: '👏' },
     { id: 'recognition', label: 'Recognition', emoji: '🎖️' },
