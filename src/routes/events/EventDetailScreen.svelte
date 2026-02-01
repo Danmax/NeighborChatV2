@@ -9,6 +9,7 @@
         fetchEventById,
         updateEventInDb,
         uploadEventImage,
+        rsvpToEvent,
         addEventItem,
         removeEventItem,
         claimEventItem,
@@ -115,6 +116,15 @@
             showToast('Event updated!', 'success');
         } catch (err) {
             showToast(`Failed to update event: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleRsvp() {
+        if (!eventData) return;
+        try {
+            await rsvpToEvent(eventData.id, !isAttending);
+        } catch (err) {
+            showToast('Unable to join event. Please try again.', 'error');
         }
     }
 
@@ -255,9 +265,13 @@
                 </button>
                     </div>
                     <div class="event-actions">
-                    <button class="btn btn-primary" on:click={() => push('/contacts')}>
-                        Message Organizer
-                    </button>
+                        <button class="btn btn-primary" on:click={handleRsvp}>
+                            {isAttending ? 'Leave Event' : 'Join Event'}
+                        </button>
+                        <button class="btn btn-secondary" on:click={() => push('/contacts')}>
+                            Message Organizer
+                        </button>
+                    </div>
                 </div>
             </div>
             </div>

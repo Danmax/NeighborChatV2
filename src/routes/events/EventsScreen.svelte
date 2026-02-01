@@ -9,7 +9,7 @@
         pastEvents,
         eventsLoading
     } from '../../stores/events.js';
-    import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents } from '../../services/events.service.js';
+    import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
@@ -180,6 +180,7 @@
                         "📜"
                     }
                     on:eventClick={handleEventClick}
+                    on:rsvp={handleRsvp}
                 />
 
                 {#if activeTab === 'upcoming' && currentEvents.length === 0 && !$eventsLoading}
@@ -368,3 +369,12 @@
         width: fit-content;
     }
 </style>
+    async function handleRsvp(event) {
+        const { event: eventData, attending } = event.detail;
+        try {
+            await rsvpToEvent(eventData.id, attending);
+        } catch (err) {
+            console.error('Failed to join event:', err);
+            errorMessage = 'Unable to join event. Please try again.';
+        }
+    }
