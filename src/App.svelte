@@ -89,14 +89,7 @@
             // Initialize Supabase
             await initSupabase();
 
-            // Check for existing auth
-            const user = await checkExistingAuth();
-
-            // Signal that initial auth check is complete
-            authInitialized.set(true);
-            console.log('🔐 Auth initialization complete');
-
-            // Set up auth state listener with onboarding routing
+            // Set up auth state listener first so INITIAL_SESSION is handled
             authSubscription = setupAuthListener(({ event, user, shouldOnboard }) => {
                 console.log('Auth event:', event);
 
@@ -117,6 +110,13 @@
                     }
                 }
             });
+
+            // Check for existing auth
+            const user = await checkExistingAuth();
+
+            // Signal that initial auth check is complete
+            authInitialized.set(true);
+            console.log('🔐 Auth initialization complete');
 
             ready = true;
             setLoading(false);
