@@ -419,58 +419,25 @@ export async function rsvpToEvent(eventId, attending = true) {
     }
 
     try {
-        const { data: membership, error: membershipError } = await supabase
-            .from('instance_memberships')
-            .select('id')
-            .eq('user_id', authUserId)
-            .eq('status', 'active')
-            .limit(1)
-            .single();
+        const { data, error } = await supabase.rpc('rsvp_event', {
+            p_event_id: eventId,
+            p_attending: attending
+        });
 
-        if (membershipError || !membership?.id) {
-            throw new Error('You must join a community before joining events.');
+        if (error) throw error;
+
+        if (data) {
+            const baseEvent = transformEventFromDb(data);
+            const updated = await attachParticipants([baseEvent]);
+            if (updated.length > 0) {
+                updateEvent(eventId, updated[0]);
+                return updated[0];
+            }
+            updateEvent(eventId, baseEvent);
+            return baseEvent;
         }
 
-        if (attending) {
-            const { error } = await supabase
-                .from('event_participants')
-                .insert([
-                    {
-                        id: crypto.randomUUID(),
-                        event_id: eventId,
-                        membership_id: membership.id,
-                        status: 'registered',
-                        role: 'attendee',
-                        registered_at: new Date().toISOString()
-                    }
-                ]);
-
-            if (error && error.code !== '23505') throw error;
-        } else {
-            const { error } = await supabase
-                .from('event_participants')
-                .delete()
-                .eq('event_id', eventId)
-                .eq('membership_id', membership.id);
-            if (error) throw error;
-        }
-
-        const { data: refreshed, error: refreshError } = await supabase
-            .from('community_events')
-            .select('*')
-            .eq('id', eventId)
-            .single();
-
-        if (refreshError) throw refreshError;
-
-        const baseEvent = transformEventFromDb(refreshed);
-        const updated = await attachParticipants([baseEvent]);
-        if (updated.length > 0) {
-            updateEvent(eventId, updated[0]);
-            return updated[0];
-        }
-
-        return baseEvent;
+        return null;
     } catch (error) {
         console.error('Failed to join event:', error);
         throw error;
