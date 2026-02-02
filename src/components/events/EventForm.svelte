@@ -43,6 +43,8 @@
     let aiError = '';
     let aiWarnings = [];
 
+    let potluckItemsInput = '';
+
     // Get tomorrow's date as minimum
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -65,6 +67,25 @@
             settings.meetup_allow_speaker_submissions = meetupAllowSpeakerSubmissions;
         }
 
+        const initialItems = type === 'potluck' && potluckItemsInput.trim()
+            ? potluckItemsInput
+                .split(',')
+                .map(item => item.trim())
+                .filter(Boolean)
+                .map((name) => ({
+                    id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                    name,
+                    category: 'other',
+                    needed_qty: 1,
+                    slots: 1,
+                    allow_recipe: true,
+                    recipe_id: null,
+                    claims: [],
+                    created_by: $currentUser?.user_id || null,
+                    created_at: new Date().toISOString()
+                }))
+            : [];
+
         const eventData = {
             title: title.trim(),
             type,
@@ -80,6 +101,7 @@
                 .map(item => item.trim())
                 .filter(Boolean),
             cover_image_file: coverImageFile || null,
+            items: initialItems,
             // New fields
             status,
             capacity: capacity ? parseInt(capacity) : null,
@@ -403,6 +425,17 @@
         <div class="form-section">
             <h4 class="section-title">Potluck Options</h4>
 
+            <div class="form-group">
+                <label for="potluck-items">Initial Items (comma-separated)</label>
+                <input
+                    id="potluck-items"
+                    type="text"
+                    bind:value={potluckItemsInput}
+                    placeholder="Salad, Chips, Soda"
+                />
+                <span class="help-text">We’ll create one item per entry. You can edit items later.</span>
+            </div>
+
             <div class="toggle-group">
                 <label class="toggle-option">
                     <input type="checkbox" bind:checked={potluckAllowNewItems} />
@@ -558,6 +591,11 @@
     .form-group textarea {
         resize: vertical;
         min-height: 80px;
+    }
+
+    .help-text {
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     .form-row {
