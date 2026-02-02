@@ -78,6 +78,13 @@ function normalizeDraft(draft) {
 
     const settings = typeof draft.settings === 'object' && draft.settings ? draft.settings : {};
 
+    let initialItems = [];
+    if (Array.isArray(draft.initial_items)) {
+        initialItems = draft.initial_items.map(item => String(item).trim()).filter(Boolean);
+    } else if (typeof draft.initial_items === 'string') {
+        initialItems = draft.initial_items.split(',').map(item => item.trim()).filter(Boolean);
+    }
+
     return {
         draft: {
             title,
@@ -93,7 +100,8 @@ function normalizeDraft(draft) {
             cover_image_url,
             attachments,
             status: DEFAULTS.status,
-            settings
+            settings,
+            initial_items: type === 'potluck' ? initialItems : []
         },
         warnings
     };
@@ -214,6 +222,7 @@ Return a JSON object with keys:
 - meeting_link (string or null)
 - cover_image_url (string or null)
 - attachments (array of urls)
+- initial_items (comma-separated string or array of strings) for potluck only
 - settings (object)
 Always pick a date in the future. Keep it concise.`;
 

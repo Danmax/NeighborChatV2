@@ -140,6 +140,9 @@
         coverImageUrl = draft.cover_image_url || coverImageUrl;
         attachments = Array.isArray(draft.attachments) ? draft.attachments.join('\n') : attachments;
         status = 'draft';
+        if (draft.initial_items && Array.isArray(draft.initial_items)) {
+            potluckItemsInput = draft.initial_items.join(', ');
+        }
     }
 
     async function handleGenerateDraft() {
