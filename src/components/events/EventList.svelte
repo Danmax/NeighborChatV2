@@ -8,6 +8,8 @@
     export let compact = false;
     export let loading = false;
     export let joinState = new Set();
+    export let activeMembershipId = null;
+    export let layout = 'grid';
 
     const dispatch = createEventDispatcher();
 
@@ -20,7 +22,7 @@
     }
 </script>
 
-<div class="event-list" class:compact>
+<div class="event-list" class:compact class:upcoming={layout === 'upcoming'}>
     {#if loading}
         <div class="loading-state">
             <div class="loading-spinner"></div>
@@ -32,11 +34,13 @@
             <p class="empty-message">{emptyMessage}</p>
         </div>
     {:else}
-        {#each events as event (event.id)}
+        {#each events as event, index (event.id)}
             <EventCard
                 {event}
                 {compact}
+                featured={layout === 'upcoming' && index === 0 && !compact}
                 joining={joinState?.has?.(event.id)}
+                {activeMembershipId}
                 on:click={handleEventClick}
                 on:rsvp={handleRsvp}
             />
@@ -51,10 +55,25 @@
         gap: 16px;
     }
 
+    .event-list.upcoming {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+    }
+
+    :global(.event-list.upcoming .event-card.featured) {
+        grid-column: span 2;
+    }
+
     .event-list.compact {
         display: flex;
         flex-direction: column;
         gap: 8px;
+    }
+
+    @media (max-width: 900px) {
+        :global(.event-list.upcoming .event-card.featured) {
+            grid-column: span 1;
+        }
     }
 
     .loading-state,

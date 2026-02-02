@@ -9,6 +9,7 @@
         updateEventInDb,
         uploadEventImage,
         rsvpToEvent,
+        getActiveMembershipId,
         addEventItem,
         removeEventItem,
         claimEventItem,
@@ -37,6 +38,7 @@
     let notifyTarget = 'attendees';
     let sendingNotify = false;
     let joining = false;
+    let activeMembershipId = null;
 
     $: eventId = params?.id;
     $: {
@@ -46,7 +48,7 @@
         }
     }
     $: isOwner = eventData?.created_by === $currentUser?.user_id;
-    $: isAttending = eventData?.attendees?.includes($currentUser?.user_id);
+    $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes($currentUser?.user_id));
     $: items = eventData?.items || [];
 
     onMount(async () => {
@@ -71,6 +73,7 @@
 
         fetchContacts();
         loadParticipants();
+        getActiveMembershipId().then(id => activeMembershipId = id);
 
         subscription = subscribeToEvent(eventId, (updated) => {
             if (updated) {

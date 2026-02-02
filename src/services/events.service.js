@@ -12,7 +12,7 @@ import {
 import { events } from '../stores/events.js';
 import { get } from 'svelte/store';
 
-async function getActiveMembershipId() {
+export async function getActiveMembershipId() {
     const supabase = getSupabase();
     const authUserId = await getAuthUserId();
     if (!authUserId) return null;

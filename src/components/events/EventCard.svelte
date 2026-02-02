@@ -8,12 +8,14 @@
     export let event;
     export let compact = false;
     export let joining = false;
+    export let activeMembershipId = null;
+    export let featured = false;
 
     const dispatch = createEventDispatcher();
 
     $: eventType = getEventType(event.type);
     $: isCreator = event.created_by === $currentUser?.user_id;
-    $: isAttending = event.isAttending ?? event.attendees?.includes($currentUser?.user_id);
+    $: isAttending = event.isAttending ?? (activeMembershipId ? event.attendees?.includes(activeMembershipId) : event.attendees?.includes($currentUser?.user_id));
     $: attendeeCount = (event.attendeeCount ?? event.attendees?.length) || 0;
     $: formattedDate = formatDate(event.date);
     $: formattedTime = formatTime(event.time);
@@ -69,6 +71,7 @@
 
 <div
     class="event-card"
+    class:featured
     class:compact
     class:past={isPast}
     on:click={handleClick}
@@ -162,6 +165,10 @@
         gap: 12px;
     }
 
+    .event-card.featured {
+        border: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
     .event-card.past {
         opacity: 0.7;
     }
@@ -193,6 +200,10 @@
         overflow: hidden;
     }
 
+    .event-card.featured .event-cover {
+        max-height: 320px;
+    }
+
     .event-cover img {
         width: 100%;
         height: auto;
@@ -205,6 +216,10 @@
         flex: 1;
     }
 
+    .event-card.featured .event-content {
+        padding: 20px;
+    }
+
     .compact .event-content {
         padding: 0;
     }
@@ -214,6 +229,11 @@
         font-weight: 600;
         color: var(--text);
         margin-bottom: 8px;
+    }
+
+    .event-card.featured .event-title {
+        font-size: 20px;
+        margin-bottom: 10px;
     }
 
     .compact .event-title {
@@ -228,6 +248,10 @@
         font-size: 13px;
         color: var(--text-muted);
         margin-bottom: 8px;
+    }
+
+    .event-card.featured .event-datetime {
+        font-size: 14px;
     }
 
     .event-location {
@@ -307,6 +331,11 @@
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
+    }
+
+    .event-card.featured .rsvp-btn {
+        padding: 10px 18px;
+        font-size: 13px;
     }
 
     .rsvp-btn:hover {

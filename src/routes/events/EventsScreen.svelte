@@ -8,7 +8,7 @@
         pastEvents,
         eventsLoading
     } from '../../stores/events.js';
-    import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent } from '../../services/events.service.js';
+    import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent, getActiveMembershipId } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
@@ -18,6 +18,7 @@
     let creating = false;
     let errorMessage = '';
     let joiningIds = new Set();
+    let activeMembershipId = null;
 
     const tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
@@ -44,6 +45,7 @@
             fetchEvents();
             fetchContacts();
             subscription = subscribeToEvents();
+            getActiveMembershipId().then(id => activeMembershipId = id);
         }
     });
 
@@ -187,9 +189,11 @@
                         activeTab === 'mine' ? "⭐" :
                         "📜"
                     }
+                    layout={activeTab === 'upcoming' ? 'upcoming' : 'grid'}
                     on:eventClick={handleEventClick}
                     on:rsvp={handleRsvp}
                     joinState={joiningIds}
+                    activeMembershipId={activeMembershipId}
                 />
 
                 {#if activeTab === 'upcoming' && currentEvents.length === 0 && !$eventsLoading}
