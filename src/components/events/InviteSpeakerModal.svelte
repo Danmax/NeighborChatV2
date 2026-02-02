@@ -12,11 +12,19 @@
     let speakers = [];
     let loadingSpeakers = false;
     let selectedSpeakerId = '';
+    let inviteMode = 'existing';
+    let speakerName = '';
+    let speakerEmail = '';
     let talkTitle = '';
     let talkAbstract = '';
     let duration = 30;
 
-    $: isValid = selectedSpeakerId && talkTitle.trim() && talkAbstract.trim();
+    $: emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(speakerEmail.trim());
+    $: isValid = (
+        inviteMode === 'existing'
+            ? selectedSpeakerId
+            : speakerName.trim() && emailValid
+    ) && talkTitle.trim() && talkAbstract.trim();
 
     // Load speakers when modal opens
     $: if (show && speakers.length === 0) {
@@ -26,6 +34,9 @@
     // Reset form when modal opens
     $: if (show) {
         selectedSpeakerId = '';
+        inviteMode = 'existing';
+        speakerName = '';
+        speakerEmail = '';
         talkTitle = '';
         talkAbstract = '';
         duration = 30;
@@ -51,7 +62,10 @@
         if (!isValid || loading) return;
 
         dispatch('submit', {
-            speakerId: selectedSpeakerId,
+            mode: inviteMode,
+            speakerId: inviteMode === 'existing' ? selectedSpeakerId : null,
+            speakerName: inviteMode === 'email' ? speakerName.trim() : null,
+            speakerEmail: inviteMode === 'email' ? speakerEmail.trim().toLowerCase() : null,
             talkTitle: talkTitle.trim(),
             talkAbstract: talkAbstract.trim(),
             duration: parseInt(duration)
@@ -80,25 +94,69 @@
                         <span class="spinner"></span>
                         <p>Loading speakers...</p>
                     </div>
-                {:else if speakers.length === 0}
-                    <div class="empty-state">
-                        <p>No speakers found. Create a speaker profile first.</p>
-                    </div>
                 {:else}
-                    <!-- Speaker Selection -->
-                    <div class="form-group">
-                        <label for="speaker-select">Select Speaker *</label>
-                        <select id="speaker-select" bind:value={selectedSpeakerId}>
-                            <option value="">-- Choose a speaker --</option>
-                            {#each speakers as speaker (speaker.id)}
-                                <option value={speaker.id}>
-                                    {speaker.name}
-                                    {speaker.title ? `- ${speaker.title}` : ''}
-                                    {speaker.company ? `(${speaker.company})` : ''}
-                                </option>
-                            {/each}
-                        </select>
+                    <div class="invite-mode">
+                        <button
+                            class:active={inviteMode === 'existing'}
+                            type="button"
+                            on:click={() => inviteMode = 'existing'}
+                        >
+                            Select Speaker
+                        </button>
+                        <button
+                            class:active={inviteMode === 'email'}
+                            type="button"
+                            on:click={() => inviteMode = 'email'}
+                        >
+                            Invite by Email
+                        </button>
                     </div>
+
+                    <!-- Speaker Selection -->
+                    {#if inviteMode === 'existing'}
+                        {#if speakers.length === 0}
+                            <div class="empty-state">
+                                <p>No speakers found yet. Invite by email or create a speaker profile.</p>
+                            </div>
+                        {/if}
+                        <div class="form-group">
+                            <label for="speaker-select">Select Speaker *</label>
+                            <select id="speaker-select" bind:value={selectedSpeakerId}>
+                                <option value="">-- Choose a speaker --</option>
+                                {#each speakers as speaker (speaker.id)}
+                                    <option value={speaker.id}>
+                                        {speaker.name}
+                                        {speaker.title ? `- ${speaker.title}` : ''}
+                                        {speaker.company ? `(${speaker.company})` : ''}
+                                    </option>
+                                {/each}
+                            </select>
+                        </div>
+                    {:else}
+                        <div class="form-group">
+                            <label for="speaker-name">Speaker Name *</label>
+                            <input
+                                id="speaker-name"
+                                type="text"
+                                bind:value={speakerName}
+                                placeholder="e.g., Jordan Lee"
+                                maxlength="120"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="speaker-email">Speaker Email *</label>
+                            <input
+                                id="speaker-email"
+                                type="email"
+                                bind:value={speakerEmail}
+                                placeholder="e.g., jordan@example.com"
+                                maxlength="160"
+                            />
+                            {#if speakerEmail && !emailValid}
+                                <span class="help-text error">Enter a valid email address.</span>
+                            {/if}
+                        </div>
+                    {/if}
 
                     <!-- Talk Title -->
                     <div class="form-group">
@@ -147,7 +205,7 @@
                 <button
                     class="btn btn-primary"
                     on:click={handleSubmit}
-                    disabled={!isValid || loading || loadingSpeakers || speakers.length === 0}
+                    disabled={!isValid || loading || loadingSpeakers || (inviteMode === 'existing' && speakers.length === 0)}
                 >
                     {loading ? 'Sending...' : 'Send Invitation'}
                 </button>
@@ -220,6 +278,37 @@
         padding: 20px;
         overflow-y: auto;
         flex: 1;
+    }
+
+    .invite-mode {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .invite-mode button {
+        border: 1px solid var(--cream-dark);
+        background: var(--cream);
+        color: var(--text);
+        padding: 10px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .invite-mode button.active {
+        background: var(--brand, #4CAF50);
+        border-color: var(--brand, #4CAF50);
+        color: white;
+    }
+
+    .help-text.error {
+        color: #c0392b;
+        font-size: 12px;
+        margin-top: 6px;
+        display: block;
     }
 
     .form-group {

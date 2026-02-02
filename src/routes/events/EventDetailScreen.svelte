@@ -24,7 +24,8 @@
         checkInParticipant,
         getMeetingLink,
         updateSpeakerInvite,
-        inviteSpeaker
+        inviteSpeaker,
+        inviteSpeakerByEmail
     } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import { createSpeaker, fetchSpeakers } from '../../services/speakers.service.js';
@@ -322,14 +323,24 @@
 
     // Invite speaker handler (organizers)
     async function handleInviteSpeaker(event) {
-        const { speakerId, talkTitle, talkAbstract, duration } = event.detail;
+        const { mode, speakerId, speakerName, speakerEmail, talkTitle, talkAbstract, duration } = event.detail;
         inviteSpeakerLoading = true;
         try {
-            await inviteSpeaker(eventId, speakerId, {
-                talkTitle,
-                talkAbstract,
-                durationMinutes: duration
-            });
+            if (mode === 'email') {
+                await inviteSpeakerByEmail(eventId, {
+                    email: speakerEmail,
+                    name: speakerName,
+                    talkTitle,
+                    talkAbstract,
+                    durationMinutes: duration
+                });
+            } else {
+                await inviteSpeaker(eventId, speakerId, {
+                    talkTitle,
+                    talkAbstract,
+                    durationMinutes: duration
+                });
+            }
             eventData = await fetchEventById(eventId);
             showInviteSpeakerModal = false;
             showToast('Speaker invited!', 'success');

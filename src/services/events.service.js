@@ -955,6 +955,31 @@ export async function inviteSpeaker(eventId, speakerId, { talkTitle, talkAbstrac
 }
 
 /**
+ * Invite a speaker by email (creates a private speaker profile)
+ */
+export async function inviteSpeakerByEmail(eventId, { email, name, talkTitle, talkAbstract = null, durationMinutes = 30 }) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('invite_speaker_by_email', {
+        p_event_id: eventId,
+        p_email: email,
+        p_name: name,
+        p_talk_title: talkTitle,
+        p_talk_abstract: talkAbstract,
+        p_duration_minutes: durationMinutes
+    });
+
+    if (error) throw error;
+
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
  * Update a speaker invite status (accept/decline)
  */
 export async function updateSpeakerInvite(eventId, inviteId, status) {
