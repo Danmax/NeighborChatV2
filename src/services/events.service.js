@@ -697,7 +697,7 @@ export async function approveRsvp(eventId, participantId) {
 
     const { data, error } = await supabase.rpc('approve_rsvp', {
         p_event_id: eventId,
-        p_participant_id: participantId
+        p_membership_id: participantId
     });
 
     if (error) throw error;
@@ -716,7 +716,7 @@ export async function rejectRsvp(eventId, participantId) {
 
     const { data, error } = await supabase.rpc('reject_rsvp', {
         p_event_id: eventId,
-        p_participant_id: participantId
+        p_membership_id: participantId
     });
 
     if (error) throw error;
@@ -735,7 +735,7 @@ export async function checkInParticipant(eventId, participantId) {
 
     const { data, error } = await supabase.rpc('check_in_participant', {
         p_event_id: eventId,
-        p_participant_id: participantId
+        p_membership_id: participantId
     });
 
     if (error) throw error;
@@ -1006,13 +1006,12 @@ export async function fetchEventParticipantsDetailed(eventId) {
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('event_participants')
-        .select('user_id, membership_id, rsvp_status, guest_count, checked_in, approval_status, notes')
+        .select('membership_id, rsvp_status, guest_count, checked_in, approval_status, notes')
         .eq('event_id', eventId);
 
     if (error) throw error;
 
     const participantIds = (data || []).map(row => row.membership_id).filter(Boolean);
-    const userIds = (data || []).map(row => row.user_id).filter(Boolean);
 
     // Fetch membership data
     let memberships = [];
@@ -1028,7 +1027,7 @@ export async function fetchEventParticipantsDetailed(eventId) {
     }
 
     // Fetch public profiles
-    const allUserIds = [...new Set([...userIds, ...memberships.map(m => m.user_id).filter(Boolean)])];
+    const allUserIds = [...new Set([...memberships.map(m => m.user_id).filter(Boolean)])];
     let publicProfiles = [];
     if (allUserIds.length > 0) {
         const { data: profileData, error: profileError } = await supabase
@@ -1053,11 +1052,10 @@ export async function fetchEventParticipantsDetailed(eventId) {
 
     return (data || []).map(row => {
         const membership = membershipMap[row.membership_id];
-        const publicProfile = row.user_id ? publicProfileMap[row.user_id] :
-            (membership?.user_id ? publicProfileMap[membership.user_id] : null);
+        const publicProfile = membership?.user_id ? publicProfileMap[membership.user_id] : null;
 
         return {
-            user_id: row.user_id || row.membership_id,
+            user_id: row.membership_id,
             membership_id: row.membership_id,
             status: row.status,
             role: row.role,
