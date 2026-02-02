@@ -451,6 +451,11 @@
                 </button>
                     </div>
                     <div class="event-actions">
+                        {#if myRsvpStatus}
+                            <span class="rsvp-status-badge" class:going={myRsvpStatus === 'going'} class:maybe={myRsvpStatus === 'maybe'} class:not-going={myRsvpStatus === 'not_going'}>
+                                {myRsvpStatus === 'going' ? 'Going' : myRsvpStatus === 'maybe' ? 'Maybe' : 'Not Going'}
+                            </span>
+                        {/if}
                         {#if !isClosed}
                             <button class="btn btn-primary" on:click={() => showRsvpModal = true} disabled={joining}>
                                 {myRsvpStatus ? 'Update RSVP' : 'RSVP'}
@@ -490,10 +495,22 @@
                     <p class="empty-text">No attendees yet.</p>
                 {:else}
                     <div class="attendee-list">
-                        {#each participants as participant (participant.user_id)}
+                        {#each participants as participant (participant.membership_id || participant.user_id)}
                             <div class="attendee-item">
                                 <Avatar avatar={participant.profile?.avatar} size="sm" />
-                                <span class="attendee-name">{participant.profile?.display_name || 'Neighbor'}</span>
+                                <div class="attendee-info">
+                                    <span class="attendee-name">
+                                        {participant.profile?.display_name || participant.profile?.username || 'Neighbor'}
+                                    </span>
+                                    {#if participant.profile?.username}
+                                        <span class="attendee-username">@{participant.profile.username}</span>
+                                    {/if}
+                                    {#if participant.rsvp_status && participant.rsvp_status !== 'going'}
+                                        <span class="attendee-rsvp-badge" class:maybe={participant.rsvp_status === 'maybe'}>
+                                            {participant.rsvp_status === 'maybe' ? 'Maybe' : ''}
+                                        </span>
+                                    {/if}
+                                </div>
                             </div>
                         {/each}
                     </div>
@@ -929,5 +946,57 @@
     .capacity-badge.full {
         background: rgba(244, 67, 54, 0.9);
         color: white;
+    }
+
+    .rsvp-status-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .rsvp-status-badge.going {
+        background: #E8F5E9;
+        color: #2E7D32;
+    }
+
+    .rsvp-status-badge.maybe {
+        background: #FFF8E1;
+        color: #F57F17;
+    }
+
+    .rsvp-status-badge.not-going {
+        background: #FFEBEE;
+        color: #C62828;
+    }
+
+    .attendee-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .attendee-username {
+        font-size: 12px;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .attendee-rsvp-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+        width: fit-content;
+    }
+
+    .attendee-rsvp-badge.maybe {
+        background: #FFF8E1;
+        color: #F57F17;
     }
 </style>
