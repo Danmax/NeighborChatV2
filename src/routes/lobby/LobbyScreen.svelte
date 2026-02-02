@@ -8,8 +8,7 @@
     import { savedContacts } from '../../stores/contacts.js';
     import {
         setupPresenceChannel,
-        updatePresenceStatus,
-        cleanupChannels
+        updatePresenceStatus
     } from '../../services/realtime.service.js';
     import { fetchEvents } from '../../services/events.service.js';
     import { fetchCelebrations } from '../../services/celebrations.service.js';
@@ -39,7 +38,7 @@
     });
 
     onDestroy(() => {
-        cleanupChannels();
+        // Presence is global; avoid tearing down on navigation
     });
 
     function toggleAvailability() {

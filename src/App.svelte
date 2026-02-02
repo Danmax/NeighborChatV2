@@ -9,7 +9,7 @@
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
     import { userStatus, isAvailable } from './stores/presence.js';
-    import { setupInviteChannel, updatePresenceStatus, sendInviteResponse, cleanupInviteChannel } from './services/realtime.service.js';
+    import { setupInviteChannel, setupPresenceChannel, updatePresenceStatus, sendInviteResponse, cleanupInviteChannel } from './services/realtime.service.js';
     import { setPendingInvite, pendingInvite, clearPendingInvite } from './stores/chat.js';
     import { statusOptions } from './stores/options.js';
     import { loadOptions } from './services/options.service.js';
@@ -97,6 +97,7 @@
 
                 if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
                     setupInviteListener();
+                    setupPresenceChannel();
                 }
             });
 
