@@ -26,15 +26,19 @@
         rejectRsvp,
         checkInParticipant,
         getMeetingLink,
-        updateSpeakerInvite
+        updateSpeakerInvite,
+        inviteSpeaker
     } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
+    import { createSpeaker, fetchSpeakers } from '../../services/speakers.service.js';
     import EventForm from '../../components/events/EventForm.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import PotluckItemsSection from '../../components/events/PotluckItemsSection.svelte';
     import DevMeetupAgenda from '../../components/events/DevMeetupAgenda.svelte';
     import RSVPModal from '../../components/events/RSVPModal.svelte';
     import EventParticipantsModal from '../../components/events/EventParticipantsModal.svelte';
+    import InviteSpeakerModal from '../../components/events/InviteSpeakerModal.svelte';
+    import SubmitTalkModal from '../../components/events/SubmitTalkModal.svelte';
     import { showToast } from '../../stores/toasts.js';
 
     export let params = {};
@@ -59,6 +63,12 @@
     let showParticipantsModal = false;
     let rsvpLoading = false;
     let meetingLink = null;
+
+    // Speaker functionality state
+    let showInviteSpeakerModal = false;
+    let showSubmitTalkModal = false;
+    let inviteSpeakerLoading = false;
+    let submitTalkLoading = false;
 
     $: eventId = params?.id;
     $: {
@@ -354,6 +364,54 @@
         }
     }
 
+    // Invite speaker handler (organizers)
+    async function handleInviteSpeaker(event) {
+        const { speakerId, talkTitle, talkAbstract, duration } = event.detail;
+        inviteSpeakerLoading = true;
+        try {
+            await inviteSpeaker(eventId, speakerId, talkTitle, talkAbstract, duration);
+            eventData = await fetchEventById(eventId);
+            showInviteSpeakerModal = false;
+            showToast('Speaker invited!', 'success');
+        } catch (err) {
+            showToast(`Failed to invite speaker: ${err.message}`, 'error');
+        } finally {
+            inviteSpeakerLoading = false;
+        }
+    }
+
+    // Submit talk proposal handler (attendees)
+    async function handleSubmitTalk(event) {
+        const { speakerProfile, talkTitle, talkAbstract, duration } = event.detail;
+        submitTalkLoading = true;
+        try {
+            // Create speaker profile if provided
+            let speakerId = speakerProfile.id; // Use existing if available
+            if (!speakerId) {
+                const newSpeaker = await createSpeaker(speakerProfile);
+                speakerId = newSpeaker.id;
+            }
+
+            // Submit talk proposal
+            await inviteSpeaker(eventId, speakerId, talkTitle, talkAbstract, duration);
+            eventData = await fetchEventById(eventId);
+            showSubmitTalkModal = false;
+            showToast('Talk proposal submitted!', 'success');
+        } catch (err) {
+            showToast(`Failed to submit proposal: ${err.message}`, 'error');
+        } finally {
+            submitTalkLoading = false;
+        }
+    }
+
+    function handleOpenInviteSpeaker() {
+        showInviteSpeakerModal = true;
+    }
+
+    function handleOpenSubmitTalk() {
+        showSubmitTalkModal = true;
+    }
+
     function formatEventDate(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
@@ -498,6 +556,8 @@
                     isAttending={myRsvpStatus === 'going'}
                     {meetingLink}
                     on:updateInvite={handleUpdateSpeakerInvite}
+                    on:inviteSpeaker={handleOpenInviteSpeaker}
+                    on:submitTalk={handleOpenSubmitTalk}
                 />
             {/if}
 
@@ -558,6 +618,25 @@
         on:approve={handleApproveParticipant}
         on:reject={handleRejectParticipant}
         on:checkin={handleCheckIn}
+    />
+
+    <!-- Invite Speaker Modal -->
+    <InviteSpeakerModal
+        show={showInviteSpeakerModal}
+        event={eventData}
+        loading={inviteSpeakerLoading}
+        on:close={() => showInviteSpeakerModal = false}
+        on:submit={handleInviteSpeaker}
+    />
+
+    <!-- Submit Talk Modal -->
+    <SubmitTalkModal
+        show={showSubmitTalkModal}
+        event={eventData}
+        currentUserId={$currentUser?.user_id}
+        loading={submitTalkLoading}
+        on:close={() => showSubmitTalkModal = false}
+        on:submit={handleSubmitTalk}
     />
 {/if}
 
