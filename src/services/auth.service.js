@@ -57,12 +57,17 @@ export async function signInWithPassword(email, password) {
 
     if (error) throw error;
 
-    // Set user data (await async function)
-    const userData = await createUserDataFromSession(data.user);
-    setCurrentUser(userData);
+    // Fast path: set basic user data immediately
+    const basicUserData = createBasicUserData(data.user);
+    setCurrentUser(basicUserData);
     authUser.set(data.user);
 
-    return { success: true, user: userData };
+    // Background: fetch full profile
+    if (basicUserData?.user_id) {
+        fetchAndUpdateUserProfile(basicUserData.user_id);
+    }
+
+    return { success: true, user: basicUserData };
 }
 
 /**
@@ -213,20 +218,22 @@ export async function checkExistingAuth() {
         const supabase = getSupabase();
         const { data: { session } } = await withTimeout(
             supabase.auth.getSession(),
-            6000,
+            3000,
             'getSession'
         );
 
         if (session && session.user) {
-            // Await async createUserDataFromSession
-            const userData = await withTimeout(
-                createUserDataFromSession(session.user),
-                8000,
-                'createUserDataFromSession'
-            );
-            setCurrentUser(userData);
+            // Fast path: set basic user data immediately
+            const basicUserData = createBasicUserData(session.user);
+            setCurrentUser(basicUserData);
             authUser.set(session.user);
-            return userData;
+
+            // Background: fetch full profile
+            if (basicUserData?.user_id) {
+                fetchAndUpdateUserProfile(basicUserData.user_id);
+            }
+
+            return basicUserData;
         }
 
         return null;
@@ -247,7 +254,7 @@ export function setupAuthListener(callback) {
     let lastHandledUserId = null;
     let lastHandledEvent = null;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         console.log('Auth state changed:', event);
 
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
@@ -255,30 +262,26 @@ export function setupAuthListener(callback) {
             if (event === 'INITIAL_SESSION' && lastHandledUserId === currentUserId && lastHandledEvent === 'SIGNED_IN') {
                 return;
             }
-            let userData = null;
-            try {
-                // IMPORTANT: Now async!
-                userData = await withTimeout(
-                    createUserDataFromSession(session.user),
-                    8000,
-                    'createUserDataFromSession'
-                );
-            } catch (err) {
-                console.error('Auth profile load failed:', err);
-                userData = buildBaseUserData(session.user);
-            }
 
-            setCurrentUser(userData);
+            // Fast path: set basic user data immediately (no await, no database query)
+            const basicUserData = createBasicUserData(session.user);
+            setCurrentUser(basicUserData);
             authUser.set(session.user);
 
-            // Determine if onboarding needed
-            const shouldOnboard = userData.isNewUser || !userData.onboardingCompleted;
+            // Determine if onboarding needed (based on basic data)
+            const shouldOnboard = basicUserData?.onboardingCompleted === false;
 
             callback?.({
                 event,
-                user: userData,
-                shouldOnboard // NEW: routing decision
+                user: basicUserData,
+                shouldOnboard
             });
+
+            // Background: fetch full profile in parallel (non-blocking)
+            if (basicUserData?.user_id) {
+                fetchAndUpdateUserProfile(basicUserData.user_id);
+            }
+
             lastHandledUserId = currentUserId;
             lastHandledEvent = event;
         }
@@ -313,7 +316,7 @@ async function createUserDataFromSession(user) {
                 .select('*')
                 .eq('user_id', user.id)
                 .maybeSingle(),
-            6000,
+            4000,
             'fetchUserProfile'
         );
         profile = result?.data || null;
@@ -375,6 +378,88 @@ function buildBaseUserData(user) {
         avatar: user.user_metadata?.avatar || generateRandomAvatar(),
         loginTime: Date.now()
     };
+}
+
+/**
+ * Create basic user data immediately (no database query)
+ * Used for fast initial auth completion
+ */
+function createBasicUserData(user) {
+    if (!user) return null;
+
+    const baseData = buildBaseUserData(user);
+
+    // Return with cached profile if available
+    const cachedUser = getCachedUserForSession(user);
+    if (cachedUser) {
+        return cachedUser;
+    }
+
+    // Return base data with flags indicating profile is loading
+    return {
+        ...baseData,
+        profileLoading: true,
+        onboardingCompleted: false
+    };
+}
+
+/**
+ * Fetch user profile in the background and update the store
+ * This is non-blocking - completes auth immediately
+ */
+export async function fetchAndUpdateUserProfile(userId) {
+    if (!userId) return;
+
+    try {
+        const supabase = getSupabase();
+        const { data: profile, error } = await withTimeout(
+            supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle(),
+            4000,
+            'fetchUserProfile'
+        );
+
+        if (error) {
+            console.error('Profile fetch error:', error);
+            return;
+        }
+
+        if (profile) {
+            // Update store with full profile data
+            updateCurrentUser({
+                name: profile.username || profile.display_name,
+                username: profile.username,
+                avatar: profile.avatar,
+                interests: profile.interests || [],
+                birthday: profile.birthday,
+                title: profile.title,
+                phone: profile.phone,
+                city: profile.city,
+                magic_email: profile.magic_email,
+                bio: profile.bio,
+                banner_color: profile.banner_color,
+                banner_pattern: profile.banner_pattern,
+                show_city: profile.show_city ?? true,
+                show_phone: profile.show_phone ?? false,
+                show_email: profile.show_email ?? false,
+                show_birthday: profile.show_birthday ?? false,
+                show_interests: profile.show_interests ?? true,
+                onboardingCompleted: profile.onboarding_completed || false,
+                firstLoginAt: profile.first_login_at,
+                profileLoading: false
+            });
+        } else {
+            // No profile found - mark as loaded
+            updateCurrentUser({ profileLoading: false });
+        }
+    } catch (err) {
+        console.error('Failed to fetch and update profile:', err);
+        // Mark as loaded even on error to prevent infinite loading
+        updateCurrentUser({ profileLoading: false });
+    }
 }
 
 function getCachedUserForSession(user) {

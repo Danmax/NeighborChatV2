@@ -20,6 +20,12 @@ export const authUser = writable(null);
  */
 export const isAuthenticated = derived(currentUser, $currentUser => !!$currentUser);
 
+/**
+ * Whether auth initialization is in progress
+ * @type {import('svelte/store').Writable<boolean>}
+ */
+export const authLoading = writable(true);
+
 // Sync currentUser to localStorage
 currentUser.subscribe(value => {
     if (value) {

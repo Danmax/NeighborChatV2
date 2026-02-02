@@ -4,7 +4,7 @@
     import Router, { push, location } from 'svelte-spa-router';
     import { initSupabase } from './lib/supabase.js';
     import { checkExistingAuth, setupAuthListener } from './services/auth.service.js';
-    import { isAuthenticated, currentUser, authUser } from './stores/auth.js';
+    import { isAuthenticated, currentUser, authUser, authLoading } from './stores/auth.js';
     import { isLoading, setLoading, showTopMenu, authInitialized } from './stores/ui.js';
     import { currentTheme } from './stores/theme.js';
     import { unreadCount } from './stores/notifications.js';
@@ -98,9 +98,9 @@
                 }
             });
 
-            // Check for existing auth
-            await checkExistingAuth();
+            // Rely on setupAuthListener's INITIAL_SESSION event for session init
             authInitialized.set(true);
+            authLoading.set(false);
             console.log('🔐 Auth initialization complete');
 
             ready = true;
@@ -109,6 +109,7 @@
         } catch (error) {
             console.error('App initialization failed:', error);
             authInitialized.set(true);
+            authLoading.set(false);
             setLoading(false);
             ready = true;
         }
@@ -220,7 +221,7 @@
     }
 </script>
 
-{#if $isLoading || !ready}
+{#if $isLoading || !ready || $authLoading}
     <LoadingScreen />
 {:else}
     <div class="app-container">
