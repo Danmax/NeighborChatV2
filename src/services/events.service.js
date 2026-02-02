@@ -509,7 +509,20 @@ export async function fetchEventParticipants(eventId) {
 
     if (membershipError) throw membershipError;
 
-    const profileMap = (memberships || []).reduce((acc, profile) => {
+    const userIds = (memberships || []).map(row => row.user_id).filter(Boolean);
+    const { data: publicProfiles, error: profileError } = await supabase
+        .from('public_profiles')
+        .select('user_id, display_name, username, avatar')
+        .in('user_id', userIds);
+
+    if (profileError) throw profileError;
+
+    const publicProfileMap = (publicProfiles || []).reduce((acc, profile) => {
+        acc[profile.user_id] = profile;
+        return acc;
+    }, {});
+
+    const membershipMap = (memberships || []).reduce((acc, profile) => {
         acc[profile.id] = profile;
         return acc;
     }, {});
@@ -519,7 +532,17 @@ export async function fetchEventParticipants(eventId) {
         status: row.status,
         role: row.role,
         registered_at: row.registered_at,
-        profile: profileMap[row.membership_id]
+        profile: (() => {
+            const membership = membershipMap[row.membership_id];
+            const publicProfile = membership?.user_id ? publicProfileMap[membership.user_id] : null;
+            if (publicProfile) {
+                return {
+                    ...publicProfile,
+                    display_name: publicProfile.username || publicProfile.display_name
+                };
+            }
+            return membership;
+        })()
     }));
 }
 
