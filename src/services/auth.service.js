@@ -329,12 +329,13 @@ async function createUserDataFromSession(user) {
     const baseData = buildBaseUserData(user);
 
     // If profile exists, merge database data
-    if (profile && !error) {
-        return {
-            ...baseData,
-            name: profile.username || profile.display_name || baseData.name,
-            username: profile.username,
-            avatar: profile.avatar || baseData.avatar,
+        if (profile && !error) {
+            return {
+                ...baseData,
+                name: profile.username || profile.display_name || baseData.name,
+                username: profile.username,
+                role: profile.role || 'user',
+                avatar: profile.avatar || baseData.avatar,
             interests: profile.interests || [],
             birthday: profile.birthday,
             title: profile.title,
@@ -432,6 +433,7 @@ export async function fetchAndUpdateUserProfile(userId) {
             updateCurrentUser({
                 name: profile.username || profile.display_name,
                 username: profile.username,
+                role: profile.role || 'user',
                 avatar: profile.avatar,
                 interests: profile.interests || [],
                 birthday: profile.birthday,

@@ -1,6 +1,8 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { EVENT_TYPES, EVENT_STATUSES, getEventSettings } from '../../stores/events.js';
+    import { currentUser } from '../../stores/auth.js';
+    import { generateEventDraft } from '../../services/ai.service.js';
     import { savedContacts } from '../../stores/contacts.js';
 
     export let event = null; // For editing existing events
@@ -34,12 +36,20 @@
     let meetupShowZoomOnlyToRsvp = existingSettings.meetup_show_zoom_only_to_rsvp;
     let meetupAllowSpeakerSubmissions = existingSettings.meetup_allow_speaker_submissions;
 
+    let showAiDraft = false;
+    let aiPrompt = '';
+    let aiContext = '';
+    let aiLoading = false;
+    let aiError = '';
+    let aiWarnings = [];
+
     // Get tomorrow's date as minimum
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const minDate = tomorrow.toISOString().split('T')[0];
 
     $: isValid = title.trim() && date;
+    $: canUseAi = ['admin', 'event_manager'].includes($currentUser?.role);
 
     function handleSubmit() {
         if (!isValid || loading) return;
@@ -92,9 +102,89 @@
             invitedUserIds = [...invitedUserIds, userId];
         }
     }
+
+    function applyDraft(draft) {
+        if (!draft) return;
+        title = draft.title || title;
+        type = draft.type || type;
+        date = draft.date || date;
+        time = draft.time || time;
+        location = draft.location || location;
+        description = draft.description || description;
+        maxAttendees = draft.max_attendees ?? maxAttendees;
+        capacity = draft.capacity ?? capacity;
+        joinPolicy = draft.join_policy || joinPolicy;
+        meetingLink = draft.meeting_link || meetingLink;
+        coverImageUrl = draft.cover_image_url || coverImageUrl;
+        attachments = Array.isArray(draft.attachments) ? draft.attachments.join('\n') : attachments;
+        status = 'draft';
+    }
+
+    async function handleGenerateDraft() {
+        if (!aiPrompt.trim() || aiLoading) return;
+        aiLoading = true;
+        aiError = '';
+        aiWarnings = [];
+        try {
+            const response = await generateEventDraft({
+                prompt: aiPrompt.trim(),
+                context: {
+                    notes: aiContext.trim() || null,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    location_hint: location || null
+                }
+            });
+            applyDraft(response.draft);
+            aiWarnings = response.warnings || [];
+            showAiDraft = false;
+        } catch (err) {
+            aiError = err.message || 'Failed to generate draft.';
+        } finally {
+            aiLoading = false;
+        }
+    }
 </script>
 
 <form class="event-form" on:submit|preventDefault={handleSubmit}>
+    {#if canUseAi}
+        <div class="ai-banner">
+            <div>
+                <h4>AI Draft (Event Managers)</h4>
+                <p>Generate a draft event from a prompt. It will be saved as Draft.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" on:click={() => showAiDraft = true}>
+                ✨ Generate Draft
+            </button>
+        </div>
+        {#if aiWarnings.length > 0}
+            <div class="ai-warnings">
+                {#each aiWarnings as warning}
+                    <span>⚠️ {warning}</span>
+                {/each}
+            </div>
+        {/if}
+    {/if}
+
+    {#if showAiDraft}
+        <div class="ai-modal">
+            <div class="ai-modal-card">
+                <h3>Generate Event Draft</h3>
+                <label>Prompt *</label>
+                <textarea rows="4" bind:value={aiPrompt} placeholder="e.g., Potluck for neighbors in early March, family friendly, evening"></textarea>
+                <label>Context (optional)</label>
+                <textarea rows="3" bind:value={aiContext} placeholder="Add constraints: location, vibe, audience, budget..."></textarea>
+                {#if aiError}
+                    <div class="ai-error">{aiError}</div>
+                {/if}
+                <div class="ai-actions">
+                    <button type="button" class="btn btn-secondary" on:click={() => showAiDraft = false} disabled={aiLoading}>Cancel</button>
+                    <button type="button" class="btn btn-primary" on:click={handleGenerateDraft} disabled={aiLoading || !aiPrompt.trim()}>
+                        {aiLoading ? 'Generating...' : 'Generate Draft'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
     <div class="form-group">
         <label for="event-title">Event Title *</label>
         <input
@@ -350,6 +440,78 @@
         display: flex;
         flex-direction: column;
         gap: 20px;
+    }
+
+    .ai-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: #fff9e6;
+        border: 1px solid #ffe2a8;
+        border-radius: var(--radius-sm);
+    }
+
+    .ai-banner h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+    }
+
+    .ai-banner p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .ai-warnings {
+        display: grid;
+        gap: 6px;
+        padding: 10px 12px;
+        background: #fff4d6;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+    }
+
+    .ai-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1200;
+        padding: 20px;
+    }
+
+    .ai-modal-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        width: min(520px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .ai-modal textarea {
+        padding: 10px 12px;
+        border: 1px solid var(--cream-dark);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+    }
+
+    .ai-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .ai-error {
+        color: #c0392b;
+        font-size: 12px;
     }
 
     .form-group {
