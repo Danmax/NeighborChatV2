@@ -496,12 +496,17 @@
     }
 
     .event-host {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: 8px;
         margin-top: 8px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.9);
+        color: #1b2b22;
+        background: rgba(255, 255, 255, 0.85);
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
     }
 
     .event-actions {
@@ -531,16 +536,10 @@
     }
 
     .attendee-name {
-        opacity: 0;
-        max-width: 0;
-        overflow: hidden;
-        white-space: nowrap;
-        transition: opacity 0.2s ease, max-width 0.2s ease;
-    }
-
-    .attendee-item:hover .attendee-name {
         opacity: 1;
         max-width: 160px;
+        overflow: hidden;
+        white-space: nowrap;
     }
 
     .item-form {

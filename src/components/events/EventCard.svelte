@@ -289,10 +289,11 @@
         align-items: center;
         gap: 8px;
         font-size: 12px;
-        color: var(--text-muted);
-        background: none;
-        border: none;
-        padding: 0;
+        color: #1b2b22;
+        background: rgba(45, 90, 71, 0.12);
+        border: 1px solid rgba(45, 90, 71, 0.2);
+        padding: 6px 10px;
+        border-radius: 999px;
         cursor: pointer;
         text-align: left;
     }
