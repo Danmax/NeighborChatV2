@@ -1006,7 +1006,7 @@ export async function fetchEventParticipantsDetailed(eventId) {
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('event_participants')
-        .select('user_id, membership_id, status, role, registered_at, rsvp_status, guest_count, checked_in, approval_status, notes')
+        .select('user_id, membership_id, rsvp_status, guest_count, checked_in, approval_status, notes')
         .eq('event_id', eventId);
 
     if (error) throw error;

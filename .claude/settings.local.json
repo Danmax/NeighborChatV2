@@ -6,7 +6,17 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(find:*)",
+      "Bash(__NEW_LINE_d7b659fa36ea99bb__ sed -n '14,21p' \"/Users/daniel.maldonado1/Desktop/svelteApp/src/routes/lobby/FindMatchScreen.svelte\")",
+      "Bash(__NEW_LINE_4934888063a92a3e__ sed -n '24,31p' \"/Users/daniel.maldonado1/Desktop/svelteApp/src/routes/lobby/LobbyChatScreen.svelte\")",
+      "Bash(__NEW_LINE_4ae226ca296aae53__ sed -n '17,24p' \"/Users/daniel.maldonado1/Desktop/svelteApp/src/routes/celebrations/CelebrationsScreen.svelte\")",
+      "Bash(for:*)",
+      "Bash(do if grep -c \"authInitialized\" \"$file\")",
+      "Bash(then echo \"$file\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(git reset:*)"
     ]
   }
 }

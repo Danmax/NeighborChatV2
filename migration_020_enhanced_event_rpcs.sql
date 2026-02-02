@@ -115,7 +115,7 @@ BEGIN
 
     -- Verify user is event organizer
     SELECT * INTO v_event FROM public.community_events
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF v_event IS NULL THEN
         RAISE EXCEPTION 'Not authorized - must be event organizer';
@@ -154,7 +154,7 @@ BEGIN
 
     -- Verify user is event organizer
     SELECT * INTO v_event FROM public.community_events
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF v_event IS NULL THEN
         RAISE EXCEPTION 'Not authorized - must be event organizer';
@@ -193,7 +193,7 @@ BEGIN
 
     -- Verify user is event organizer
     SELECT * INTO v_event FROM public.community_events
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF v_event IS NULL THEN
         RAISE EXCEPTION 'Not authorized - must be event organizer';
@@ -245,7 +245,7 @@ BEGIN
     END IF;
 
     -- Check if user is organizer or if event allows new items
-    IF v_event.organizer_id != v_user_id THEN
+    IF v_event.created_by_id != v_user_id THEN
         -- Check settings for potluck_allow_new_items
         IF NOT COALESCE((v_event.settings->>'potluck_allow_new_items')::boolean, true) THEN
             RAISE EXCEPTION 'Adding items is disabled for this event';
@@ -451,7 +451,7 @@ BEGIN
     LOOP
         IF v_claim->>'id' = p_claim_id THEN
             -- Verify ownership or organizer
-            IF v_claim->>'user_id' != v_user_id::text AND v_event.organizer_id != v_user_id THEN
+            IF v_claim->>'user_id' != v_user_id::text AND v_event.created_by_id != v_user_id THEN
                 RAISE EXCEPTION 'Not authorized to remove this claim';
             END IF;
             -- Skip this claim (don't add to new_claims)
@@ -540,7 +540,7 @@ BEGIN
     v_claim := v_claims->v_claim_index;
 
     -- Verify ownership or organizer
-    IF v_claim->>'user_id' != v_user_id::text AND v_event.organizer_id != v_user_id THEN
+    IF v_claim->>'user_id' != v_user_id::text AND v_event.created_by_id != v_user_id THEN
         RAISE EXCEPTION 'Not authorized';
     END IF;
 
@@ -679,7 +679,7 @@ BEGIN
 
     -- Verify user is event organizer
     SELECT * INTO v_event FROM public.community_events
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF v_event IS NULL THEN
         RAISE EXCEPTION 'Not authorized - must be event organizer';
@@ -781,7 +781,7 @@ BEGIN
     v_speaker_id := (v_invite->>'speaker_id')::uuid;
 
     -- Verify: user is event organizer OR created the speaker profile
-    IF v_event.organizer_id != v_user_id THEN
+    IF v_event.created_by_id != v_user_id THEN
         -- Check if user owns the speaker profile
         IF NOT EXISTS (SELECT 1 FROM public.speakers WHERE id = v_speaker_id AND created_by_id = v_user_id) THEN
             RAISE EXCEPTION 'Not authorized';
@@ -843,7 +843,7 @@ BEGIN
     v_show_to_rsvp_only := COALESCE((v_event.settings->>'meetup_show_zoom_only_to_rsvp')::boolean, true);
 
     -- If user is organizer, always show
-    IF v_event.organizer_id = v_user_id THEN
+    IF v_event.created_by_id = v_user_id THEN
         RETURN jsonb_build_object('success', true, 'meeting_link', v_event.meeting_link);
     END IF;
 
@@ -900,7 +900,7 @@ BEGIN
     -- Verify user is organizer
     UPDATE public.community_events
     SET status = p_status, updated_at = now()
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Event not found or not authorized';
@@ -935,7 +935,7 @@ BEGIN
     -- Get current settings
     SELECT settings INTO v_current_settings
     FROM public.community_events
-    WHERE id = p_event_id AND organizer_id = v_user_id;
+    WHERE id = p_event_id AND created_by_id = v_user_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Event not found or not authorized';
