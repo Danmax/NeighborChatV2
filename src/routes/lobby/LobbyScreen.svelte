@@ -106,7 +106,7 @@
                 {#if publicUpcomingEvents.length > 0}
                     <div class="events-preview-list">
                         {#each publicUpcomingEvents as event (event.id)}
-                            <EventCard {event} compact={true} />
+                            <EventCard {event} compact={true} on:click={() => push(`/events/${event.id}`)} />
                         {/each}
                     </div>
                 {:else}
