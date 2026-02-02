@@ -11,13 +11,10 @@
         rsvpToEvent,
         rsvpToEventV2,
         getActiveMembershipId,
-        addEventItem,
         addEventItemV2,
         removeEventItem,
-        claimEventItem,
         claimEventItemV2,
         unclaimEventItem,
-        assignEventItem,
         sendEventNotification,
         fetchEventParticipants,
         fetchEventParticipantsDetailed,
@@ -180,28 +177,6 @@
         }
     }
 
-    async function handleAddItem() {
-        if (!newItemName.trim()) return;
-        const itemsToAdd = newItemName
-            .split(',')
-            .map(item => item.trim())
-            .filter(Boolean);
-
-        if (itemsToAdd.length === 0) return;
-
-        try {
-            let updatedItems = eventData.items || [];
-            for (const item of itemsToAdd) {
-                updatedItems = await addEventItem(eventData.id, item);
-            }
-            eventData = { ...eventData, items: updatedItems || [] };
-            newItemName = '';
-            showToast(itemsToAdd.length > 1 ? 'Items added!' : 'Item added!', 'success');
-        } catch (err) {
-            showToast(`Failed to add item: ${err.message}`, 'error');
-        }
-    }
-
     async function handleRemoveItem(itemId) {
         try {
             const updatedItems = await removeEventItem(eventData.id, itemId);
@@ -209,25 +184,6 @@
             showToast('Item removed.', 'success');
         } catch (err) {
             showToast(`Failed to remove: ${err.message}`, 'error');
-        }
-    }
-
-    async function handleClaimItem(itemId) {
-        try {
-            const updatedItems = await claimEventItem(eventData.id, itemId);
-            eventData = { ...eventData, items: updatedItems || [] };
-        } catch (err) {
-            showToast(err.message || 'Unable to claim item', 'error');
-        }
-    }
-
-    async function handleAssignItem(itemId, userId) {
-        if (!userId) return;
-        try {
-            await assignEventItem(eventData.id, itemId, userId);
-            showToast('Item assigned.', 'success');
-        } catch (err) {
-            showToast(`Failed to assign: ${err.message}`, 'error');
         }
     }
 
@@ -369,7 +325,11 @@
         const { speakerId, talkTitle, talkAbstract, duration } = event.detail;
         inviteSpeakerLoading = true;
         try {
-            await inviteSpeaker(eventId, speakerId, talkTitle, talkAbstract, duration);
+            await inviteSpeaker(eventId, speakerId, {
+                talkTitle,
+                talkAbstract,
+                durationMinutes: duration
+            });
             eventData = await fetchEventById(eventId);
             showInviteSpeakerModal = false;
             showToast('Speaker invited!', 'success');
@@ -393,7 +353,11 @@
             }
 
             // Submit talk proposal
-            await inviteSpeaker(eventId, speakerId, talkTitle, talkAbstract, duration);
+            await inviteSpeaker(eventId, speakerId, {
+                talkTitle,
+                talkAbstract,
+                durationMinutes: duration
+            });
             eventData = await fetchEventById(eventId);
             showSubmitTalkModal = false;
             showToast('Talk proposal submitted!', 'success');
