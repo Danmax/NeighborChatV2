@@ -35,6 +35,36 @@ export async function getActiveMembershipId() {
 // Transform database row to app format
 function transformEventFromDb(row) {
     const eventData = row.event_data || {};
+
+    // Transform items to handle both old and new format (claims array)
+    const items = (eventData.items || []).map(item => {
+        // If item has old format (claimed_by instead of claims), convert
+        if (item.claimed_by && !item.claims) {
+            return {
+                ...item,
+                claims: item.claimed_by ? [{
+                    id: `claim_legacy_${item.id}`,
+                    user_id: item.claimed_by,
+                    user_name: item.claimed_by_name || 'User',
+                    quantity_claimed: 1,
+                    status: 'claimed'
+                }] : [],
+                slots: item.slots || 1,
+                needed_qty: item.needed_qty || 1,
+                category: item.category || 'other',
+                allow_recipe: item.allow_recipe !== false
+            };
+        }
+        return {
+            ...item,
+            claims: item.claims || [],
+            slots: item.slots || 1,
+            needed_qty: item.needed_qty || 1,
+            category: item.category || 'other',
+            allow_recipe: item.allow_recipe !== false
+        };
+    });
+
     return {
         id: row.id,
         type: row.type,
@@ -48,12 +78,19 @@ function transformEventFromDb(row) {
         creator_avatar: eventData.creator_avatar,
         cover_image_url: eventData.cover_image_url,
         attachments: eventData.attachments || [],
-        items: eventData.items || [],
+        items,
         attendees: row.participants || [],
         visibility: row.visibility || 'public',
         archived: row.archived || false,
         created_at: row.created_at,
         invited_user_ids: eventData.invited_user_ids || [],
+        // New fields
+        status: row.status || 'published',
+        capacity: row.capacity || null,
+        join_policy: row.join_policy || 'open',
+        meeting_link: row.meeting_link || null,
+        settings: row.settings || {},
+        speaker_invites: eventData.speaker_invites || [],
         ...eventData
     };
 }
@@ -67,7 +104,8 @@ function transformEventToDb(eventData, user, authUserId) {
         invited_user_ids: eventData.invited_user_ids || [],
         items: eventData.items || [],
         cover_image_url: eventData.cover_image_url || null,
-        attachments: eventData.attachments || []
+        attachments: eventData.attachments || [],
+        speaker_invites: eventData.speaker_invites || []
     };
 
     return {
@@ -83,7 +121,13 @@ function transformEventToDb(eventData, user, authUserId) {
         participants: [],
         visibility: eventData.visibility || 'public',
         archived: false,
-        event_data: extraData
+        event_data: extraData,
+        // New fields
+        status: eventData.status || 'published',
+        capacity: eventData.capacity || null,
+        join_policy: eventData.join_policy || 'open',
+        meeting_link: eventData.meeting_link || null,
+        settings: eventData.settings || {}
     };
 }
 
@@ -558,30 +602,43 @@ async function attachParticipants(events, partial = false) {
     try {
         const { data, error } = await supabase
             .from('event_participants')
-            .select('event_id, membership_id')
+            .select('event_id, membership_id, rsvp_status, guest_count, checked_in, approval_status')
             .in('event_id', eventIds);
 
         if (error) throw error;
 
         const attendeesByEvent = {};
+        const participantDataByEvent = {};
         (data || []).forEach(row => {
             if (!attendeesByEvent[row.event_id]) {
                 attendeesByEvent[row.event_id] = [];
+                participantDataByEvent[row.event_id] = [];
             }
             attendeesByEvent[row.event_id].push(row.membership_id);
+            participantDataByEvent[row.event_id].push({
+                membership_id: row.membership_id,
+                rsvp_status: row.rsvp_status || 'going',
+                guest_count: row.guest_count || 0,
+                checked_in: row.checked_in || false,
+                approval_status: row.approval_status || 'approved'
+            });
         });
 
         return events.map(event => {
             const attendees = attendeesByEvent[event.id] || event.attendees || [];
+            const participantData = participantDataByEvent[event.id] || [];
             const attendeeCount = attendees.length;
             const isAttending = attendees.includes(membershipId);
+            const myParticipation = participantData.find(p => p.membership_id === membershipId);
 
             if (partial) {
                 return {
                     ...event,
                     attendees,
                     attendeeCount,
-                    isAttending
+                    isAttending,
+                    myRsvpStatus: myParticipation?.rsvp_status || null,
+                    participantData
                 };
             }
 
@@ -589,11 +646,428 @@ async function attachParticipants(events, partial = false) {
                 ...event,
                 attendees,
                 attendeeCount,
-                isAttending
+                isAttending,
+                myRsvpStatus: myParticipation?.rsvp_status || null,
+                participantData
             };
         });
     } catch (error) {
         console.warn('Failed to attach participants:', error);
         return events;
     }
+}
+
+// ============================================
+// ENHANCED RSVP FUNCTIONS
+// ============================================
+
+/**
+ * Enhanced RSVP with status, guest count, and notes
+ */
+export async function rsvpToEventV2(eventId, { rsvpStatus = 'going', guestCount = 0, notes = null } = {}) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to RSVP.');
+    }
+
+    const { data, error } = await supabase.rpc('rsvp_event_v2', {
+        p_event_id: eventId,
+        p_rsvp_status: rsvpStatus,
+        p_guest_count: guestCount,
+        p_notes: notes
+    });
+
+    if (error) throw error;
+
+    // Refresh the event data
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Approve a pending RSVP (organizer only)
+ */
+export async function approveRsvp(eventId, participantId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('approve_rsvp', {
+        p_event_id: eventId,
+        p_participant_id: participantId
+    });
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Reject a pending RSVP (organizer only)
+ */
+export async function rejectRsvp(eventId, participantId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('reject_rsvp', {
+        p_event_id: eventId,
+        p_participant_id: participantId
+    });
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Check in a participant (organizer only)
+ */
+export async function checkInParticipant(eventId, participantId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('check_in_participant', {
+        p_event_id: eventId,
+        p_participant_id: participantId
+    });
+
+    if (error) throw error;
+    return data;
+}
+
+// ============================================
+// EVENT STATUS FUNCTIONS
+// ============================================
+
+/**
+ * Update event status (draft/published/closed)
+ */
+export async function updateEventStatus(eventId, status) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('update_event_status', {
+        p_event_id: eventId,
+        p_status: status
+    });
+
+    if (error) throw error;
+
+    updateEvent(eventId, { status });
+    return data;
+}
+
+/**
+ * Close an event
+ */
+export async function closeEvent(eventId) {
+    return updateEventStatus(eventId, 'closed');
+}
+
+/**
+ * Publish a draft event
+ */
+export async function publishEvent(eventId) {
+    return updateEventStatus(eventId, 'published');
+}
+
+/**
+ * Update event settings
+ */
+export async function updateEventSettings(eventId, settings) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('update_event_settings', {
+        p_event_id: eventId,
+        p_settings: settings
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+// ============================================
+// ENHANCED POTLUCK ITEM FUNCTIONS
+// ============================================
+
+/**
+ * Add an item with enhanced fields (category, slots, recipes)
+ */
+export async function addEventItemV2(eventId, { name, category = 'other', neededQty = 1, slots = 1, allowRecipe = true }) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to add items.');
+    }
+
+    const { data, error } = await supabase.rpc('add_event_item_v2', {
+        p_event_id: eventId,
+        p_name: name,
+        p_category: category,
+        p_needed_qty: neededQty,
+        p_slots: slots,
+        p_allow_recipe: allowRecipe
+    });
+
+    if (error) throw error;
+
+    // Refresh the event to get updated items
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Claim an item with quantity support
+ */
+export async function claimEventItemV2(eventId, itemId, quantity = 1) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to claim items.');
+    }
+
+    const { data, error } = await supabase.rpc('claim_event_item_v2', {
+        p_event_id: eventId,
+        p_item_id: itemId,
+        p_quantity: quantity
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Remove a claim from an item
+ */
+export async function unclaimEventItem(eventId, itemId, claimId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('unclaim_event_item', {
+        p_event_id: eventId,
+        p_item_id: itemId,
+        p_claim_id: claimId
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Mark a claim as fulfilled
+ */
+export async function fulfillClaim(eventId, itemId, claimId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('fulfill_claim', {
+        p_event_id: eventId,
+        p_item_id: itemId,
+        p_claim_id: claimId
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Attach a recipe to an item
+ */
+export async function attachRecipeToItem(eventId, itemId, recipeId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('attach_recipe_to_item', {
+        p_event_id: eventId,
+        p_item_id: itemId,
+        p_recipe_id: recipeId
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+// ============================================
+// SPEAKER FUNCTIONS
+// ============================================
+
+/**
+ * Invite a speaker to an event
+ */
+export async function inviteSpeaker(eventId, speakerId, { talkTitle, talkAbstract = null, durationMinutes = 30 }) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('invite_speaker', {
+        p_event_id: eventId,
+        p_speaker_id: speakerId,
+        p_talk_title: talkTitle,
+        p_talk_abstract: talkAbstract,
+        p_duration_minutes: durationMinutes
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Update a speaker invite status (accept/decline)
+ */
+export async function updateSpeakerInvite(eventId, inviteId, status) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { data, error } = await supabase.rpc('update_speaker_invite_status', {
+        p_event_id: eventId,
+        p_invite_id: inviteId,
+        p_status: status
+    });
+
+    if (error) throw error;
+
+    // Refresh the event
+    await fetchEventById(eventId);
+    return data;
+}
+
+/**
+ * Get meeting link (respects RSVP requirement setting)
+ */
+export async function getMeetingLink(eventId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to view meeting link.');
+    }
+
+    const { data, error } = await supabase.rpc('get_meeting_link', {
+        p_event_id: eventId
+    });
+
+    if (error) throw error;
+    return data;
+}
+
+// ============================================
+// ENHANCED PARTICIPANTS FETCH
+// ============================================
+
+/**
+ * Fetch detailed participant data for an event (with RSVP status, guests, etc.)
+ */
+export async function fetchEventParticipantsDetailed(eventId) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('event_participants')
+        .select('user_id, membership_id, status, role, registered_at, rsvp_status, guest_count, checked_in, approval_status, notes')
+        .eq('event_id', eventId);
+
+    if (error) throw error;
+
+    const participantIds = (data || []).map(row => row.membership_id).filter(Boolean);
+    const userIds = (data || []).map(row => row.user_id).filter(Boolean);
+
+    // Fetch membership data
+    let memberships = [];
+    if (participantIds.length > 0) {
+        const { data: membershipData, error: membershipError } = await supabase
+            .from('instance_memberships')
+            .select('id, user_id, display_name, avatar')
+            .in('id', participantIds);
+
+        if (!membershipError) {
+            memberships = membershipData || [];
+        }
+    }
+
+    // Fetch public profiles
+    const allUserIds = [...new Set([...userIds, ...memberships.map(m => m.user_id).filter(Boolean)])];
+    let publicProfiles = [];
+    if (allUserIds.length > 0) {
+        const { data: profileData, error: profileError } = await supabase
+            .from('public_profiles')
+            .select('user_id, display_name, username, avatar')
+            .in('user_id', allUserIds);
+
+        if (!profileError) {
+            publicProfiles = profileData || [];
+        }
+    }
+
+    const publicProfileMap = publicProfiles.reduce((acc, profile) => {
+        acc[profile.user_id] = profile;
+        return acc;
+    }, {});
+
+    const membershipMap = memberships.reduce((acc, m) => {
+        acc[m.id] = m;
+        return acc;
+    }, {});
+
+    return (data || []).map(row => {
+        const membership = membershipMap[row.membership_id];
+        const publicProfile = row.user_id ? publicProfileMap[row.user_id] :
+            (membership?.user_id ? publicProfileMap[membership.user_id] : null);
+
+        return {
+            user_id: row.user_id || row.membership_id,
+            membership_id: row.membership_id,
+            status: row.status,
+            role: row.role,
+            registered_at: row.registered_at,
+            rsvp_status: row.rsvp_status || 'going',
+            guest_count: row.guest_count || 0,
+            checked_in: row.checked_in || false,
+            approval_status: row.approval_status || 'approved',
+            notes: row.notes,
+            profile: publicProfile || membership || { display_name: 'User' }
+        };
+    });
 }

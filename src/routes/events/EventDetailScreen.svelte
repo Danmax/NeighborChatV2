@@ -2,25 +2,39 @@
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
-    import { events } from '../../stores/events.js';
+    import { events, getEventStatus, getCapacityInfo } from '../../stores/events.js';
     import { savedContacts } from '../../stores/contacts.js';
     import {
         fetchEventById,
         updateEventInDb,
         uploadEventImage,
         rsvpToEvent,
+        rsvpToEventV2,
         getActiveMembershipId,
         addEventItem,
+        addEventItemV2,
         removeEventItem,
         claimEventItem,
+        claimEventItemV2,
+        unclaimEventItem,
         assignEventItem,
         sendEventNotification,
         fetchEventParticipants,
-        subscribeToEvent
+        fetchEventParticipantsDetailed,
+        subscribeToEvent,
+        approveRsvp,
+        rejectRsvp,
+        checkInParticipant,
+        getMeetingLink,
+        updateSpeakerInvite
     } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventForm from '../../components/events/EventForm.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
+    import PotluckItemsSection from '../../components/events/PotluckItemsSection.svelte';
+    import DevMeetupAgenda from '../../components/events/DevMeetupAgenda.svelte';
+    import RSVPModal from '../../components/events/RSVPModal.svelte';
+    import EventParticipantsModal from '../../components/events/EventParticipantsModal.svelte';
     import { showToast } from '../../stores/toasts.js';
 
     export let params = {};
@@ -40,6 +54,12 @@
     let joining = false;
     let activeMembershipId = null;
 
+    // New state
+    let showRsvpModal = false;
+    let showParticipantsModal = false;
+    let rsvpLoading = false;
+    let meetingLink = null;
+
     $: eventId = params?.id;
     $: {
         const fromStore = $events.find(item => item.id === eventId);
@@ -50,6 +70,13 @@
     $: isOwner = eventData?.created_by === $currentUser?.user_id;
     $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes($currentUser?.user_id));
     $: items = eventData?.items || [];
+    $: eventStatus = getEventStatus(eventData?.status);
+    $: capacityInfo = getCapacityInfo(eventData);
+    $: myRsvpStatus = eventData?.myRsvpStatus || (isAttending ? 'going' : null);
+    $: isPotluck = eventData?.type === 'potluck';
+    $: isDevMeetup = eventData?.type === 'dev-meetup';
+    $: isDraft = eventData?.status === 'draft';
+    $: isClosed = eventData?.status === 'closed';
 
     onMount(async () => {
         if (!$isAuthenticated || !eventId) return;
@@ -92,11 +119,21 @@
         if (!eventId) return;
         loadingParticipants = true;
         try {
-            participants = await fetchEventParticipants(eventId);
+            participants = await fetchEventParticipantsDetailed(eventId);
         } catch (err) {
             participants = [];
         } finally {
             loadingParticipants = false;
+        }
+    }
+
+    async function loadMeetingLink() {
+        if (!eventId || !isDevMeetup) return;
+        try {
+            const result = await getMeetingLink(eventId);
+            meetingLink = result?.meeting_link || null;
+        } catch (err) {
+            meetingLink = null;
         }
     }
 
@@ -205,6 +242,118 @@
         }
     }
 
+    // Enhanced RSVP handler
+    async function handleRsvpSubmit(event) {
+        const { rsvpStatus, guestCount, notes } = event.detail;
+        rsvpLoading = true;
+        try {
+            await rsvpToEventV2(eventId, { rsvpStatus, guestCount, notes });
+            eventData = await fetchEventById(eventId);
+            loadParticipants();
+            if (isDevMeetup) loadMeetingLink();
+            showRsvpModal = false;
+            showToast('RSVP updated!', 'success');
+        } catch (err) {
+            showToast(`Failed to update RSVP: ${err.message}`, 'error');
+        } finally {
+            rsvpLoading = false;
+        }
+    }
+
+    // Participant management (organizer)
+    async function handleApproveParticipant(event) {
+        try {
+            await approveRsvp(eventId, event.detail.participantId);
+            loadParticipants();
+            showToast('RSVP approved!', 'success');
+        } catch (err) {
+            showToast(`Failed to approve: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleRejectParticipant(event) {
+        try {
+            await rejectRsvp(eventId, event.detail.participantId);
+            loadParticipants();
+            showToast('RSVP rejected.', 'success');
+        } catch (err) {
+            showToast(`Failed to reject: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleCheckIn(event) {
+        try {
+            await checkInParticipant(eventId, event.detail.participantId);
+            loadParticipants();
+            showToast('Checked in!', 'success');
+        } catch (err) {
+            showToast(`Failed to check in: ${err.message}`, 'error');
+        }
+    }
+
+    // Potluck item handlers
+    async function handleAddPotluckItem(event) {
+        const { name, category, slots } = event.detail;
+        try {
+            await addEventItemV2(eventId, {
+                name,
+                category,
+                neededQty: 1,
+                slots,
+                allowRecipe: true
+            });
+            eventData = await fetchEventById(eventId);
+            showToast('Item added!', 'success');
+        } catch (err) {
+            showToast(`Failed to add item: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleClaimPotluckItem(event) {
+        const { itemId, quantity } = event.detail;
+        try {
+            await claimEventItemV2(eventId, itemId, quantity);
+            eventData = await fetchEventById(eventId);
+            showToast('Item claimed!', 'success');
+        } catch (err) {
+            showToast(`Failed to claim: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleUnclaimPotluckItem(event) {
+        const { itemId, claimId } = event.detail;
+        try {
+            await unclaimEventItem(eventId, itemId, claimId);
+            eventData = await fetchEventById(eventId);
+            showToast('Claim removed.', 'success');
+        } catch (err) {
+            showToast(`Failed to unclaim: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleRemovePotluckItem(event) {
+        const { itemId } = event.detail;
+        try {
+            await removeEventItem(eventId, itemId);
+            eventData = await fetchEventById(eventId);
+            showToast('Item removed.', 'success');
+        } catch (err) {
+            showToast(`Failed to remove: ${err.message}`, 'error');
+        }
+    }
+
+    // Speaker invite handlers
+    async function handleUpdateSpeakerInvite(event) {
+        const { inviteId, status } = event.detail;
+        try {
+            await updateSpeakerInvite(eventId, inviteId, status);
+            eventData = await fetchEventById(eventId);
+            showToast(`Speaker invite ${status}.`, 'success');
+        } catch (err) {
+            showToast(`Failed to update invite: ${err.message}`, 'error');
+        }
+    }
+
     function formatEventDate(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
@@ -254,6 +403,16 @@
                 {/if}
                 <div class="event-hero-overlay">
                     <div class="event-hero-content">
+                        {#if isDraft}
+                            <span class="status-badge draft">Draft</span>
+                        {:else if isClosed}
+                            <span class="status-badge closed">Closed</span>
+                        {/if}
+                        {#if capacityInfo.hasCapacity}
+                            <span class="capacity-badge" class:full={capacityInfo.isFull}>
+                                {capacityInfo.spotsTaken}/{capacityInfo.spotsTotal} spots
+                            </span>
+                        {/if}
                         <h3 class="event-title">{eventData.title}</h3>
                         <div class="event-meta">
                             <span>📅 {formatEventDate(eventData.date)}</span>
@@ -270,11 +429,13 @@
                 </button>
                     </div>
                     <div class="event-actions">
-                        <button class="btn btn-primary" on:click={handleRsvp} disabled={joining}>
-                            {joining ? 'Updating…' : isAttending ? 'Leave Event' : 'Join Event'}
-                        </button>
-                        <button class="btn btn-secondary" on:click={() => push('/contacts')}>
-                            Message Organizer
+                        {#if !isClosed}
+                            <button class="btn btn-primary" on:click={() => showRsvpModal = true} disabled={joining}>
+                                {myRsvpStatus ? 'Update RSVP' : 'RSVP'}
+                            </button>
+                        {/if}
+                        <button class="btn btn-secondary" on:click={() => showParticipantsModal = true}>
+                            View Attendees ({participants.length})
                         </button>
                     </div>
                 </div>
@@ -317,57 +478,27 @@
                 {/if}
             </div>
 
-            {#if eventData.type === 'potluck'}
-                <div class="card">
-                    <h3 class="card-title">Potluck Items</h3>
+            <!-- Potluck Items Section -->
+            {#if isPotluck}
+                <PotluckItemsSection
+                    event={eventData}
+                    {isOwner}
+                    on:addItem={handleAddPotluckItem}
+                    on:claim={handleClaimPotluckItem}
+                    on:unclaim={handleUnclaimPotluckItem}
+                    on:removeItem={handleRemovePotluckItem}
+                />
+            {/if}
 
-                    {#if isOwner}
-                        <div class="item-form">
-                            <input
-                                type="text"
-                                placeholder="Add an item (e.g., salad, plates)"
-                                bind:value={newItemName}
-                            />
-                            <button class="btn btn-secondary btn-small" on:click={handleAddItem}>
-                                Add
-                            </button>
-                        </div>
-                    {/if}
-
-                    {#if items.length === 0}
-                        <p class="empty-text">No items added yet.</p>
-                    {:else}
-                        <div class="items-list">
-                            {#each items as item (item.id)}
-                                <div class="item-row">
-                                    <div class="item-info">
-                                        <span class="item-name">{item.name}</span>
-                                        <span class="item-status">{item.status || 'open'}</span>
-                                        {#if item.claimed_by_name}
-                                            <span class="item-claimer">Claimed by {item.claimed_by_name}</span>
-                                        {/if}
-                                    </div>
-                                    <div class="item-actions">
-                                        <button class="btn btn-claim btn-small" on:click={() => handleClaimItem(item.id)}>
-                                            {item.claimed_by_id === $currentUser?.user_id ? 'Unclaim' : 'Claim'}
-                                        </button>
-                                        {#if isOwner}
-                                            <select class="assign-select" on:change={(e) => handleAssignItem(item.id, e.target.value)}>
-                                                <option value="">Assign to contact</option>
-                                                {#each $savedContacts as contact}
-                                                    <option value={contact.user_id}>{contact.name}</option>
-                                                {/each}
-                                            </select>
-                                            <button class="btn btn-remove btn-small" on:click={() => handleRemoveItem(item.id)}>
-                                                Remove
-                                            </button>
-                                        {/if}
-                                    </div>
-                                </div>
-                            {/each}
-                        </div>
-                    {/if}
-                </div>
+            <!-- Dev Meetup Agenda Section -->
+            {#if isDevMeetup}
+                <DevMeetupAgenda
+                    event={eventData}
+                    {isOwner}
+                    isAttending={myRsvpStatus === 'going'}
+                    {meetingLink}
+                    on:updateInvite={handleUpdateSpeakerInvite}
+                />
             {/if}
 
             {#if eventData.attachments?.length}
@@ -406,6 +537,28 @@
             <div class="empty-state">Event not found.</div>
         {/if}
     </div>
+
+    <!-- RSVP Modal -->
+    <RSVPModal
+        show={showRsvpModal}
+        event={eventData}
+        currentStatus={myRsvpStatus}
+        loading={rsvpLoading}
+        on:close={() => showRsvpModal = false}
+        on:submit={handleRsvpSubmit}
+    />
+
+    <!-- Participants Modal -->
+    <EventParticipantsModal
+        show={showParticipantsModal}
+        event={eventData}
+        {participants}
+        loading={loadingParticipants}
+        on:close={() => showParticipantsModal = false}
+        on:approve={handleApproveParticipant}
+        on:reject={handleRejectParticipant}
+        on:checkin={handleCheckIn}
+    />
 {/if}
 
 <style>
@@ -695,5 +848,43 @@
     .empty-state {
         color: var(--text-muted);
         font-size: 13px;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .status-badge.draft {
+        background: rgba(158, 158, 158, 0.9);
+        color: white;
+    }
+
+    .status-badge.closed {
+        background: rgba(244, 67, 54, 0.9);
+        color: white;
+    }
+
+    .capacity-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text);
+        margin-left: 8px;
+        margin-bottom: 8px;
+    }
+
+    .capacity-badge.full {
+        background: rgba(244, 67, 54, 0.9);
+        color: white;
     }
 </style>

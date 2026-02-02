@@ -18,6 +18,30 @@ export const EVENT_TYPES = [
     { id: 'other', label: 'Other', emoji: '📌', color: '#90A4AE' }
 ];
 
+// Item categories for potluck events
+export const ITEM_CATEGORIES = [
+    { id: 'main', label: 'Main Dish', emoji: '🍖' },
+    { id: 'side', label: 'Side Dish', emoji: '🥗' },
+    { id: 'dessert', label: 'Dessert', emoji: '🍰' },
+    { id: 'drinks', label: 'Drinks', emoji: '🍹' },
+    { id: 'supplies', label: 'Supplies', emoji: '🍽️' },
+    { id: 'other', label: 'Other', emoji: '📦' }
+];
+
+// RSVP status options
+export const RSVP_STATUSES = [
+    { id: 'going', label: 'Going', emoji: '✓', color: '#4CAF50' },
+    { id: 'maybe', label: 'Maybe', emoji: '?', color: '#FF9800' },
+    { id: 'not_going', label: 'Not Going', emoji: '✕', color: '#9E9E9E' }
+];
+
+// Event status options
+export const EVENT_STATUSES = [
+    { id: 'draft', label: 'Draft', color: '#9E9E9E' },
+    { id: 'published', label: 'Published', color: '#4CAF50' },
+    { id: 'closed', label: 'Closed', color: '#F44336' }
+];
+
 // Derived: upcoming events (future dates, sorted)
 export const upcomingEvents = derived(events, ($events) => {
     const now = new Date();
@@ -39,7 +63,29 @@ export const myEvents = derived([events, currentUser], ([$events, $currentUser])
 export const pastEvents = derived(events, ($events) => {
     const now = new Date();
     return $events
-        .filter(e => new Date(e.date) < now)
+        .filter(e => new Date(e.date) < now && e.status !== 'draft')
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+});
+
+// Derived: draft events (visible only to organizers)
+export const draftEvents = derived([events, currentUser], ([$events, $currentUser]) => {
+    if (!$currentUser) return [];
+    return $events
+        .filter(e => e.status === 'draft' && e.created_by === $currentUser.user_id)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+});
+
+// Derived: published events only (excludes drafts)
+export const publishedEvents = derived(events, ($events) => {
+    return $events
+        .filter(e => e.status === 'published' || !e.status)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+});
+
+// Derived: closed events
+export const closedEvents = derived(events, ($events) => {
+    return $events
+        .filter(e => e.status === 'closed')
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 });
 
@@ -104,4 +150,101 @@ export function leaveEvent(eventId) {
 // Get event type info
 export function getEventType(typeId) {
     return EVENT_TYPES.find(t => t.id === typeId) || EVENT_TYPES.find(t => t.id === 'other');
+}
+
+// Get item category info
+export function getItemCategory(categoryId) {
+    return ITEM_CATEGORIES.find(c => c.id === categoryId) || ITEM_CATEGORIES.find(c => c.id === 'other');
+}
+
+// Get RSVP status info
+export function getRsvpStatus(statusId) {
+    return RSVP_STATUSES.find(s => s.id === statusId) || RSVP_STATUSES[0];
+}
+
+// Get event status info
+export function getEventStatus(statusId) {
+    return EVENT_STATUSES.find(s => s.id === statusId) || EVENT_STATUSES.find(s => s.id === 'published');
+}
+
+// Get event settings with defaults
+export function getEventSettings(event) {
+    const defaults = {
+        potluck_allow_new_items: true,
+        potluck_allow_recipes: true,
+        meetup_show_zoom_only_to_rsvp: true,
+        meetup_allow_speaker_submissions: false
+    };
+    return { ...defaults, ...(event?.settings || {}) };
+}
+
+// Check if meeting link should be shown based on RSVP status
+export function canShowMeetingLink(event, userRsvpStatus) {
+    // No meeting link to show
+    if (!event?.meeting_link) return false;
+
+    const settings = getEventSettings(event);
+
+    // If setting is disabled, show to everyone
+    if (!settings.meetup_show_zoom_only_to_rsvp) return true;
+
+    // Only show if user is going
+    return userRsvpStatus === 'going';
+}
+
+// Calculate available slots for an item
+export function calculateAvailableSlots(item) {
+    const totalSlots = item?.slots || 1;
+    const claims = item?.claims || [];
+    const claimedQty = claims.reduce((sum, claim) => sum + (claim.quantity_claimed || 1), 0);
+    return Math.max(0, totalSlots - claimedQty);
+}
+
+// Calculate total claimed quantity for an item
+export function calculateClaimedQuantity(item) {
+    const claims = item?.claims || [];
+    return claims.reduce((sum, claim) => sum + (claim.quantity_claimed || 1), 0);
+}
+
+// Check if user has claimed an item
+export function getUserClaim(item, userId) {
+    if (!item?.claims || !userId) return null;
+    return item.claims.find(claim => claim.user_id === userId);
+}
+
+// Group items by category
+export function groupItemsByCategory(items) {
+    const groups = {};
+    ITEM_CATEGORIES.forEach(cat => {
+        groups[cat.id] = [];
+    });
+
+    (items || []).forEach(item => {
+        const category = item.category || 'other';
+        if (!groups[category]) {
+            groups[category] = [];
+        }
+        groups[category].push(item);
+    });
+
+    return groups;
+}
+
+// Get capacity info for an event
+export function getCapacityInfo(event) {
+    if (!event?.capacity) {
+        return { hasCapacity: false, spotsTotal: null, spotsTaken: 0, spotsRemaining: null, isFull: false };
+    }
+
+    const goingCount = (event.participantData || [])
+        .filter(p => p.rsvp_status === 'going' && p.approval_status === 'approved')
+        .reduce((sum, p) => sum + 1 + (p.guest_count || 0), 0);
+
+    return {
+        hasCapacity: true,
+        spotsTotal: event.capacity,
+        spotsTaken: goingCount,
+        spotsRemaining: Math.max(0, event.capacity - goingCount),
+        isFull: goingCount >= event.capacity
+    };
 }

@@ -2,7 +2,7 @@
     import { createEventDispatcher } from 'svelte';
     import { push } from 'svelte-spa-router';
     import Avatar from '../avatar/Avatar.svelte';
-    import { getEventType } from '../../stores/events.js';
+    import { getEventType, getCapacityInfo, getRsvpStatus } from '../../stores/events.js';
     import { currentUser } from '../../stores/auth.js';
 
     export let event;
@@ -21,6 +21,14 @@
     $: formattedTime = formatTime(event.time);
     $: isPast = new Date(event.date) < new Date();
     $: coverImage = event.cover_image_url || event.image_url || event.image;
+
+    // New status and capacity
+    $: eventStatus = event.status || 'published';
+    $: isDraft = eventStatus === 'draft';
+    $: isClosed = eventStatus === 'closed';
+    $: capacityInfo = getCapacityInfo(event);
+    $: myRsvpStatus = event.myRsvpStatus || (isAttending ? 'going' : null);
+    $: rsvpStatusInfo = myRsvpStatus ? getRsvpStatus(myRsvpStatus) : null;
 
     function formatDate(dateStr) {
         const date = new Date(dateStr);
@@ -74,6 +82,8 @@
     class:featured
     class:compact
     class:past={isPast}
+    class:draft={isDraft}
+    class:closed={isClosed}
     on:click={handleClick}
     on:keypress={(e) => e.key === 'Enter' && handleClick()}
     role="button"
@@ -85,6 +95,13 @@
             <span class="type-label">{eventType.label}</span>
         {/if}
     </div>
+
+    <!-- Status Badge -->
+    {#if isDraft}
+        <span class="status-badge status-draft">Draft</span>
+    {:else if isClosed}
+        <span class="status-badge status-closed">Closed</span>
+    {/if}
 
     {#if coverImage && !compact}
         <div class="event-cover">
@@ -122,8 +139,19 @@
 
             <div class="event-attendees">
                 <span class="attendee-count">👥 {attendeeCount}</span>
+                {#if capacityInfo.hasCapacity}
+                    <span class="capacity-indicator" class:full={capacityInfo.isFull}>
+                        / {capacityInfo.spotsTotal}
+                    </span>
+                {/if}
             </div>
         </div>
+
+        {#if myRsvpStatus && !compact}
+            <div class="my-rsvp-status" style="color: {rsvpStatusInfo?.color}">
+                {rsvpStatusInfo?.emoji} {rsvpStatusInfo?.label}
+            </div>
+        {/if}
     </div>
 
     {#if !isPast}
@@ -355,5 +383,56 @@
     .compact .rsvp-btn {
         position: static;
         flex-shrink: 0;
+    }
+
+    /* Status badges */
+    .status-badge {
+        position: absolute;
+        top: 44px;
+        right: 12px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .status-draft {
+        background: #9E9E9E;
+        color: white;
+    }
+
+    .status-closed {
+        background: #F44336;
+        color: white;
+    }
+
+    .event-card.draft {
+        border: 2px dashed #9E9E9E;
+    }
+
+    .event-card.closed {
+        opacity: 0.8;
+    }
+
+    /* Capacity indicator */
+    .capacity-indicator {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+
+    .capacity-indicator.full {
+        color: #F44336;
+        font-weight: 600;
+    }
+
+    /* RSVP status display */
+    .my-rsvp-status {
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--cream-dark);
     }
 </style>

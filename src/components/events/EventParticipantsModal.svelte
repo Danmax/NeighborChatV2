@@ -1,6 +1,8 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import Avatar from '../avatar/Avatar.svelte';
+    import { getRsvpStatus } from '../../stores/events.js';
+    import { currentUser } from '../../stores/auth.js';
 
     export let show = false;
     export let event = null;
@@ -9,8 +11,38 @@
 
     const dispatch = createEventDispatcher();
 
+    $: isOrganizer = event?.created_by === $currentUser?.user_id;
+
+    // Group participants by status
+    $: goingParticipants = participants.filter(p => p.rsvp_status === 'going' && p.approval_status === 'approved');
+    $: maybeParticipants = participants.filter(p => p.rsvp_status === 'maybe' && p.approval_status === 'approved');
+    $: pendingParticipants = participants.filter(p => p.approval_status === 'pending');
+    $: notGoingParticipants = participants.filter(p => p.rsvp_status === 'not_going');
+
     function handleClose() {
         dispatch('close');
+    }
+
+    function handleApprove(participantId) {
+        dispatch('approve', { participantId });
+    }
+
+    function handleReject(participantId) {
+        dispatch('reject', { participantId });
+    }
+
+    function handleCheckIn(participantId) {
+        dispatch('checkin', { participantId });
+    }
+
+    function getRsvpLabel(status) {
+        const info = getRsvpStatus(status);
+        return info?.label || status;
+    }
+
+    function getRsvpColor(status) {
+        const info = getRsvpStatus(status);
+        return info?.color || '#9E9E9E';
     }
 </script>
 
@@ -40,21 +72,101 @@
                         <p>No RSVPs yet</p>
                     </div>
                 {:else}
-                    <ul class="participants-list">
-                        {#each participants as participant (participant.user_id)}
-                            <li>
-                                <Avatar avatar={participant.profile?.avatar} size="sm" />
-                                <div class="participant-info">
-                                    <span class="participant-name">
-                                        {participant.profile?.display_name || 'Neighbor'}
-                                    </span>
-                                    <span class="participant-meta">
-                                        {participant.status || 'registered'}
-                                    </span>
-                                </div>
-                            </li>
-                        {/each}
-                    </ul>
+                    <!-- Pending Approvals (organizer only) -->
+                    {#if isOrganizer && pendingParticipants.length > 0}
+                        <div class="participant-section">
+                            <h3 class="section-title pending">Pending Approval ({pendingParticipants.length})</h3>
+                            <ul class="participants-list">
+                                {#each pendingParticipants as participant (participant.user_id)}
+                                    <li class="pending-item">
+                                        <Avatar avatar={participant.profile?.avatar} size="sm" />
+                                        <div class="participant-info">
+                                            <span class="participant-name">
+                                                {participant.profile?.display_name || 'Neighbor'}
+                                            </span>
+                                            {#if participant.notes}
+                                                <span class="participant-notes">{participant.notes}</span>
+                                            {/if}
+                                        </div>
+                                        <div class="approval-actions">
+                                            <button class="approve-btn" on:click={() => handleApprove(participant.user_id)}>Approve</button>
+                                            <button class="reject-btn" on:click={() => handleReject(participant.user_id)}>Reject</button>
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        </div>
+                    {/if}
+
+                    <!-- Going -->
+                    {#if goingParticipants.length > 0}
+                        <div class="participant-section">
+                            <h3 class="section-title going">Going ({goingParticipants.length})</h3>
+                            <ul class="participants-list">
+                                {#each goingParticipants as participant (participant.user_id)}
+                                    <li>
+                                        <Avatar avatar={participant.profile?.avatar} size="sm" />
+                                        <div class="participant-info">
+                                            <span class="participant-name">
+                                                {participant.profile?.display_name || 'Neighbor'}
+                                                {#if participant.checked_in}
+                                                    <span class="checked-in-badge">Checked In</span>
+                                                {/if}
+                                            </span>
+                                            <span class="participant-meta">
+                                                {#if participant.guest_count > 0}
+                                                    +{participant.guest_count} guest{participant.guest_count > 1 ? 's' : ''}
+                                                {/if}
+                                            </span>
+                                        </div>
+                                        {#if isOrganizer && !participant.checked_in}
+                                            <button class="checkin-btn" on:click={() => handleCheckIn(participant.user_id)}>
+                                                Check In
+                                            </button>
+                                        {/if}
+                                    </li>
+                                {/each}
+                            </ul>
+                        </div>
+                    {/if}
+
+                    <!-- Maybe -->
+                    {#if maybeParticipants.length > 0}
+                        <div class="participant-section">
+                            <h3 class="section-title maybe">Maybe ({maybeParticipants.length})</h3>
+                            <ul class="participants-list">
+                                {#each maybeParticipants as participant (participant.user_id)}
+                                    <li>
+                                        <Avatar avatar={participant.profile?.avatar} size="sm" />
+                                        <div class="participant-info">
+                                            <span class="participant-name">
+                                                {participant.profile?.display_name || 'Neighbor'}
+                                            </span>
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        </div>
+                    {/if}
+
+                    <!-- Not Going -->
+                    {#if notGoingParticipants.length > 0}
+                        <div class="participant-section">
+                            <h3 class="section-title not-going">Not Going ({notGoingParticipants.length})</h3>
+                            <ul class="participants-list">
+                                {#each notGoingParticipants as participant (participant.user_id)}
+                                    <li class="not-going-item">
+                                        <Avatar avatar={participant.profile?.avatar} size="sm" />
+                                        <div class="participant-info">
+                                            <span class="participant-name">
+                                                {participant.profile?.display_name || 'Neighbor'}
+                                            </span>
+                                        </div>
+                                    </li>
+                                {/each}
+                            </ul>
+                        </div>
+                    {/if}
                 {/if}
             </div>
         </div>
@@ -183,5 +295,109 @@
         font-size: 40px;
         margin-bottom: 12px;
         opacity: 0.5;
+    }
+
+    .participant-section {
+        margin-bottom: 20px;
+    }
+
+    .participant-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .section-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--cream-dark);
+    }
+
+    .section-title.going {
+        color: #4CAF50;
+    }
+
+    .section-title.maybe {
+        color: #FF9800;
+    }
+
+    .section-title.pending {
+        color: #2196F3;
+    }
+
+    .section-title.not-going {
+        color: #9E9E9E;
+    }
+
+    .pending-item {
+        flex-wrap: wrap;
+    }
+
+    .not-going-item {
+        opacity: 0.6;
+    }
+
+    .participant-notes {
+        font-size: 12px;
+        color: var(--text-light);
+        font-style: italic;
+    }
+
+    .approval-actions {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        margin-top: 8px;
+    }
+
+    .approve-btn,
+    .reject-btn,
+    .checkin-btn {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .approve-btn {
+        background: #4CAF50;
+        color: white;
+    }
+
+    .approve-btn:hover {
+        background: #388E3C;
+    }
+
+    .reject-btn {
+        background: #F44336;
+        color: white;
+    }
+
+    .reject-btn:hover {
+        background: #D32F2F;
+    }
+
+    .checkin-btn {
+        background: var(--primary);
+        color: white;
+        margin-left: auto;
+    }
+
+    .checkin-btn:hover {
+        background: var(--primary-dark);
+    }
+
+    .checked-in-badge {
+        display: inline-block;
+        background: #4CAF50;
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        margin-left: 6px;
+        vertical-align: middle;
     }
 </style>

@@ -1,6 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
-    import { EVENT_TYPES } from '../../stores/events.js';
+    import { EVENT_TYPES, EVENT_STATUSES, getEventSettings } from '../../stores/events.js';
     import { savedContacts } from '../../stores/contacts.js';
 
     export let event = null; // For editing existing events
@@ -21,6 +21,19 @@
     let coverImageFile = null;
     let coverImagePreview = event?.cover_image_url || '';
 
+    // New fields
+    let status = event?.status || 'published';
+    let capacity = event?.capacity || '';
+    let joinPolicy = event?.join_policy || 'open';
+    let meetingLink = event?.meeting_link || '';
+
+    // Settings (type-specific)
+    const existingSettings = getEventSettings(event);
+    let potluckAllowNewItems = existingSettings.potluck_allow_new_items;
+    let potluckAllowRecipes = existingSettings.potluck_allow_recipes;
+    let meetupShowZoomOnlyToRsvp = existingSettings.meetup_show_zoom_only_to_rsvp;
+    let meetupAllowSpeakerSubmissions = existingSettings.meetup_allow_speaker_submissions;
+
     // Get tomorrow's date as minimum
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -30,6 +43,17 @@
 
     function handleSubmit() {
         if (!isValid || loading) return;
+
+        // Build settings based on event type
+        const settings = {};
+        if (type === 'potluck') {
+            settings.potluck_allow_new_items = potluckAllowNewItems;
+            settings.potluck_allow_recipes = potluckAllowRecipes;
+        }
+        if (type === 'dev-meetup') {
+            settings.meetup_show_zoom_only_to_rsvp = meetupShowZoomOnlyToRsvp;
+            settings.meetup_allow_speaker_submissions = meetupAllowSpeakerSubmissions;
+        }
 
         const eventData = {
             title: title.trim(),
@@ -45,7 +69,13 @@
                 .split('\n')
                 .map(item => item.trim())
                 .filter(Boolean),
-            cover_image_file: coverImageFile || null
+            cover_image_file: coverImageFile || null,
+            // New fields
+            status,
+            capacity: capacity ? parseInt(capacity) : null,
+            join_policy: joinPolicy,
+            meeting_link: meetingLink.trim() || null,
+            settings
         };
 
         dispatch('submit', eventData);
@@ -207,6 +237,94 @@
             placeholder="Leave blank for unlimited"
         />
     </div>
+
+    <!-- Enhanced Event Options -->
+    <div class="form-section">
+        <h4 class="section-title">Event Options</h4>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="event-status">Status</label>
+                <select id="event-status" bind:value={status}>
+                    {#each EVENT_STATUSES as statusOption}
+                        <option value={statusOption.id}>{statusOption.label}</option>
+                    {/each}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="event-capacity">Capacity</label>
+                <input
+                    id="event-capacity"
+                    type="number"
+                    bind:value={capacity}
+                    min="1"
+                    max="1000"
+                    placeholder="Unlimited"
+                />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="event-join-policy">Join Policy</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" bind:group={joinPolicy} value="open" />
+                    <span>Open - Anyone can join</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" bind:group={joinPolicy} value="approval" />
+                    <span>Approval Required - You approve each RSVP</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dev Meetup Options -->
+    {#if type === 'dev-meetup'}
+        <div class="form-section">
+            <h4 class="section-title">Dev Meetup Options</h4>
+
+            <div class="form-group">
+                <label for="event-meeting-link">Meeting Link (Zoom, Meet, etc.)</label>
+                <input
+                    id="event-meeting-link"
+                    type="url"
+                    bind:value={meetingLink}
+                    placeholder="https://zoom.us/j/..."
+                />
+            </div>
+
+            <div class="toggle-group">
+                <label class="toggle-option">
+                    <input type="checkbox" bind:checked={meetupShowZoomOnlyToRsvp} />
+                    <span>Only show meeting link to confirmed attendees</span>
+                </label>
+                <label class="toggle-option">
+                    <input type="checkbox" bind:checked={meetupAllowSpeakerSubmissions} />
+                    <span>Allow attendees to submit talk proposals</span>
+                </label>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Potluck Options -->
+    {#if type === 'potluck'}
+        <div class="form-section">
+            <h4 class="section-title">Potluck Options</h4>
+
+            <div class="toggle-group">
+                <label class="toggle-option">
+                    <input type="checkbox" bind:checked={potluckAllowNewItems} />
+                    <span>Allow attendees to add new items</span>
+                </label>
+                <label class="toggle-option">
+                    <input type="checkbox" bind:checked={potluckAllowRecipes} />
+                    <span>Allow attaching recipes to items</span>
+                </label>
+            </div>
+        </div>
+    {/if}
 
     <div class="form-actions">
         <button
@@ -386,5 +504,78 @@
 
     .btn-secondary:hover:not(:disabled) {
         background: var(--cream-dark);
+    }
+
+    .form-section {
+        background: var(--cream);
+        padding: 16px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .form-group select {
+        padding: 12px 16px;
+        border: 1px solid var(--cream-dark);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+        background: white;
+        cursor: pointer;
+    }
+
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .radio-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .radio-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    .radio-option input[type="radio"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    .toggle-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .toggle-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    .toggle-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
     }
 </style>

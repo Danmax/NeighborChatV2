@@ -6,6 +6,8 @@
         upcomingEvents,
         myEvents,
         pastEvents,
+        draftEvents,
+        publishedEvents,
         eventsLoading
     } from '../../stores/events.js';
     import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent, getActiveMembershipId } from '../../services/events.service.js';
@@ -20,9 +22,13 @@
     let joiningIds = new Set();
     let activeMembershipId = null;
 
-    const tabs = [
+    // Dynamic tabs based on whether user has drafts
+    $: hasDrafts = $draftEvents.length > 0;
+
+    $: tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
         { id: 'mine', label: 'My Events', icon: '⭐' },
+        ...(hasDrafts ? [{ id: 'drafts', label: 'Drafts', icon: '📝' }] : []),
         { id: 'past', label: 'Past', icon: '📜' },
         { id: 'create', label: 'Create', icon: '➕' }
     ];
@@ -31,10 +37,18 @@
 
     function getEventsForTab(tab) {
         switch (tab) {
-            case 'upcoming': return $upcomingEvents;
-            case 'mine': return $myEvents;
-            case 'past': return $pastEvents;
-            default: return [];
+            case 'upcoming':
+                // Filter out drafts from upcoming - only show published events
+                return $upcomingEvents.filter(e => e.status !== 'draft');
+            case 'mine':
+                // Filter out drafts from my events - drafts have their own tab
+                return $myEvents.filter(e => e.status !== 'draft');
+            case 'drafts':
+                return $draftEvents;
+            case 'past':
+                return $pastEvents;
+            default:
+                return [];
         }
     }
 
@@ -171,6 +185,8 @@
                         <span class="icon">📅</span> Upcoming Events
                     {:else if activeTab === 'mine'}
                         <span class="icon">⭐</span> My Events
+                    {:else if activeTab === 'drafts'}
+                        <span class="icon">📝</span> Draft Events
                     {:else if activeTab === 'past'}
                         <span class="icon">📜</span> Past Events
                     {/if}
@@ -182,11 +198,13 @@
                     emptyMessage={
                         activeTab === 'upcoming' ? "No upcoming events. Why not create one?" :
                         activeTab === 'mine' ? "You haven't joined or created any events yet" :
+                        activeTab === 'drafts' ? "No draft events. Create one and save as draft!" :
                         "No past events"
                     }
                     emptyIcon={
                         activeTab === 'upcoming' ? "📭" :
                         activeTab === 'mine' ? "⭐" :
+                        activeTab === 'drafts' ? "📝" :
                         "📜"
                     }
                     layout={activeTab === 'upcoming' ? 'upcoming' : 'grid'}
