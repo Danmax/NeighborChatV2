@@ -11,7 +11,7 @@
     } from '../../services/realtime.service.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import UserCard from '../../components/users/UserCard.svelte';
-    import { INTERESTS } from '../../services/profile.service.js';
+    import { interestOptions } from '../../stores/options.js';
     import { showToast } from '../../stores/toasts.js';
 
     let searching = false;
@@ -120,7 +120,7 @@
     }
 
     function getInterestLabel(id) {
-        const interest = INTERESTS.find(i => i.id === id);
+        const interest = $interestOptions.find(i => i.id === id);
         return interest ? `${interest.emoji} ${interest.label}` : id;
     }
 </script>
@@ -221,7 +221,7 @@
                             {#if user.interests?.length > 0}
                                 <div class="user-interests">
                                     {user.interests.slice(0, 4).map(id => {
-                                        const i = INTERESTS.find(x => x.id === id);
+                                        const i = $interestOptions.find(x => x.id === id);
                                         return i?.emoji || '';
                                     }).join(' ')}
                                 </div>

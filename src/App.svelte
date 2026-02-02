@@ -11,21 +11,18 @@
     import { userStatus, isAvailable } from './stores/presence.js';
     import { setupInviteChannel, updatePresenceStatus, sendInviteResponse, cleanupInviteChannel } from './services/realtime.service.js';
     import { setPendingInvite, pendingInvite, clearPendingInvite } from './stores/chat.js';
-
-    // Status options
-    const STATUS_OPTIONS = [
-        { id: 'available', label: 'Online', color: '#4CAF50' },
-        { id: 'away', label: 'Away', color: '#FFC107' },
-        { id: 'busy', label: 'Busy', color: '#F44336' },
-        { id: 'meeting', label: 'In Meeting', color: '#9C27B0' },
-        { id: 'offline', label: 'Offline', color: '#9E9E9E' }
-    ];
+    import { statusOptions } from './stores/options.js';
+    import { loadOptions } from './services/options.service.js';
+    import { brandingSettings } from './stores/appSettings.js';
+    import { loadBrandingSettings } from './services/appSettings.service.js';
+    import { isPlatformAdmin, canManageEventAccess } from './services/admin.service.js';
 
     let showStatusMenu = false;
     let showSidebar = true;
+    let isAdmin = false;
 
     function getStatusInfo(status) {
-        return STATUS_OPTIONS.find(s => s.id === status) || STATUS_OPTIONS[4];
+        return $statusOptions.find(s => s.id === status) || $statusOptions[$statusOptions.length - 1];
     }
 
     function setStatus(status) {
@@ -52,6 +49,7 @@
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
     import FeedbackScreen from './routes/feedback/FeedbackScreen.svelte';
+    import AdminScreen from './routes/admin/AdminScreen.svelte';
 
     // Import UI components
     import InviteModal from './components/ui/InviteModal.svelte';
@@ -77,6 +75,7 @@
         '/profile': ProfileScreen,
         '/profile/view/:userId': PublicProfileScreen,
         '/feedback': FeedbackScreen,
+        '/admin': AdminScreen,
         '*': LobbyScreen // Fallback
     };
 
@@ -90,6 +89,7 @@
 
             // Initialize Supabase
             await initSupabase();
+            await loadBrandingSettings();
 
             // Set up auth state listener first so INITIAL_SESSION is handled
             authSubscription = setupAuthListener(({ event, user }) => {
@@ -125,6 +125,19 @@
             cleanupInviteChannel();
         }
     });
+
+    $: if ($isAuthenticated) {
+        loadOptions().catch(() => {});
+        Promise.allSettled([isPlatformAdmin(), canManageEventAccess()])
+            .then(([adminResult, accessResult]) => {
+                const adminValue = adminResult.status === 'fulfilled' ? adminResult.value : false;
+                const accessValue = accessResult.status === 'fulfilled' ? accessResult.value : false;
+                isAdmin = adminValue || accessValue;
+            })
+            .catch(() => { isAdmin = false; });
+    } else {
+        isAdmin = false;
+    }
 
     function setupInviteListener() {
         inviteChannel = setupInviteChannel((invite) => {
@@ -229,10 +242,10 @@
     <div class="app-container">
         <header class="header">
             <a href="#/" class="logo">
-                <div class="logo-icon">🏘️</div>
-                <span class="logo-text">Neighbor Chat</span>
+                <div class="logo-icon">{$brandingSettings.logo || '🏘️'}</div>
+                <span class="logo-text">{$brandingSettings.name || 'Neighbor Chat'}</span>
             </a>
-            <p class="tagline">Connect with neighbors, one chat at a time</p>
+            <p class="tagline">{$brandingSettings.tagline || 'Connect with neighbors, one chat at a time'}</p>
         </header>
 
         {#if $isAuthenticated && $showTopMenu}
@@ -258,7 +271,7 @@
 
                         {#if showStatusMenu}
                             <div class="status-dropdown" transition:fly={{ y: -10, duration: 150 }}>
-                                {#each STATUS_OPTIONS as option}
+                                {#each $statusOptions as option}
                                     <button
                                         class="status-item"
                                         class:active={$userStatus === option.id}
@@ -330,6 +343,12 @@
                 <span class="footer-icon">💬</span>
                 <span class="footer-label">Feedback</span>
             </a>
+            {#if isAdmin}
+                <a href="#/admin" class="footer-btn">
+                    <span class="footer-icon">🛠️</span>
+                    <span class="footer-label">Admin</span>
+                </a>
+            {/if}
         </footer>
         {#if isInChatMode}
             <button class="sidebar-toggle" on:click={() => showSidebar = !showSidebar} title="Toggle menu">

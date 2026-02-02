@@ -5,7 +5,6 @@
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
     import {
-        INTERESTS,
         updateAvatar,
         updateInterests,
         updateUsername,
@@ -16,8 +15,10 @@
         BANNER_COLORS,
         BANNER_PATTERNS
     } from '../../services/profile.service.js';
+    import { interestOptions } from '../../stores/options.js';
     import { formatPhoneNumber } from '../../lib/utils/phone.js';
     import ProfilePrivacySettings from '../../components/profile/ProfilePrivacySettings.svelte';
+    import { submitEventManagerRequest } from '../../services/admin.service.js';
 
     let activeTab = 'info';
     let editingAvatar = false;
@@ -36,6 +37,7 @@
     let displayPhone = ''; // For formatted display
     let tempCity = '';
     let tempMagicEmail = '';
+    let requestingAccess = false;
 
     // Privacy tab fields
     let editingBio = false;
@@ -182,6 +184,20 @@
         }
     }
 
+    async function requestEventManagerAccess() {
+        if (requestingAccess) return;
+        requestingAccess = true;
+        try {
+            await submitEventManagerRequest('Requesting access to manage events.');
+            message = 'Request sent for Event Manager access.';
+            setTimeout(() => message = '', 2500);
+        } catch (err) {
+            message = 'Failed to request access: ' + err.message;
+        } finally {
+            requestingAccess = false;
+        }
+    }
+
     // Privacy tab functions
     function startEditBio() {
         tempBio = $currentUser?.bio || '';
@@ -323,7 +339,7 @@
                 <fieldset class="form-group">
                     <legend>My Interests</legend>
                     <div class="interests-container" role="group" aria-label="My Interests">
-                        {#each INTERESTS as interest}
+                        {#each $interestOptions as interest}
                             <button
                                 class="interest-tag"
                                 class:selected={userInterests.includes(interest.id)}
@@ -616,6 +632,19 @@
 
             <div class="card">
                 <h3 class="card-title">
+                    <span class="icon">🗂️</span>
+                    Event Manager Access
+                </h3>
+                <p class="card-subtitle">
+                    Request access to create and manage community events.
+                </p>
+                <button class="btn btn-secondary btn-full" on:click={requestEventManagerAccess} disabled={requestingAccess}>
+                    {requestingAccess ? 'Requesting...' : 'Request Access'}
+                </button>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">
                     <span class="icon">🚪</span>
                     Account
                 </h3>
@@ -676,6 +705,12 @@
         display: flex;
         align-items: center;
         gap: 8px;
+    }
+
+    .card-subtitle {
+        color: var(--text-muted);
+        font-size: 13px;
+        margin: 6px 0 12px;
     }
 
     .profile-email {

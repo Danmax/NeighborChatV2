@@ -2,7 +2,8 @@
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { currentUser } from '../../stores/auth.js';
-    import { loadPublicProfile, INTERESTS } from '../../services/profile.service.js';
+    import { loadPublicProfile } from '../../services/profile.service.js';
+    import { interestOptions } from '../../stores/options.js';
     import { saveContact } from '../../services/contacts.service.js';
     import { isContact } from '../../stores/contacts.js';
     import { sendChatInviteWithResponse } from '../../services/realtime.service.js';
@@ -125,7 +126,7 @@
         if (!interestIds || interestIds.length === 0) return '';
         return interestIds
             .map(id => {
-                const interest = INTERESTS.find(i => i.id === id);
+                const interest = $interestOptions.find(i => i.id === id);
                 return interest ? interest.emoji : '';
             })
             .filter(Boolean)
@@ -207,7 +208,7 @@
                     </div>
                     <div class="interests-labels">
                         {#each profile.interests as interestId}
-                            {@const interest = INTERESTS.find(i => i.id === interestId)}
+                            {@const interest = $interestOptions.find(i => i.id === interestId)}
                             {#if interest}
                                 <span class="interest-label">{interest.label}</span>
                             {/if}

@@ -1,7 +1,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import Avatar from '../avatar/Avatar.svelte';
-    import { INTERESTS } from '../../services/profile.service.js';
+    import { interestOptions } from '../../stores/options.js';
 
     export let user;
     export let showInterests = true;
@@ -18,7 +18,7 @@
         return interestIds
             .slice(0, 4)
             .map(id => {
-                const interest = INTERESTS.find(i => i.id === id);
+                const interest = $interestOptions.find(i => i.id === id);
                 return interest?.emoji || '';
             })
             .join(' ');

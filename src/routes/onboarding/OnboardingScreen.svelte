@@ -6,7 +6,7 @@
     import { getSupabase } from '../../lib/supabase.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
-import { INTERESTS } from '../../services/profile.service.js';
+import { interestOptions } from '../../stores/options.js';
     import { generateRandomAvatar } from '../../lib/utils/avatar.js';
     import {
         generateRandomUsername,
@@ -278,7 +278,7 @@ import { INTERESTS } from '../../services/profile.service.js';
             </p>
 
             <div class="interests-container">
-                {#each INTERESTS as interest}
+                {#each $interestOptions as interest}
                     <button
                         class="interest-tag"
                         class:selected={selectedInterests.includes(interest.id)}
