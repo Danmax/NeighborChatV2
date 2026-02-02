@@ -48,6 +48,10 @@ ADD COLUMN IF NOT EXISTS meeting_link TEXT;
 ALTER TABLE public.community_events
 ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb;
 
+-- Add updated_at for RPCs that touch it
+ALTER TABLE public.community_events
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
 -- ============================================
 -- EVENT_PARTICIPANTS TABLE ENHANCEMENTS
 -- ============================================

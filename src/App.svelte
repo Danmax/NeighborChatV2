@@ -51,6 +51,7 @@
     import OnboardingScreen from './routes/onboarding/OnboardingScreen.svelte';
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
+    import FeedbackScreen from './routes/feedback/FeedbackScreen.svelte';
 
     // Import UI components
     import InviteModal from './components/ui/InviteModal.svelte';
@@ -75,6 +76,7 @@
         '/onboarding': OnboardingScreen,
         '/profile': ProfileScreen,
         '/profile/view/:userId': PublicProfileScreen,
+        '/feedback': FeedbackScreen,
         '*': LobbyScreen // Fallback
     };
 
@@ -323,6 +325,10 @@
             <a href="#/profile" class="footer-btn">
                 <span class="footer-icon">👤</span>
                 <span class="footer-label">Profile</span>
+            </a>
+            <a href="#/feedback" class="footer-btn">
+                <span class="footer-icon">💬</span>
+                <span class="footer-label">Feedback</span>
             </a>
         </footer>
         {#if isInChatMode}
