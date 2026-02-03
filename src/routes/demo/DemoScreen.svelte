@@ -4,9 +4,12 @@
     import { isAuthenticated } from '../../stores/auth.js';
 
     let potluckTitle = '';
+    let eventType = 'potluck';
     let aiPrompt = '';
     let draft = null;
     let aiWarnings = [];
+    let newItem = '';
+    let items = ['Salad', 'Chips', 'Sparkling Water'];
 
     function goToAuth() {
         push('/auth');
@@ -21,7 +24,7 @@
     function buildPromptFromTitle(title) {
         const cleanTitle = title.trim();
         if (!cleanTitle) return '';
-        return `Create a friendly neighborhood potluck event. Title: ${cleanTitle}. Include a short description, set type to potluck, suggest 3 simple items, and choose a fun icon.`;
+        return `Create a friendly neighborhood potluck event. Title: ${cleanTitle}. Include a short description, set type to ${eventType}, suggest 3 simple items, and choose a fun icon.`;
     }
 
     function generateDraft() {
@@ -36,10 +39,21 @@
         draft = {
             title: potluckTitle.trim(),
             description: `Join us for ${potluckTitle.trim()} — share food, stories, and good vibes with neighbors.`,
-            type: 'potluck',
+            type: eventType,
             icon: '🍲',
-            items: ['Salad', 'Chips', 'Sparkling Water']
+            items
         };
+    }
+
+    function addItem() {
+        const value = newItem.trim();
+        if (!value) return;
+        items = [...items, value];
+        newItem = '';
+    }
+
+    function removeItem(item) {
+        items = items.filter(i => i !== item);
     }
 </script>
 
@@ -55,40 +69,62 @@
             </div>
         </div>
         <div class="promo-grid single">
-            <div class="promo-card">
-                <h4>Potluck Title</h4>
-                <input
-                    class="demo-input"
-                    type="text"
-                    placeholder="e.g., Spring Block Potluck"
-                    bind:value={potluckTitle}
-                />
-                {#if aiWarnings.length > 0}
-                    <div class="warning">
-                        {#each aiWarnings as warning}
-                            <span>⚠️ {warning}</span>
-                        {/each}
+            <div class="promo-card wide">
+                <h4>Potluck Builder Demo</h4>
+                <div class="builder-grid">
+                    <div class="builder-panel">
+                        <label>Title</label>
+                        <input
+                            class="demo-input"
+                            type="text"
+                            placeholder="e.g., Spring Block Potluck"
+                            bind:value={potluckTitle}
+                        />
+                        <label>Type</label>
+                        <select class="demo-input" bind:value={eventType}>
+                            <option value="potluck">Potluck</option>
+                            <option value="social">Social</option>
+                            <option value="meetup">Meetup</option>
+                        </select>
+                        <label>Add Item</label>
+                        <div class="item-row">
+                            <input class="demo-input" type="text" bind:value={newItem} placeholder="e.g., Dessert" />
+                            <button class="btn btn-secondary" on:click={addItem}>Add</button>
+                        </div>
+                        <div class="pill-list">
+                            {#each items as item}
+                                <span class="pill">
+                                    {item}
+                                    <button class="pill-x" on:click={() => removeItem(item)}>✕</button>
+                                </span>
+                            {/each}
+                        </div>
+                        {#if aiWarnings.length > 0}
+                            <div class="warning">
+                                {#each aiWarnings as warning}
+                                    <span>⚠️ {warning}</span>
+                                {/each}
+                            </div>
+                        {/if}
+                        <button class="btn btn-primary" on:click={generateDraft}>Generate Template</button>
                     </div>
-                {/if}
-                <button class="btn btn-primary" on:click={generateDraft}>Generate Template</button>
-            </div>
-            <div class="promo-card">
-                <h4>AI Prompt</h4>
-                <div class="ai-draft">{aiPrompt || 'Your AI prompt will appear here.'}</div>
-            </div>
-            <div class="promo-card">
-                <h4>Event Template Preview</h4>
-                {#if draft}
-                    <div class="template-preview">
-                        <div class="template-row"><strong>Title:</strong> {draft.title}</div>
-                        <div class="template-row"><strong>Description:</strong> {draft.description}</div>
-                        <div class="template-row"><strong>Type:</strong> {draft.type}</div>
-                        <div class="template-row"><strong>Icon:</strong> {draft.icon}</div>
-                        <div class="template-row"><strong>Items:</strong> {draft.items.join(', ')}</div>
+                    <div class="builder-panel">
+                        <h4>AI Prompt</h4>
+                        <div class="ai-draft">{aiPrompt || 'Your AI prompt will appear here.'}</div>
+                        <h4>Template Preview</h4>
+                        {#if draft}
+                            <div class="template-preview">
+                                <div class="template-row"><strong>Title:</strong> {draft.title}</div>
+                                <div class="template-row"><strong>Description:</strong> {draft.description}</div>
+                                <div class="template-row"><strong>Type:</strong> {draft.type}</div>
+                                <div class="template-row"><strong>Icon:</strong> {draft.icon}</div>
+                                <div class="template-row"><strong>Items:</strong> {draft.items.join(', ')}</div>
+                            </div>
+                        {:else}
+                            <p class="muted">Generate a template to preview details.</p>
+                        {/if}
                     </div>
-                {:else}
-                    <p class="muted">Generate a template to preview details.</p>
-                {/if}
+                </div>
             </div>
         </div>
     </section>
@@ -150,7 +186,7 @@
     }
 
     .promo-grid.single {
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        grid-template-columns: 1fr;
     }
 
     .promo-card {
@@ -218,6 +254,14 @@
         gap: 4px;
     }
 
+    .pill-x {
+        border: none;
+        background: transparent;
+        font-size: 10px;
+        cursor: pointer;
+        margin-left: 6px;
+    }
+
     .btn {
         padding: 12px 22px;
         border: none;
@@ -237,3 +281,23 @@
         color: var(--text);
     }
 </style>
+    .promo-card.wide {
+        grid-column: 1 / -1;
+    }
+
+    .builder-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+    }
+
+    .builder-panel {
+        display: grid;
+        gap: 10px;
+    }
+
+    .item-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
