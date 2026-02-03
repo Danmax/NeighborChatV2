@@ -115,7 +115,7 @@
                     </div>
                 {/if}
 
-                <a href="#/events" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
+                <a href="#/events?create=1" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
                     ➕ Create an Event
                 </a>
             </div>

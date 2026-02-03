@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
+    import { location } from 'svelte-spa-router';
     import {
         upcomingEvents,
         myEvents,
@@ -10,6 +11,7 @@
         publishedEvents,
         eventsLoading
     } from '../../stores/events.js';
+    import { EVENT_TYPES } from '../../stores/events.js';
     import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent, getActiveMembershipId } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
     import EventList from '../../components/events/EventList.svelte';
@@ -17,6 +19,7 @@
 
     let activeTab = 'upcoming';
     let showCreateForm = false;
+    let selectedType = 'all';
     let creating = false;
     let errorMessage = '';
     let joiningIds = new Set();
@@ -29,11 +32,13 @@
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
         { id: 'mine', label: 'My Events', icon: '⭐' },
         ...(hasDrafts ? [{ id: 'drafts', label: 'Drafts', icon: '📝' }] : []),
-        { id: 'past', label: 'Past', icon: '📜' },
-        { id: 'create', label: 'Create', icon: '➕' }
+        { id: 'past', label: 'Past', icon: '📜' }
     ];
 
     $: currentEvents = getEventsForTab(activeTab);
+    $: filteredEvents = selectedType === 'all'
+        ? currentEvents
+        : currentEvents.filter(eventItem => eventItem.type === selectedType);
 
     function getEventsForTab(tab) {
         switch (tab) {
@@ -61,6 +66,10 @@
             subscription = subscribeToEvents();
             getActiveMembershipId().then(id => activeMembershipId = id);
         }
+
+        if ($location?.includes('create=1')) {
+            showCreateForm = true;
+        }
     });
 
     onDestroy(() => {
@@ -71,13 +80,13 @@
 
     function handleTabChange(tabId) {
         errorMessage = '';
-        if (tabId === 'create') {
-            showCreateForm = true;
-            activeTab = 'upcoming';
-        } else {
-            activeTab = tabId;
-            showCreateForm = false;
-        }
+        activeTab = tabId;
+        showCreateForm = false;
+    }
+
+    function openCreateForm() {
+        showCreateForm = true;
+        activeTab = 'upcoming';
     }
 
     async function handleCreateEvent(event) {
@@ -145,13 +154,25 @@
             {#each tabs as tab}
                 <button
                     class="tab"
-                    class:active={activeTab === tab.id || (tab.id === 'create' && showCreateForm)}
+                    class:active={activeTab === tab.id}
                     on:click={() => handleTabChange(tab.id)}
                 >
                     <span class="tab-icon">{tab.icon}</span>
                     <span class="tab-label">{tab.label}</span>
                 </button>
             {/each}
+            <div class="type-filter">
+                <label for="type-filter">Type</label>
+                <select id="type-filter" bind:value={selectedType}>
+                    <option value="all">All Types</option>
+                    {#each EVENT_TYPES as typeOption}
+                        <option value={typeOption.id}>{typeOption.label}</option>
+                    {/each}
+                </select>
+            </div>
+            <button class="btn btn-primary create-btn" on:click={openCreateForm}>
+                ➕ Create Event
+            </button>
         </div>
 
         <!-- Error Banner -->
@@ -204,7 +225,7 @@
                 </h3>
 
                 <EventList
-                    events={currentEvents}
+                    events={filteredEvents}
                     loading={$eventsLoading}
                     emptyMessage={
                         activeTab === 'upcoming' ? "No upcoming events. Why not create one?" :
@@ -225,11 +246,11 @@
                     activeMembershipId={activeMembershipId}
                 />
 
-                {#if activeTab === 'upcoming' && currentEvents.length === 0 && !$eventsLoading}
+                {#if activeTab === 'upcoming' && filteredEvents.length === 0 && !$eventsLoading}
                     <button
                         class="btn btn-primary btn-full"
                         style="margin-top: 16px;"
-                        on:click={() => handleTabChange('create')}
+                        on:click={openCreateForm}
                     >
                         ➕ Create the First Event
                     </button>
@@ -272,6 +293,31 @@
         margin-bottom: 20px;
         overflow-x: auto;
         padding-bottom: 4px;
+        align-items: center;
+    }
+
+    .type-filter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    .type-filter label {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .type-filter select {
+        padding: 8px 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 10px;
+        font-size: 12px;
+        background: white;
+    }
+
+    .create-btn {
+        white-space: nowrap;
     }
 
     .access-banner {
