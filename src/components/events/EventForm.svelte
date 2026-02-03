@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { push } from 'svelte-spa-router';
     import { EVENT_TYPES, EVENT_STATUSES, getEventSettings } from '../../stores/events.js';
     import { currentUser } from '../../stores/auth.js';
     import { generateEventDraft } from '../../services/ai.service.js';
@@ -52,6 +53,7 @@
 
     $: isValid = title.trim() && date;
     $: canUseAi = ['admin', 'event_manager'].includes($currentUser?.role);
+    $: needsEventAccess = !['admin', 'event_manager'].includes($currentUser?.role);
 
     function handleSubmit() {
         if (!isValid || loading) return;
@@ -171,6 +173,18 @@
 </script>
 
 <form class="event-form" on:submit|preventDefault={handleSubmit}>
+    {#if needsEventAccess}
+        <div class="access-banner">
+            <div>
+                <h4>Event Manager Access</h4>
+                <p>Request access to create and manage community events.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" on:click={() => push('/profile')}>
+                Request Access
+            </button>
+        </div>
+    {/if}
+
     {#if canUseAi}
         <div class="ai-banner">
             <div>
@@ -487,6 +501,28 @@
         background: #fff9e6;
         border: 1px solid #ffe2a8;
         border-radius: var(--radius-sm);
+    }
+
+    .access-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: #f3f6ff;
+        border: 1px solid #d7e0ff;
+        border-radius: var(--radius-sm);
+    }
+
+    .access-banner h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+    }
+
+    .access-banner p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     .ai-banner h4 {

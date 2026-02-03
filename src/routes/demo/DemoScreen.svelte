@@ -36,6 +36,19 @@
             return;
         }
 
+        if (items.length === 0) {
+            const titleLower = potluckTitle.toLowerCase();
+            if (titleLower.includes('brunch')) {
+                items = ['Pastries', 'Fruit Salad', 'Coffee'];
+            } else if (titleLower.includes('bbq') || titleLower.includes('grill')) {
+                items = ['Burgers', 'Chips', 'Lemonade'];
+            } else if (titleLower.includes('holiday') || titleLower.includes('thanksgiving')) {
+                items = ['Stuffing', 'Pumpkin Pie', 'Sparkling Cider'];
+            } else {
+                items = ['Salad', 'Chips', 'Sparkling Water'];
+            }
+        }
+
         draft = {
             title: potluckTitle.trim(),
             description: `Join us for ${potluckTitle.trim()} — share food, stories, and good vibes with neighbors.`,
