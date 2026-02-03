@@ -140,7 +140,7 @@ export async function submitEventManagerRequest(reason) {
 export async function reviewEventManagerRequest(requestId, status) {
     const supabase = getSupabase();
     const { data, error } = await supabase.rpc('review_event_manager_request', {
-        p_request_id: requestId,
+        p_request_id: String(requestId),
         p_status: status
     });
     if (error) throw error;
