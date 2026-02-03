@@ -14,6 +14,7 @@
     import { EVENT_TYPES } from '../../stores/events.js';
     import { fetchEvents, createEvent, uploadEventImage, subscribeToEvents, rsvpToEvent, getActiveMembershipId } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
+    import { submitEventManagerRequest } from '../../services/admin.service.js';
     import EventList from '../../components/events/EventList.svelte';
     import EventForm from '../../components/events/EventForm.svelte';
 
@@ -24,14 +25,13 @@
     let errorMessage = '';
     let joiningIds = new Set();
     let activeMembershipId = null;
-
-    // Dynamic tabs based on whether user has drafts
-    $: hasDrafts = $draftEvents.length > 0;
+    let requestingAccess = false;
+    let accessRequested = false;
 
     $: tabs = [
         { id: 'upcoming', label: 'Upcoming', icon: '📅' },
         { id: 'mine', label: 'My Events', icon: '⭐' },
-        ...(hasDrafts ? [{ id: 'drafts', label: 'Drafts', icon: '📝' }] : []),
+        { id: 'drafts', label: 'Drafts', icon: '📝' },
         { id: 'past', label: 'Past', icon: '📜' }
     ];
 
@@ -87,6 +87,19 @@
     function openCreateForm() {
         showCreateForm = true;
         activeTab = 'upcoming';
+    }
+
+    async function requestAccess() {
+        if (requestingAccess || accessRequested) return;
+        requestingAccess = true;
+        try {
+            await submitEventManagerRequest('Requesting access to create and manage community events.');
+            accessRequested = true;
+        } catch (err) {
+            errorMessage = 'Failed to request access: ' + (err.message || 'Unknown error');
+        } finally {
+            requestingAccess = false;
+        }
     }
 
     async function handleCreateEvent(event) {
@@ -202,8 +215,8 @@
                             <h4>Event Manager Access</h4>
                             <p>Request access to create and manage community events.</p>
                         </div>
-                        <button class="btn btn-secondary" on:click={() => push('/profile')}>
-                            Request Access
+                        <button class="btn btn-secondary" on:click={requestAccess} disabled={requestingAccess || accessRequested}>
+                            {accessRequested ? 'Access Requested' : (requestingAccess ? 'Requesting...' : 'Request Access')}
                         </button>
                     </div>
                 {/if}
