@@ -170,8 +170,12 @@
                     {/each}
                 </select>
             </div>
-            <button class="btn btn-primary create-btn" on:click={openCreateForm}>
-                ➕ Create Event
+        </div>
+
+        <div class="create-row">
+            <button class="create-event-btn" on:click={openCreateForm}>
+                <span class="create-icon">✨</span>
+                Create an event for your community
             </button>
         </div>
 
@@ -316,8 +320,34 @@
         background: white;
     }
 
-    .create-btn {
-        white-space: nowrap;
+    .create-row {
+        margin-bottom: 20px;
+    }
+
+    .create-event-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 16px;
+        border: 2px dashed var(--cream-dark);
+        border-radius: var(--radius-md);
+        background: white;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .create-event-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .create-icon {
+        font-size: 20px;
     }
 
     .access-banner {
