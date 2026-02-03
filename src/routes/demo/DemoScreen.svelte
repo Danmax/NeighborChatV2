@@ -1,5 +1,7 @@
 <script>
+    import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
+    import { isAuthenticated } from '../../stores/auth.js';
     import EventCard from '../../components/events/EventCard.svelte';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
 
@@ -48,76 +50,74 @@
     function goToAuth() {
         push('/auth');
     }
+
+    onMount(() => {
+        if ($isAuthenticated) {
+            push('/');
+        }
+    });
 </script>
 
 <div class="demo-page">
-    <section class="demo-hero">
-        <div class="hero-copy">
-            <h1>Explore Neighbor Chat</h1>
-            <p>Try a guided, read‑only demo. Sign up to RSVP, chat, and post celebrations.</p>
+    <section class="promo-hero">
+        <div class="promo-copy">
+            <span class="promo-pill">✨ Social Neighborhood Demo</span>
+            <h1>Meet neighbors, plan meetups, and celebrate the good stuff.</h1>
+            <p>Explore a lively preview of events, celebrations, chats, and AI‑assisted planning. Sign up to jump in.</p>
             <div class="hero-actions">
-                <button class="btn btn-primary" on:click={goToAuth}>Sign up free</button>
+                <button class="btn btn-primary" on:click={goToAuth}>Start Free</button>
                 <button class="btn btn-secondary" on:click={goToAuth}>Log in</button>
             </div>
         </div>
-        <div class="hero-preview">
-            <div class="preview-card">
+        <div class="promo-grid">
+            <div class="promo-card tall">
                 <h4>Good News</h4>
-                <CelebrationCard celebration={demoCelebration} interactive={false} clickable={false} showCommentsPreview={false} />
+                <CelebrationCard celebration={demoCelebration} interactive={false} clickable={false} showCommentsPreview={false} variant="hero" />
             </div>
-        </div>
-    </section>
-
-    <section class="demo-section">
-        <div class="section-header">
-            <h2>Upcoming Dev Meetup</h2>
-            <p>See how events look before you join.</p>
-        </div>
-        <EventCard event={demoEvent} featured={true} on:click={() => {}} />
-    </section>
-
-    <section class="demo-section grid-3">
-        <div class="demo-card">
-            <h3>Messages Preview</h3>
-            <div class="list">
-                {#each demoMessages as msg}
-                    <div class="list-item">
-                        <div>
-                            <strong>{msg.name}</strong>
-                            <p>{msg.snippet}</p>
+            <div class="promo-card">
+                <h4>Dev Meetup</h4>
+                <EventCard event={demoEvent} featured={true} on:click={() => {}} />
+            </div>
+            <div class="promo-card">
+                <h4>AI Draft Preview</h4>
+                <p class="muted">Prompt: “Family potluck next month, evening, bring‑a‑dish.”</p>
+                <div class="ai-draft">
+                    <div><strong>Title:</strong> Spring Neighborhood Potluck</div>
+                    <div><strong>Type:</strong> Potluck</div>
+                    <div><strong>Date:</strong> Next Saturday</div>
+                    <div><strong>Items:</strong> Salad, Drinks, Dessert</div>
+                </div>
+                <button class="btn btn-secondary" on:click={goToAuth}>Generate your own</button>
+            </div>
+            <div class="promo-card">
+                <h4>Messages</h4>
+                <div class="list">
+                    {#each demoMessages as msg}
+                        <div class="list-item">
+                            <div>
+                                <strong>{msg.name}</strong>
+                                <p>{msg.snippet}</p>
+                            </div>
+                            <span class="time">{msg.time}</span>
                         </div>
-                        <span class="time">{msg.time}</span>
-                    </div>
-                {/each}
+                    {/each}
+                </div>
             </div>
-        </div>
-
-        <div class="demo-card">
-            <h3>Contacts Preview</h3>
-            <div class="list">
-                {#each demoContacts as contact}
-                    <div class="list-item">
-                        <span class="status-dot {contact.status}"></span>
-                        <strong>{contact.name}</strong>
-                    </div>
-                {/each}
+            <div class="promo-card">
+                <h4>Contacts</h4>
+                <div class="list">
+                    {#each demoContacts as contact}
+                        <div class="list-item">
+                            <span class="status-dot {contact.status}"></span>
+                            <strong>{contact.name}</strong>
+                        </div>
+                    {/each}
+                </div>
             </div>
-        </div>
-
-        <div class="demo-card">
-            <h3>AI Draft Preview</h3>
-            <p>Prompt: “Family potluck next month, evening, bring‑a‑dish.”</p>
-            <div class="ai-draft">
-                <div><strong>Title:</strong> Spring Neighborhood Potluck</div>
-                <div><strong>Type:</strong> Potluck</div>
-                <div><strong>Date:</strong> Next Saturday</div>
-                <div><strong>Items:</strong> Salad, Drinks, Dessert</div>
-            </div>
-            <button class="btn btn-secondary" on:click={goToAuth}>Generate your own</button>
         </div>
     </section>
 
-    <section class="demo-section cta">
+    <section class="promo-cta">
         <h2>Ready to join your neighbors?</h2>
         <p>Create an account to RSVP, chat, and celebrate together.</p>
         <button class="btn btn-primary" on:click={goToAuth}>Get Started</button>
@@ -132,25 +132,32 @@
         color: var(--text);
     }
 
-    .demo-hero {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 24px;
-        align-items: center;
-        background: linear-gradient(135deg, #fffaf0, #f0f7ff);
-        border-radius: 20px;
-        padding: 24px;
+    .promo-hero {
+        background: radial-gradient(circle at top, #fff7ea 0%, #f2f7ff 55%, #ffffff 100%);
+        border-radius: 24px;
+        padding: 28px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.08);
         margin-bottom: 32px;
     }
 
-    .hero-copy h1 {
-        font-size: 30px;
-        margin-bottom: 10px;
+    .promo-copy h1 {
+        font-size: 32px;
+        margin-bottom: 12px;
     }
 
-    .hero-copy p {
+    .promo-copy p {
         color: var(--text-muted);
         margin-bottom: 16px;
+    }
+
+    .promo-pill {
+        display: inline-flex;
+        padding: 6px 12px;
+        background: #fff1d6;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 12px;
     }
 
     .hero-actions {
@@ -159,28 +166,14 @@
         flex-wrap: wrap;
     }
 
-    .preview-card {
-        background: white;
-        padding: 16px;
-        border-radius: 16px;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.08);
-    }
-
-    .preview-card h4 {
-        margin-bottom: 12px;
-    }
-
-    .demo-section {
-        margin-bottom: 32px;
-    }
-
-    .grid-3 {
+    .promo-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 16px;
+        margin-top: 24px;
     }
 
-    .demo-card {
+    .promo-card {
         background: white;
         padding: 16px;
         border-radius: 16px;
@@ -188,6 +181,10 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
+    }
+
+    .promo-card.tall {
+        grid-row: span 2;
     }
 
     .list {
@@ -236,15 +233,12 @@
         gap: 6px;
     }
 
-    .section-header h2 {
-        margin-bottom: 6px;
-    }
-
-    .section-header p {
+    .muted {
         color: var(--text-muted);
+        font-size: 12px;
     }
 
-    .cta {
+    .promo-cta {
         background: var(--cream);
         padding: 24px;
         border-radius: 16px;
