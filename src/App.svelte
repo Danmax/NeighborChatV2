@@ -50,6 +50,7 @@
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
     import FeedbackScreen from './routes/feedback/FeedbackScreen.svelte';
     import AdminScreen from './routes/admin/AdminScreen.svelte';
+    import DemoScreen from './routes/demo/DemoScreen.svelte';
 
     // Import UI components
     import InviteModal from './components/ui/InviteModal.svelte';
@@ -76,6 +77,7 @@
         '/profile/view/:userId': PublicProfileScreen,
         '/feedback': FeedbackScreen,
         '/admin': AdminScreen,
+        '/demo': DemoScreen,
         '*': LobbyScreen // Fallback
     };
 
@@ -220,8 +222,8 @@
     $: if ($authInitialized) {
         if (!$authUser) {
             showTopMenu.set(false);
-            if ($location !== '/auth') {
-                push('/auth');
+            if ($location !== '/auth' && $location !== '/demo') {
+                push('/demo');
             }
         } else if ($currentUser && !$currentUser.onboardingCompleted) {
             showTopMenu.set(false);
