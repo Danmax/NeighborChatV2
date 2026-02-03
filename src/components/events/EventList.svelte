@@ -57,12 +57,9 @@
     }
 
     .event-list.upcoming {
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        display: flex;
+        flex-direction: column;
         gap: 20px;
-    }
-
-    :global(.event-list.upcoming .event-card.featured) {
-        grid-column: span 2;
     }
 
     .event-list.compact {
