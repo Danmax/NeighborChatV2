@@ -10,6 +10,7 @@
     export let joining = false;
     export let activeMembershipId = null;
     export let featured = false;
+    export let variant = 'default';
 
     const dispatch = createEventDispatcher();
 
@@ -81,6 +82,7 @@
     class="event-card"
     class:featured
     class:compact
+    class:modern={variant === 'modern'}
     class:past={isPast}
     class:draft={isDraft}
     class:closed={isClosed}
@@ -106,6 +108,9 @@
     {#if coverImage && !compact}
         <div class="event-cover">
             <img src={coverImage} alt="Event cover" loading="lazy" />
+            {#if variant === 'modern'}
+                <div class="cover-overlay"></div>
+            {/if}
         </div>
     {/if}
 
@@ -181,9 +186,21 @@
         position: relative;
     }
 
+    .event-card.modern {
+        background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+        border: 1px solid #e8eef9;
+        border-radius: 18px;
+        box-shadow: 0 12px 28px rgba(20, 40, 80, 0.12);
+    }
+
     .event-card:hover {
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
         transform: translateY(-2px);
+    }
+
+    .event-card.modern:hover {
+        box-shadow: 0 18px 36px rgba(20, 40, 80, 0.18);
+        transform: translateY(-4px);
     }
 
     .event-card.compact {
@@ -211,6 +228,15 @@
         font-weight: 600;
     }
 
+    .event-card.modern .event-type-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        border-radius: 999px;
+        z-index: 2;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    }
+
     .compact .event-type-badge {
         padding: 6px 10px;
         border-radius: 20px;
@@ -228,6 +254,13 @@
         overflow: hidden;
     }
 
+    .event-card.modern .event-cover {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        max-height: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
     .event-card.featured .event-cover {
         max-height: 320px;
     }
@@ -239,9 +272,19 @@
         object-fit: cover;
     }
 
+    .cover-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.25) 100%);
+    }
+
     .event-content {
         padding: 16px;
         flex: 1;
+    }
+
+    .event-card.modern .event-content {
+        padding: 18px;
     }
 
     .event-card.featured .event-content {
@@ -259,6 +302,10 @@
         margin-bottom: 8px;
     }
 
+    .event-card.modern .event-title {
+        font-size: 18px;
+        letter-spacing: -0.2px;
+    }
     .event-card.featured .event-title {
         font-size: 20px;
         margin-bottom: 10px;

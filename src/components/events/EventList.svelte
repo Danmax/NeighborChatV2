@@ -39,6 +39,7 @@
                 {event}
                 {compact}
                 featured={layout === 'upcoming' && index === 0 && !compact}
+                variant={layout === 'upcoming' ? 'modern' : 'default'}
                 joining={joinState?.has?.(event.id)}
                 {activeMembershipId}
                 on:click={handleEventClick}
