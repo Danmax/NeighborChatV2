@@ -100,7 +100,26 @@ export async function fetchEventManagerRequests() {
         .select('*')
         .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+
+    const requests = data || [];
+    const userIds = [...new Set(requests.map(r => r.user_id).filter(Boolean))];
+    if (userIds.length === 0) return requests;
+
+    const { data: profiles, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('user_id, username, display_name')
+        .in('user_id', userIds);
+
+    if (profileError) {
+        return requests;
+    }
+
+    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+    return requests.map(req => ({
+        ...req,
+        username: profileMap.get(req.user_id)?.username || null,
+        display_name: profileMap.get(req.user_id)?.display_name || null
+    }));
 }
 
 export async function submitEventManagerRequest(reason) {

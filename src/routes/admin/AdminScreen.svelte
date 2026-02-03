@@ -275,7 +275,7 @@
                     </div>
                     {#each requests as req}
                         <div class="row">
-                            <span>{req.user_id}</span>
+                            <span>{req.username || req.display_name || req.user_id}</span>
                             <span class="badge {req.status}">{req.status}</span>
                             <span>{req.reason || '—'}</span>
                             <span class="actions">

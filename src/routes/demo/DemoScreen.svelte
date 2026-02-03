@@ -293,7 +293,6 @@
         border: 1px solid var(--cream-dark);
         color: var(--text);
     }
-</style>
     .promo-card.wide {
         grid-column: 1 / -1;
     }
@@ -314,3 +313,4 @@
         gap: 8px;
         align-items: center;
     }
+</style>
