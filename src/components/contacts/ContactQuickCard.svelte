@@ -4,14 +4,31 @@
     import { saveContact } from '../../services/contacts.service.js';
     import { isContact } from '../../stores/contacts.js';
     import { showToast } from '../../stores/toasts.js';
+    import { fetchFavoriteMovies } from '../../services/profile.service.js';
 
     export let show = false;
     export let user = null;
 
     const dispatch = createEventDispatcher();
     let saving = false;
+    let favoriteMovies = [];
+    let loadingFavorites = false;
 
     $: alreadySaved = user?.user_id ? isContact(user.user_id) : false;
+    $: if (show && user?.user_id) {
+        loadFavorites(user.user_id);
+    }
+
+    async function loadFavorites(userId) {
+        loadingFavorites = true;
+        try {
+            favoriteMovies = await fetchFavoriteMovies(userId);
+        } catch (err) {
+            favoriteMovies = [];
+        } finally {
+            loadingFavorites = false;
+        }
+    }
 
     async function handleSave() {
         if (!user || saving || alreadySaved) return;
@@ -67,6 +84,25 @@
                         Interests: {user.interests.join(', ')}
                     </div>
                 {/if}
+
+                <div class="contact-favorites">
+                    <div class="favorites-title">Favorite Movies</div>
+                    {#if loadingFavorites}
+                        <div class="favorites-loading">Loading...</div>
+                    {:else if favoriteMovies.length === 0}
+                        <div class="favorites-empty">No favorites yet.</div>
+                    {:else}
+                        <div class="favorites-grid">
+                            {#each favoriteMovies.slice(0, 4) as movie (movie.id)}
+                                <div class="favorite-tile">
+                                    {#if movie.poster_url}
+                                        <img src={movie.poster_url} alt={movie.title} />
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
 
                 <button
                     class="btn btn-primary btn-full"
@@ -158,6 +194,45 @@
     .contact-interests {
         font-size: 12px;
         color: var(--text-muted);
+    }
+
+    .contact-favorites {
+        display: grid;
+        gap: 8px;
+    }
+
+    .favorites-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .favorites-loading,
+    .favorites-empty {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .favorites-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+    }
+
+    .favorite-tile {
+        width: 100%;
+        aspect-ratio: 2 / 3;
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--cream);
+        border: 1px solid var(--cream-dark);
+    }
+
+    .favorite-tile img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
     }
 
     .btn {
