@@ -2,13 +2,14 @@
     import { onMount } from 'svelte';
     import { get } from 'svelte/store';
     import { push } from 'svelte-spa-router';
-    import { isAuthenticated } from '../../stores/auth.js';
-    import { celebrations } from '../../stores/celebrations.js';
-    import { fetchCelebrationById, postComment, reactToCelebration } from '../../services/celebrations.service.js';
+    import { isAuthenticated, currentUser } from '../../stores/auth.js';
+    import { celebrations, CELEBRATION_CATEGORIES } from '../../stores/celebrations.js';
+    import { fetchCelebrationById, postComment, reactToCelebration, updateCelebrationInDb } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import { showToast } from '../../stores/toasts.js';
+    import { toDateInputUtc } from '../../lib/utils/date.js';
 
     export let params = {};
 
@@ -18,8 +19,19 @@
     let replyGif = null;
     let posting = false;
     let showGifPicker = false;
+    let isEditing = false;
+    let editCategory = 'milestone';
+    let editTitle = '';
+    let editMessage = '';
+    let editDate = '';
+    let editGif = null;
+    let savingEdit = false;
+    let showEditGifPicker = false;
 
     $: replyCount = celebration?.comments?.length || 0;
+    $: isOwner = celebration?.authorId === $currentUser?.user_id || celebration?.user_id === $currentUser?.user_id;
+    $: isAdmin = $currentUser?.role === 'admin';
+    $: canEdit = isOwner || isAdmin;
     $: if (params?.id) {
         const fromStore = $celebrations.find(item => item.id === params.id);
         if (fromStore) {
@@ -86,6 +98,52 @@
             showToast('Failed to update reaction.', 'error');
         }
     }
+
+    function handleEditStart(event) {
+        const target = event.detail || celebration;
+        if (!target) return;
+        editCategory = target.category || target.type || 'milestone';
+        editTitle = target.title || '';
+        editMessage = target.message || '';
+        editDate = toDateInputUtc(target.celebration_date) || '';
+        editGif = target.gif_url ? { url: target.gif_url } : null;
+        isEditing = true;
+    }
+
+    async function handleEditSave() {
+        if (savingEdit || !celebration) return;
+        if ((editCategory === 'birthday' || editCategory === 'anniversary') && !editDate) {
+            showToast('Please select a date for this celebration.', 'error');
+            return;
+        }
+        savingEdit = true;
+        try {
+            await updateCelebrationInDb(celebration.id, {
+                category: editCategory,
+                title: editTitle.trim() || null,
+                message: editMessage.trim() || null,
+                gif_url: editGif?.url || null,
+                celebration_date: toDateInputUtc(editDate) || null
+            });
+            celebration = await fetchCelebrationById(celebration.id);
+            showToast('Celebration updated!', 'success');
+            isEditing = false;
+        } catch (err) {
+            showToast(`Failed to update celebration: ${err.message}`, 'error');
+        } finally {
+            savingEdit = false;
+        }
+    }
+
+    function handleEditCancel() {
+        isEditing = false;
+        showEditGifPicker = false;
+    }
+
+    function handleEditGifSelect(event) {
+        editGif = event.detail;
+        showEditGifPicker = false;
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -101,11 +159,68 @@
                 <p>Loading kudos...</p>
             </div>
         {:else if celebration}
+            {#if canEdit}
+                <div class="edit-header">
+                    <button class="btn btn-secondary btn-small" on:click={() => (isEditing ? handleEditCancel() : handleEditStart({ detail: celebration }))}>
+                        {isEditing ? 'Cancel Edit' : 'Edit'}
+                    </button>
+                </div>
+            {/if}
+
+            {#if isEditing}
+                <div class="edit-card">
+                    <h3>Edit Celebration</h3>
+                    <label>
+                        Type
+                        <select bind:value={editCategory}>
+                            {#each CELEBRATION_CATEGORIES as option}
+                                <option value={option.id}>{option.emoji} {option.label}</option>
+                            {/each}
+                        </select>
+                    </label>
+                    <label>
+                        Title
+                        <input type="text" bind:value={editTitle} placeholder="Celebration title" maxlength="120" />
+                    </label>
+                    <label>
+                        Message
+                        <textarea bind:value={editMessage} rows="3" maxlength="500"></textarea>
+                    </label>
+                    {#if editCategory === 'birthday' || editCategory === 'anniversary'}
+                        <label>
+                            Date
+                            <input type="date" bind:value={editDate} />
+                        </label>
+                    {/if}
+                    <div class="gif-row">
+                        {#if editGif}
+                            <div class="gif-preview">
+                                <img src={editGif.url} alt="Selected GIF" />
+                                <button class="btn btn-secondary btn-small" on:click={() => editGif = null}>
+                                    Remove
+                                </button>
+                            </div>
+                        {:else}
+                            <button class="btn btn-secondary btn-small" on:click={() => showEditGifPicker = true}>
+                                Add GIF
+                            </button>
+                        {/if}
+                    </div>
+                    <div class="edit-actions">
+                        <button class="btn btn-secondary" on:click={handleEditCancel}>Cancel</button>
+                        <button class="btn btn-primary" on:click={handleEditSave} disabled={savingEdit}>
+                            {savingEdit ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                </div>
+            {/if}
+
             <CelebrationCard
                 {celebration}
                 clickable={false}
                 showCommentsPreview={false}
                 on:reaction={handleReaction}
+                on:edit={handleEditStart}
             />
 
             <div class="reply-card">
@@ -188,6 +303,24 @@
                 </div>
             </div>
         {/if}
+
+        {#if showEditGifPicker}
+            <div
+                class="gif-modal"
+                role="button"
+                tabindex="0"
+                on:click|self={() => showEditGifPicker = false}
+                on:keydown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (showEditGifPicker = false)}
+            >
+                <div class="gif-modal-content">
+                    <GiphyPicker
+                        show={showEditGifPicker}
+                        on:select={handleEditGifSelect}
+                        on:close={() => showEditGifPicker = false}
+                    />
+                </div>
+            </div>
+        {/if}
     </div>
 {/if}
 
@@ -211,6 +344,52 @@
         font-weight: 600;
         cursor: pointer;
         padding: 8px 0;
+    }
+
+    .edit-header {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
+    }
+
+    .edit-card {
+        background: white;
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .edit-card label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .edit-card input,
+    .edit-card textarea,
+    .edit-card select {
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .gif-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .edit-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
     }
 
     .reply-card {
