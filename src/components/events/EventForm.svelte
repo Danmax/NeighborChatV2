@@ -88,6 +88,7 @@
                 }))
             : [];
 
+        const resolvedStatus = event?.status === 'draft' ? 'published' : status;
         const eventData = {
             title: title.trim(),
             type,
@@ -105,7 +106,7 @@
             cover_image_file: coverImageFile || null,
             items: initialItems,
             // New fields
-            status,
+            status: resolvedStatus,
             capacity: capacity ? parseInt(capacity) : null,
             join_policy: joinPolicy,
             meeting_link: meetingLink.trim() || null,

@@ -272,6 +272,11 @@ export async function updateEventInDb(eventId, updates) {
     if (updates.attendees !== undefined) dbUpdates.participants = updates.attendees;
     if (updates.visibility !== undefined) dbUpdates.visibility = updates.visibility;
     if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+    if (updates.join_policy !== undefined) dbUpdates.join_policy = updates.join_policy;
+    if (updates.meeting_link !== undefined) dbUpdates.meeting_link = updates.meeting_link;
+    if (updates.settings !== undefined) dbUpdates.settings = updates.settings;
     if (
         updates.time !== undefined ||
         updates.invited_user_ids !== undefined ||
