@@ -325,6 +325,8 @@
         }
     }
 
+    $: favoriteMovieIds = new Set(favoriteMovies.map(m => m.movie_id));
+
     let favoritesLoadedFor = null;
     $: if ($currentUser?.user_id && favoritesLoadedFor !== $currentUser.user_id) {
         favoritesLoadedFor = $currentUser.user_id;
@@ -815,8 +817,12 @@
                                     {#if movie.year}
                                         <div class="movie-year">{movie.year}</div>
                                     {/if}
-                                    <button class="btn btn-primary btn-small" on:click={() => handleAddFavorite(movie)}>
-                                        Add to Favorites
+                                    <button
+                                        class="btn btn-primary btn-small"
+                                        on:click={() => handleAddFavorite(movie)}
+                                        disabled={favoriteMovieIds.has(movie.id)}
+                                    >
+                                        {favoriteMovieIds.has(movie.id) ? 'Added' : 'Add to Favorites'}
                                     </button>
                                 </div>
                             </div>
