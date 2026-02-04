@@ -61,6 +61,7 @@
     let showParticipantsModal = false;
     let rsvpLoading = false;
     let meetingLink = null;
+    let showHeroModal = false;
 
     // Speaker functionality state
     let showInviteSpeakerModal = false;
@@ -408,6 +409,15 @@
             minute: '2-digit'
         }).toLowerCase();
     }
+
+    function openHeroModal() {
+        if (!eventData?.cover_image_url) return;
+        showHeroModal = true;
+    }
+
+    function closeHeroModal() {
+        showHeroModal = false;
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -430,7 +440,10 @@
         {:else if eventData}
             <div class="event-hero">
                 {#if eventData.cover_image_url}
-                    <img class="event-hero-image" src={eventData.cover_image_url} alt="Event cover" />
+                    <button class="event-hero-button" type="button" on:click={openHeroModal} aria-label="Open event image">
+                        <img class="event-hero-image" src={eventData.cover_image_url} alt="Event cover" />
+                        <span class="event-hero-hint">View image</span>
+                    </button>
                 {:else}
                     <div class="event-hero-placeholder"></div>
                 {/if}
@@ -630,6 +643,15 @@
         on:close={() => showSubmitTalkModal = false}
         on:submit={handleSubmitTalk}
     />
+
+    {#if showHeroModal && eventData?.cover_image_url}
+        <div class="image-modal" role="dialog" aria-modal="true" on:click={closeHeroModal}>
+            <div class="image-modal-content" on:click|stopPropagation>
+                <button class="image-modal-close" type="button" on:click={closeHeroModal} aria-label="Close image">✕</button>
+                <img src={eventData.cover_image_url} alt="Event full cover" />
+            </div>
+        </div>
+    {/if}
 {/if}
 
 <style>
@@ -671,11 +693,42 @@
         min-height: 220px;
     }
 
+    .event-hero-button {
+        display: block;
+        padding: 0;
+        border: none;
+        width: 100%;
+        background: transparent;
+        cursor: pointer;
+        position: relative;
+    }
+
     .event-hero-image {
         width: 100%;
         height: 320px;
         object-fit: cover;
         display: block;
+    }
+
+    .event-hero-hint {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: all 0.2s ease;
+    }
+
+    .event-hero-button:hover .event-hero-hint,
+    .event-hero-button:focus-visible .event-hero-hint {
+        opacity: 1;
+        transform: translateY(0);
     }
 
     .event-hero-placeholder {
@@ -1009,5 +1062,53 @@
     .attendee-rsvp-badge.maybe {
         background: #FFF8E1;
         color: #F57F17;
+    }
+
+    .image-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 10, 20, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 60;
+    }
+
+    .image-modal-content {
+        position: relative;
+        max-width: 980px;
+        width: 100%;
+        max-height: 90vh;
+        background: #111;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-modal-content img {
+        width: 100%;
+        height: auto;
+        max-height: 90vh;
+        object-fit: contain;
+        display: block;
+    }
+
+    .image-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.9);
+        color: #111;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
     }
 </style>
