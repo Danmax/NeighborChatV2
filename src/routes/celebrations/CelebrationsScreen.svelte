@@ -122,6 +122,7 @@
     }
 
     async function handleReaction(event) {
+        const { celebration, emoji } = event.detail;
         try {
             await reactToCelebration(celebration.id, emoji);
         } catch (err) {

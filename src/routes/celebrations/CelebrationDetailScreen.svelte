@@ -4,7 +4,7 @@
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
     import { celebrations } from '../../stores/celebrations.js';
-    import { fetchCelebrationById, postComment } from '../../services/celebrations.service.js';
+    import { fetchCelebrationById, postComment, reactToCelebration } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
@@ -77,6 +77,15 @@
         const date = new Date(timestamp);
         return date.toLocaleString();
     }
+
+    async function handleReaction(event) {
+        const { celebration: target, emoji } = event.detail;
+        try {
+            await reactToCelebration(target.id, emoji);
+        } catch (err) {
+            showToast('Failed to update reaction.', 'error');
+        }
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -92,7 +101,12 @@
                 <p>Loading kudos...</p>
             </div>
         {:else if celebration}
-            <CelebrationCard {celebration} clickable={false} showCommentsPreview={false} />
+            <CelebrationCard
+                {celebration}
+                clickable={false}
+                showCommentsPreview={false}
+                on:reaction={handleReaction}
+            />
 
             <div class="reply-card">
                 <h3>Replies ({replyCount})</h3>
