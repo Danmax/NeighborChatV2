@@ -9,7 +9,8 @@
 
     let title = recipe?.title || '';
     let description = recipe?.description || '';
-    let ingredients = recipe?.ingredients ? JSON.stringify(recipe.ingredients, null, 2) : '[]';
+    let ingredientsList = recipe?.ingredients ? [...recipe.ingredients] : [];
+    let newIngredient = '';
     let instructions = recipe?.instructions || '';
     let prepTime = recipe?.prepTime || '';
     let cookTime = recipe?.cookTime || '';
@@ -23,13 +24,7 @@
     function handleSubmit() {
         if (!isValid || loading) return;
 
-        let parsedIngredients = [];
-        try {
-            parsedIngredients = JSON.parse(ingredients);
-        } catch (e) {
-            // If JSON parsing fails, split by newlines
-            parsedIngredients = ingredients.split('\n').filter(i => i.trim());
-        }
+        const parsedIngredients = ingredientsList.map(i => i.trim()).filter(Boolean);
 
         const recipeData = {
             title: title.trim(),
@@ -57,6 +52,17 @@
         } else {
             tags = [...tags, tag];
         }
+    }
+
+    function addIngredient() {
+        const trimmed = newIngredient.trim();
+        if (!trimmed) return;
+        ingredientsList = [...ingredientsList, trimmed];
+        newIngredient = '';
+    }
+
+    function removeIngredient(index) {
+        ingredientsList = ingredientsList.filter((_, i) => i !== index);
     }
 </script>
 
@@ -123,14 +129,32 @@
     </div>
 
     <div class="form-group">
-        <label for="recipe-ingredients">Ingredients</label>
-        <textarea
-            id="recipe-ingredients"
-            bind:value={ingredients}
-            placeholder="Enter ingredients, one per line:&#10;2 cups flour&#10;1 tsp salt&#10;..."
-            rows="6"
-        ></textarea>
-        <span class="helper-text">Enter one ingredient per line, or use JSON format</span>
+        <label>Ingredients</label>
+        <div class="ingredients-input">
+            <input
+                type="text"
+                bind:value={newIngredient}
+                placeholder="Add ingredient (e.g., 2 cups flour)"
+                on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addIngredient())}
+            />
+            <button type="button" class="btn btn-secondary btn-small" on:click={addIngredient}>
+                Add
+            </button>
+        </div>
+        {#if ingredientsList.length > 0}
+            <ul class="ingredients-list">
+                {#each ingredientsList as ingredient, index}
+                    <li>
+                        <span>{ingredient}</span>
+                        <button type="button" class="remove-ingredient" on:click={() => removeIngredient(index)}>
+                            ✕
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        {:else}
+            <span class="helper-text">No ingredients added yet.</span>
+        {/if}
     </div>
 
     <div class="form-group">
@@ -207,6 +231,50 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+    }
+
+    .ingredients-input {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .ingredients-input input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+    }
+
+    .ingredients-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .ingredients-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 12px;
+        background: #f7f7f7;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .remove-ingredient {
+        border: none;
+        background: #ffe4e4;
+        color: #c62828;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-weight: 700;
     }
 
     fieldset.form-group {
