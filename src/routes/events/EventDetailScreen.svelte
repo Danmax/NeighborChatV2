@@ -515,7 +515,7 @@
                 <p>Loading event...</p>
             </div>
         {:else if eventData}
-            <div class="event-hero">
+            <div class="event-hero" on:click={openHeroModal}>
                 {#if eventData.cover_image_url}
                     <button class="event-hero-button" type="button" on:click={openHeroModal} aria-label="Open event image">
                         <img class="event-hero-image" src={eventData.cover_image_url} alt="Event cover" />
@@ -546,12 +546,12 @@
                                 <span>📍 {eventData.location}</span>
                             {/if}
                         </div>
-                <button class="event-host" type="button" on:click={() => !isOwner && eventData.created_by && push(`/profile/view/${eventData.created_by}`)}>
+                <button class="event-host" type="button" on:click|stopPropagation={() => !isOwner && eventData.created_by && push(`/profile/view/${eventData.created_by}`)}>
                     <Avatar avatar={eventData.creator_avatar} size="sm" />
                     <span>Organizer: {isOwner ? 'You' : eventData.creator_name}</span>
                 </button>
                     </div>
-                    <div class="event-actions">
+                    <div class="event-actions" on:click|stopPropagation>
                         {#if myRsvpStatus}
                             <span class="rsvp-status-badge" class:going={myRsvpStatus === 'going'} class:maybe={myRsvpStatus === 'maybe'} class:not-going={myRsvpStatus === 'not_going'}>
                                 {myRsvpStatus === 'going' ? 'Going' : myRsvpStatus === 'maybe' ? 'Maybe' : 'Not Going'}
@@ -811,6 +811,7 @@
         margin-bottom: 16px;
         background: #f5f5f5;
         min-height: 220px;
+        cursor: pointer;
     }
 
     .event-hero-button {
