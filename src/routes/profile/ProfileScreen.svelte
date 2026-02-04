@@ -361,6 +361,44 @@
             .filter(Boolean)
             .join(' ');
     }
+
+    function formatBirthdayLabel(dateStr) {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return null;
+        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    }
+
+    function getBirthdayCountdown(dateStr) {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return null;
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const target = new Date(date);
+        target.setFullYear(currentYear);
+        target.setHours(0, 0, 0, 0);
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        if (target < today) {
+            target.setFullYear(currentYear + 1);
+        }
+        const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays <= 5) {
+            return `${diffDays} day${diffDays === 1 ? '' : 's'} until birthday`;
+        }
+        if (diffDays >= 360 || diffDays <= 2) {
+            if (diffDays === 0) return 'Birthday today 🎉';
+            if (diffDays === 1) return '1 day until birthday';
+        }
+        if (diffDays > 350) {
+            const afterDays = 365 - diffDays;
+            if (afterDays <= 2) {
+                return `${afterDays} day${afterDays === 1 ? '' : 's'} since birthday`;
+            }
+        }
+        return null;
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -549,7 +587,16 @@
                     <div class="details-display">
                         <div class="detail-row">
                             <span class="detail-label">🎂 Birthday</span>
-                            <span class="detail-value">{$currentUser?.birthday || 'Not set'}</span>
+                            {#if $currentUser?.birthday}
+                                <div class="detail-value">
+                                    <div>{formatBirthdayLabel($currentUser.birthday)}</div>
+                                    {#if getBirthdayCountdown($currentUser.birthday)}
+                                        <div class="birthday-countdown">{getBirthdayCountdown($currentUser.birthday)}</div>
+                                    {/if}
+                                </div>
+                            {:else}
+                                <span class="detail-value">Not set</span>
+                            {/if}
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">💼 Title</span>
@@ -1398,6 +1445,11 @@
         gap: 8px;
     }
 
+    .birthday-countdown {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
     .interest-pill {
         display: inline-flex;
         align-items: center;
