@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher } from 'svelte';
     import { RECIPE_TAGS } from '../../stores/recipes.js';
+    import { generateRecipeDraft } from '../../services/ai.service.js';
 
     export let recipe = null;
     export let loading = false;
@@ -18,6 +19,9 @@
     let tags = recipe?.tags || [];
     let imageUrl = recipe?.imageUrl || '';
     let isPublic = recipe?.isPublic !== false;
+    let aiPrompt = '';
+    let aiLoading = false;
+    let aiWarnings = [];
 
     $: isValid = title.trim() && instructions.trim();
 
@@ -64,9 +68,65 @@
     function removeIngredient(index) {
         ingredientsList = ingredientsList.filter((_, i) => i !== index);
     }
+
+    async function handleGenerate() {
+        if (!aiPrompt.trim() || aiLoading) return;
+        aiLoading = true;
+        aiWarnings = [];
+        try {
+            const result = await generateRecipeDraft({ prompt: aiPrompt.trim() });
+            const draft = result?.draft || result || {};
+            title = draft.title || title;
+            description = draft.description || description;
+            instructions = draft.instructions || instructions;
+            if (Array.isArray(draft.ingredients)) {
+                ingredientsList = draft.ingredients;
+            }
+            prepTime = draft.prep_time ?? draft.prepTime ?? prepTime;
+            cookTime = draft.cook_time ?? draft.cookTime ?? cookTime;
+            servings = draft.servings ?? servings;
+            tags = Array.isArray(draft.tags) ? draft.tags : tags;
+            imageUrl = draft.image_url || draft.imageUrl || imageUrl;
+            if (typeof draft.is_public === 'boolean') {
+                isPublic = draft.is_public;
+            }
+            aiWarnings = result?.warnings || [];
+        } catch (err) {
+            aiWarnings = [err.message || 'AI draft failed'];
+        } finally {
+            aiLoading = false;
+        }
+    }
 </script>
 
 <form class="recipe-form" on:submit|preventDefault={handleSubmit}>
+    <div class="form-group ai-group">
+        <label for="recipe-ai">AI Prompt</label>
+        <textarea
+            id="recipe-ai"
+            bind:value={aiPrompt}
+            placeholder="Describe the recipe you want (e.g., \"Cozy vegetarian chili for 6, smoky, weeknight friendly\")"
+            rows="3"
+        ></textarea>
+        <div class="ai-actions">
+            <button
+                type="button"
+                class="btn btn-secondary btn-small"
+                on:click={handleGenerate}
+                disabled={!aiPrompt.trim() || aiLoading}
+            >
+                {aiLoading ? 'Generating...' : 'Generate with AI'}
+            </button>
+            <span class="helper-text">This will fill the form fields for you.</span>
+        </div>
+        {#if aiWarnings.length > 0}
+            <div class="ai-warnings">
+                {#each aiWarnings as warning}
+                    <div>{warning}</div>
+                {/each}
+            </div>
+        {/if}
+    </div>
     <div class="form-group">
         <label for="recipe-title">Recipe Title *</label>
         <input
@@ -231,6 +291,30 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+    }
+
+    .ai-group textarea {
+        resize: vertical;
+        min-height: 80px;
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+    }
+
+    .ai-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .ai-warnings {
+        background: #fff8e1;
+        border: 1px solid #ffe0b2;
+        color: #6d4c41;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font-size: 12px;
     }
 
     .ingredients-input {
