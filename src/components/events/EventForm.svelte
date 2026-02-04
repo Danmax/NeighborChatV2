@@ -11,9 +11,19 @@
 
     const dispatch = createEventDispatcher();
 
+    function toDateInput(value) {
+        if (!value) return '';
+        if (typeof value === 'string' && value.includes('T')) {
+            return value.split('T')[0];
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return '';
+        return parsed.toISOString().split('T')[0];
+    }
+
     let title = event?.title || '';
     let type = event?.type || 'meetup';
-    let date = event?.date || '';
+    let date = toDateInput(event?.date) || '';
     let time = event?.time || '';
     let location = event?.location || '';
     let description = event?.description || '';
@@ -29,6 +39,24 @@
     let capacity = event?.capacity || '';
     let joinPolicy = event?.join_policy || 'open';
     let meetingLink = event?.meeting_link || '';
+
+    $: if (event) {
+        title = event.title || '';
+        type = event.type || 'meetup';
+        date = toDateInput(event.date) || '';
+        time = event.time || '';
+        location = event.location || '';
+        description = event.description || '';
+        maxAttendees = event.max_attendees || '';
+        invitedUserIds = event.invited_user_ids || [];
+        coverImageUrl = event.cover_image_url || '';
+        attachments = (event.attachments || []).join('\n');
+        coverImagePreview = event.cover_image_url || '';
+        status = event.status || 'published';
+        capacity = event.capacity || '';
+        joinPolicy = event.join_policy || 'open';
+        meetingLink = event.meeting_link || '';
+    }
 
     // Settings (type-specific)
     const existingSettings = getEventSettings(event);
