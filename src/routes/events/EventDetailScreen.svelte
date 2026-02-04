@@ -515,16 +515,18 @@
                 <p>Loading event...</p>
             </div>
         {:else if eventData}
-            <div class="event-hero" on:click={openHeroModal}>
+            <div class="event-hero">
                 {#if eventData.cover_image_url}
-                    <button class="event-hero-button" type="button" on:click={openHeroModal} aria-label="Open event image">
+                    <button class="event-hero-button" type="button" aria-label="Event cover">
                         <img class="event-hero-image" src={eventData.cover_image_url} alt="Event cover" />
-                        <span class="event-hero-hint">View image</span>
                     </button>
                 {:else}
                     <div class="event-hero-placeholder"></div>
                 {/if}
                 <div class="event-hero-overlay">
+                    <button class="event-hero-zoom" type="button" on:click={openHeroModal} aria-label="Open event image">
+                        🔍
+                    </button>
                     <div class="event-hero-content">
                         {#if isDraft}
                             <span class="status-badge draft">Draft</span>
@@ -811,7 +813,6 @@
         margin-bottom: 16px;
         background: #f5f5f5;
         min-height: 220px;
-        cursor: pointer;
     }
 
     .event-hero-button {
@@ -831,25 +832,22 @@
         display: block;
     }
 
-    .event-hero-hint {
+    .event-hero-zoom {
         position: absolute;
-        bottom: 16px;
-        right: 16px;
-        background: rgba(0, 0, 0, 0.6);
-        color: #fff;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-        opacity: 0;
-        transform: translateY(6px);
-        transition: all 0.2s ease;
-    }
-
-    .event-hero-button:hover .event-hero-hint,
-    .event-hero-button:focus-visible .event-hero-hint {
-        opacity: 1;
-        transform: translateY(0);
+        top: 14px;
+        right: 14px;
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 3;
     }
 
     .event-hero-placeholder {
