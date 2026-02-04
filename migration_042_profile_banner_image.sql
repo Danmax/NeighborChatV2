@@ -7,7 +7,9 @@ BEGIN;
 ALTER TABLE public.user_profiles
 ADD COLUMN IF NOT EXISTS banner_image_url text;
 
-CREATE OR REPLACE VIEW public.public_profiles
+DROP VIEW IF EXISTS public.public_profiles;
+
+CREATE VIEW public.public_profiles
 WITH (security_barrier = true) AS
 SELECT
     user_id,
