@@ -15,6 +15,7 @@
         removeEventItem,
         claimEventItemV2,
         unclaimEventItem,
+        attachRecipeToItem,
         sendEventNotification,
         fetchEventParticipants,
         fetchEventParticipantsDetailed,
@@ -28,6 +29,7 @@
         inviteSpeakerByEmail
     } from '../../services/events.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
+    import { createRecipe } from '../../services/recipes.service.js';
     import { createSpeaker, fetchSpeakers } from '../../services/speakers.service.js';
     import EventForm from '../../components/events/EventForm.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
@@ -495,6 +497,18 @@
             showToast('Item removed.', 'success');
         } catch (err) {
             showToast(`Failed to remove: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleCreateRecipeForItem(event) {
+        const { itemId, recipe } = event.detail;
+        try {
+            const created = await createRecipe(recipe);
+            await attachRecipeToItem(eventId, itemId, created.id);
+            eventData = await fetchEventById(eventId);
+            showToast('Recipe attached!', 'success');
+        } catch (err) {
+            showToast(`Failed to attach recipe: ${err.message}`, 'error');
         }
     }
 
@@ -982,6 +996,7 @@
                     on:claim={handleClaimPotluckItem}
                     on:unclaim={handleUnclaimPotluckItem}
                     on:removeItem={handleRemovePotluckItem}
+                    on:createRecipe={handleCreateRecipeForItem}
                 />
             {/if}
 

@@ -1,5 +1,6 @@
 <script>
     import { createEventDispatcher } from 'svelte';
+    import { push } from 'svelte-spa-router';
     import {
         ITEM_CATEGORIES,
         getItemCategory,
@@ -10,6 +11,7 @@
         getEventSettings
     } from '../../stores/events.js';
     import { currentUser } from '../../stores/auth.js';
+    import RecipeForm from '../recipes/RecipeForm.svelte';
 
     export let event;
     export let isOwner = false;
@@ -23,6 +25,8 @@
     let newItemSlots = 1;
     let claimQuantity = 1;
     let claimingItemId = null;
+    let showRecipeModal = false;
+    let recipeItem = null;
 
     $: settings = getEventSettings(event);
     $: canAddItems = isOwner || settings.potluck_allow_new_items;
@@ -60,6 +64,23 @@
 
     function handleRemoveItem(itemId) {
         dispatch('removeItem', { itemId });
+    }
+
+    function openRecipeModal(item) {
+        recipeItem = item;
+        showRecipeModal = true;
+    }
+
+    function handleRecipeSubmit(event) {
+        if (!recipeItem) return;
+        dispatch('createRecipe', { itemId: recipeItem.id, recipe: event.detail });
+        showRecipeModal = false;
+        recipeItem = null;
+    }
+
+    function handleRecipeCancel() {
+        showRecipeModal = false;
+        recipeItem = null;
     }
 
     function getProgressPercent(item) {
@@ -145,6 +166,8 @@
                 {@const claimed = calculateClaimedQuantity(item)}
                 {@const myClaim = getUserClaim(item, $currentUser?.user_id)}
                 {@const progressPercent = getProgressPercent(item)}
+                {@const canAttachRecipe = settings.potluck_allow_recipes && item.allow_recipe !== false}
+                {@const canSuggestRecipe = canAttachRecipe && (canAddItems || myClaim)}
 
                 <div class="item-card" class:claimed-full={available === 0}>
                     <div class="item-header">
@@ -185,6 +208,21 @@
                         </div>
                     {/if}
 
+                    {#if canAttachRecipe}
+                        <div class="recipe-row">
+                            {#if item.recipe_id}
+                                <button class="recipe-btn" on:click={() => push(`/recipes/${item.recipe_id}`)}>
+                                    📖 View Recipe
+                                </button>
+                            {/if}
+                            {#if canSuggestRecipe}
+                                <button class="recipe-btn secondary" on:click={() => openRecipeModal(item)}>
+                                    {item.recipe_id ? 'Replace Recipe' : 'Add Recipe'}
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
+
                     <!-- Claim Button -->
                     {#if available > 0 && !myClaim}
                         {#if claimingItemId === item.id}
@@ -217,6 +255,18 @@
                     {/if}
                 </div>
             {/each}
+        </div>
+    {/if}
+
+    {#if showRecipeModal}
+        <div class="recipe-modal" role="dialog" aria-modal="true" on:click|self={handleRecipeCancel}>
+            <div class="recipe-modal-content">
+                <div class="recipe-modal-header">
+                    <h4>{recipeItem?.name ? `Recipe for ${recipeItem.name}` : 'Add Recipe'}</h4>
+                    <button class="modal-close" on:click={handleRecipeCancel}>✕</button>
+                </div>
+                <RecipeForm on:submit={handleRecipeSubmit} on:cancel={handleRecipeCancel} />
+            </div>
         </div>
     {/if}
 </div>
@@ -537,5 +587,61 @@
         color: #4CAF50;
         font-weight: 600;
         font-size: 13px;
+    }
+
+    .recipe-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .recipe-btn {
+        border: none;
+        background: #fff3e0;
+        color: #e65100;
+        padding: 6px 12px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .recipe-btn.secondary {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .recipe-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 300;
+    }
+
+    .recipe-modal-content {
+        width: min(720px, 100%);
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .recipe-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        border: none;
+        background: none;
+        font-size: 18px;
+        cursor: pointer;
     }
 </style>
