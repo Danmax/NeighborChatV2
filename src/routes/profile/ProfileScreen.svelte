@@ -366,7 +366,10 @@
         if (!dateStr) return null;
         const date = new Date(dateStr);
         if (Number.isNaN(date.getTime())) return null;
-        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+        const month = date.getUTCMonth();
+        const day = date.getUTCDate();
+        const labelDate = new Date(Date.UTC(2000, month, day));
+        return labelDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
     }
 
     function getBirthdayCountdown(dateStr) {
@@ -374,28 +377,21 @@
         const date = new Date(dateStr);
         if (Number.isNaN(date.getTime())) return null;
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const target = new Date(date);
-        target.setFullYear(currentYear);
-        target.setHours(0, 0, 0, 0);
-        const today = new Date(now);
-        today.setHours(0, 0, 0, 0);
+        const currentYear = now.getUTCFullYear();
+        const target = new Date(Date.UTC(currentYear, date.getUTCMonth(), date.getUTCDate()));
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         if (target < today) {
-            target.setFullYear(currentYear + 1);
+            target.setUTCFullYear(currentYear + 1);
         }
         const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays <= 5) {
             return `${diffDays} day${diffDays === 1 ? '' : 's'} until birthday`;
         }
-        if (diffDays >= 360 || diffDays <= 2) {
-            if (diffDays === 0) return 'Birthday today 🎉';
-            if (diffDays === 1) return '1 day until birthday';
-        }
-        if (diffDays > 350) {
-            const afterDays = 365 - diffDays;
-            if (afterDays <= 2) {
-                return `${afterDays} day${afterDays === 1 ? '' : 's'} since birthday`;
-            }
+        if (diffDays === 0) return 'Birthday today 🎉';
+        if (diffDays === 1) return '1 day until birthday';
+        const afterDays = 365 - diffDays;
+        if (afterDays >= 0 && afterDays <= 2) {
+            return `${afterDays} day${afterDays === 1 ? '' : 's'} since birthday`;
         }
         return null;
     }
