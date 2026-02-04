@@ -298,6 +298,8 @@
         border-radius: var(--radius-lg);
         padding: 20px;
         box-shadow: var(--shadow-lg);
+        max-height: 90vh;
+        overflow-y: auto;
     }
 
     .modal-header {
