@@ -164,16 +164,18 @@
 
         <!-- Tabs -->
         <div class="tabs">
-            {#each tabs as tab}
-                <button
-                    class="tab"
-                    class:active={activeTab === tab.id}
-                    on:click={() => handleTabChange(tab.id)}
-                >
-                    <span class="tab-icon">{tab.icon}</span>
-                    <span class="tab-label">{tab.label}</span>
-                </button>
-            {/each}
+            <div class="tabs-row">
+                {#each tabs as tab}
+                    <button
+                        class="tab"
+                        class:active={activeTab === tab.id}
+                        on:click={() => handleTabChange(tab.id)}
+                    >
+                        <span class="tab-icon">{tab.icon}</span>
+                        <span class="tab-label">{tab.label}</span>
+                    </button>
+                {/each}
+            </div>
             <div class="type-filter">
                 <label for="type-filter">Type</label>
                 <select id="type-filter" bind:value={selectedType}>
@@ -305,11 +307,16 @@
     }
 
     .tabs {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .tabs-row {
         display: flex;
         gap: 8px;
-        margin-bottom: 20px;
-        overflow-x: auto;
-        padding-bottom: 4px;
+        flex-wrap: wrap;
         align-items: center;
     }
 
@@ -317,7 +324,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-left: auto;
+        justify-content: flex-end;
     }
 
     .type-filter label {
@@ -331,6 +338,20 @@
         border-radius: 10px;
         font-size: 12px;
         background: white;
+    }
+
+    @media (max-width: 720px) {
+        .tabs {
+            gap: 10px;
+        }
+
+        .tabs-row {
+            gap: 6px;
+        }
+
+        .type-filter {
+            justify-content: flex-start;
+        }
     }
 
     .create-row {
