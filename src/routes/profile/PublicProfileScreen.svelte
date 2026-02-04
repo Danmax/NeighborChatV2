@@ -106,8 +106,10 @@
         }
     }
 
-    function getBannerStyle(color, pattern) {
-        let style = `background-color: ${color || '#4CAF50'};`;
+    function getBannerStyle(color, pattern, imageUrl) {
+        let style = imageUrl
+            ? `background-image: url('${imageUrl}'); background-size: cover; background-position: center;`
+            : `background-color: ${color || '#4CAF50'};`;
 
         if (pattern === 'dots') {
             style += ' background-image: radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 20px 20px;';
@@ -150,7 +152,7 @@
         </div>
     {:else if profile}
         <!-- Profile Banner -->
-        <div class="profile-banner" style={getBannerStyle(profile.banner_color, profile.banner_pattern)}>
+        <div class="profile-banner" style={getBannerStyle(profile.banner_color, profile.banner_pattern, profile.banner_image_url)}>
             <button class="back-btn" on:click={() => window.history.back()} title="Go back">
                 ←
             </button>

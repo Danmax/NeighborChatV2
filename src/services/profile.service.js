@@ -1,5 +1,5 @@
 // Profile service - Supabase profile operations
-import { getSupabase } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId } from '../lib/supabase.js';
 import { currentUser, updateCurrentUser } from '../stores/auth.js';
 import { get } from 'svelte/store';
 import { cacheData, getCachedData } from '../lib/utils/cache.js';
@@ -71,6 +71,7 @@ export async function saveUserProfile(profileData) {
     // Banner customization
     if (profileData.banner_color !== undefined) upsertData.banner_color = profileData.banner_color;
     if (profileData.banner_pattern !== undefined) upsertData.banner_pattern = profileData.banner_pattern;
+    if (profileData.banner_image_url !== undefined) upsertData.banner_image_url = profileData.banner_image_url;
 
     // Privacy settings
     if (profileData.show_city !== undefined) upsertData.show_city = profileData.show_city;
@@ -109,6 +110,7 @@ export async function saveUserProfile(profileData) {
     if (profileData.bio !== undefined) localUpdate.bio = profileData.bio;
     if (profileData.banner_color !== undefined) localUpdate.banner_color = profileData.banner_color;
     if (profileData.banner_pattern !== undefined) localUpdate.banner_pattern = profileData.banner_pattern;
+    if (profileData.banner_image_url !== undefined) localUpdate.banner_image_url = profileData.banner_image_url;
     if (profileData.show_city !== undefined) localUpdate.show_city = profileData.show_city;
     if (profileData.show_phone !== undefined) localUpdate.show_phone = profileData.show_phone;
     if (profileData.show_email !== undefined) localUpdate.show_email = profileData.show_email;
@@ -357,6 +359,7 @@ export async function loadPublicProfile(userId) {
         bio: data.bio,
         banner_color: data.banner_color,
         banner_pattern: data.banner_pattern,
+        banner_image_url: data.banner_image_url,
         interests: data.interests || [],
         city: data.city || null,
         phone: data.phone || null,
@@ -429,7 +432,7 @@ export async function updateBio(bio) {
 /**
  * Update banner customization
  */
-export async function updateBanner(bannerColor, bannerPattern) {
+export async function updateBanner(bannerColor, bannerPattern, bannerImageUrl = undefined) {
     const user = get(currentUser);
 
     if (!user) {
@@ -449,22 +452,54 @@ export async function updateBanner(bannerColor, bannerPattern) {
 
     const supabase = getSupabase();
 
+    const updates = {
+        banner_color: bannerColor,
+        banner_pattern: bannerPattern
+    };
+    if (bannerImageUrl !== undefined) {
+        updates.banner_image_url = bannerImageUrl;
+    }
+
     const { error } = await supabase
         .from('user_profiles')
         .update({
-            banner_color: bannerColor,
-            banner_pattern: bannerPattern,
+            ...updates,
             updated_at: new Date().toISOString()
         })
         .eq('user_id', user.user_id);
 
     if (error) throw error;
 
-    const updates = { banner_color: bannerColor, banner_pattern: bannerPattern };
     updateCurrentUser(updates);
     cacheData('banner', updates);
 
     return updates;
+}
+
+/**
+ * Upload banner image and return public URL
+ */
+export async function uploadBannerImage(file) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to upload banner images.');
+    }
+
+    const safeName = file.name.replace(/\s+/g, '_');
+    const path = `${authUserId}/${Date.now()}_${safeName}`;
+
+    const { error } = await supabase.storage
+        .from('profile-banners')
+        .upload(path, file, { upsert: false });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+        .from('profile-banners')
+        .getPublicUrl(path);
+
+    return data.publicUrl;
 }
 
 /**

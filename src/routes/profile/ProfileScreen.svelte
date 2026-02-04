@@ -11,6 +11,7 @@
         updateProfileDetails,
         updateBio,
         updateBanner,
+        uploadBannerImage,
         updatePrivacySettings,
         BANNER_COLORS,
         BANNER_PATTERNS
@@ -46,6 +47,9 @@
     let editingBanner = false;
     let tempBannerColor = '';
     let tempBannerPattern = '';
+    let tempBannerImageUrl = '';
+    let bannerImageFile = null;
+    let bannerImagePreview = '';
     let privacySettings = {
         show_city: true,
         show_phone: false,
@@ -222,13 +226,20 @@
     function startEditBanner() {
         tempBannerColor = $currentUser?.banner_color || '#4CAF50';
         tempBannerPattern = $currentUser?.banner_pattern || 'solid';
+        tempBannerImageUrl = $currentUser?.banner_image_url || '';
+        bannerImagePreview = $currentUser?.banner_image_url || '';
+        bannerImageFile = null;
         editingBanner = true;
     }
 
     async function saveBanner() {
         saving = true;
         try {
-            await updateBanner(tempBannerColor, tempBannerPattern);
+            let bannerUrl = tempBannerImageUrl || null;
+            if (bannerImageFile) {
+                bannerUrl = await uploadBannerImage(bannerImageFile);
+            }
+            await updateBanner(tempBannerColor, tempBannerPattern, bannerUrl);
             editingBanner = false;
             message = 'Banner updated!';
             setTimeout(() => message = '', 2000);
@@ -237,6 +248,12 @@
         } finally {
             saving = false;
         }
+    }
+
+    function clearBannerImage() {
+        bannerImageFile = null;
+        bannerImagePreview = '';
+        tempBannerImageUrl = '';
     }
 
     async function handlePrivacyChange(event) {
@@ -542,7 +559,33 @@
 
                 {#if editingBanner}
                     <div class="banner-edit">
-                        <div class="banner-preview" style="background-color: {tempBannerColor}; height: 120px; border-radius: var(--radius-sm); margin-bottom: 16px;"></div>
+                        <div
+                            class="banner-preview"
+                            style={bannerImagePreview
+                                ? `background-image: url('${bannerImagePreview}'); background-size: cover; background-position: center;`
+                                : `background-color: ${tempBannerColor};`}
+                        ></div>
+
+                        <div class="form-group">
+                            <label for="banner-image">Banner Image (optional)</label>
+                            <input
+                                id="banner-image"
+                                type="file"
+                                accept="image/*"
+                                on:change={(e) => {
+                                    const file = e.currentTarget.files?.[0];
+                                    bannerImageFile = file || null;
+                                    if (file) {
+                                        bannerImagePreview = URL.createObjectURL(file);
+                                    }
+                                }}
+                            />
+                            {#if bannerImagePreview}
+                                <button class="btn btn-secondary btn-small" on:click={clearBannerImage} type="button">
+                                    Remove Image
+                                </button>
+                            {/if}
+                        </div>
 
                         <fieldset class="form-group">
                             <legend>Banner Color</legend>
@@ -589,7 +632,9 @@
                     <div class="banner-display">
                         <div
                             class="banner-preview"
-                            style="background-color: {$currentUser?.banner_color || '#4CAF50'}; height: 120px; border-radius: var(--radius-sm); margin-bottom: 12px;"
+                            style={$currentUser?.banner_image_url
+                                ? `background-image: url('${$currentUser.banner_image_url}'); background-size: cover; background-position: center;`
+                                : `background-color: ${$currentUser?.banner_color || '#4CAF50'};`}
                         ></div>
                         <button class="btn btn-secondary btn-full" on:click={startEditBanner}>
                             🎨 Customize Banner
@@ -975,6 +1020,10 @@
     .banner-preview {
         width: 100%;
         border: 2px solid var(--cream-dark);
+        height: 120px;
+        border-radius: var(--radius-sm);
+        background-size: cover;
+        background-position: center;
     }
 
     .color-picker {

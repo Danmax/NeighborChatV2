@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount } from 'svelte';
     import { fetchSpeakers } from '../../services/speakers.service.js';
     import { showToast } from '../../stores/toasts.js';
+    import { savedContacts } from '../../stores/contacts.js';
 
     export let show = false;
     export let event = null;
@@ -20,6 +21,10 @@
     let duration = 30;
 
     $: emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(speakerEmail.trim());
+    $: isContactSelection = inviteMode === 'existing' && selectedSpeakerId?.startsWith('contact:');
+    $: selectedContact = isContactSelection
+        ? ($savedContacts || []).find(c => c.user_id === selectedSpeakerId.replace('contact:', ''))
+        : null;
     $: isValid = (
         inviteMode === 'existing'
             ? selectedSpeakerId
@@ -61,9 +66,14 @@
     function handleSubmit() {
         if (!isValid || loading) return;
 
+        const contactId = isContactSelection ? selectedSpeakerId.replace('contact:', '') : null;
+        const contact = contactId ? ($savedContacts || []).find(c => c.user_id === contactId) : null;
+
         dispatch('submit', {
-            mode: inviteMode,
-            speakerId: inviteMode === 'existing' ? selectedSpeakerId : null,
+            mode: isContactSelection ? 'contact' : inviteMode,
+            speakerId: inviteMode === 'existing' && !isContactSelection ? selectedSpeakerId : null,
+            contactId,
+            contactName: contact?.name || contact?.contact_name || null,
             speakerName: inviteMode === 'email' ? speakerName.trim() : null,
             speakerEmail: inviteMode === 'email' ? speakerEmail.trim().toLowerCase() : null,
             talkTitle: talkTitle.trim(),
@@ -114,7 +124,7 @@
 
                     <!-- Speaker Selection -->
                     {#if inviteMode === 'existing'}
-                        {#if speakers.length === 0}
+                        {#if speakers.length === 0 && (!$savedContacts || $savedContacts.length === 0)}
                             <div class="empty-state">
                                 <p>No speakers found yet. Invite by email or create a speaker profile.</p>
                             </div>
@@ -123,14 +133,30 @@
                             <label for="speaker-select">Select Speaker *</label>
                             <select id="speaker-select" bind:value={selectedSpeakerId}>
                                 <option value="">-- Choose a speaker --</option>
-                                {#each speakers as speaker (speaker.id)}
-                                    <option value={speaker.id}>
-                                        {speaker.name}
-                                        {speaker.title ? `- ${speaker.title}` : ''}
-                                        {speaker.company ? `(${speaker.company})` : ''}
-                                    </option>
-                                {/each}
+                                {#if $savedContacts.length > 0}
+                                    <optgroup label="Your Contacts">
+                                        {#each $savedContacts as contact (contact.user_id)}
+                                            <option value={`contact:${contact.user_id}`}>
+                                                {contact.name || contact.contact_name || 'Neighbor'}
+                                            </option>
+                                        {/each}
+                                    </optgroup>
+                                {/if}
+                                {#if speakers.length > 0}
+                                    <optgroup label="Speakers">
+                                        {#each speakers as speaker (speaker.id)}
+                                            <option value={speaker.id}>
+                                                {speaker.name}
+                                                {speaker.title ? `- ${speaker.title}` : ''}
+                                                {speaker.company ? `(${speaker.company})` : ''}
+                                            </option>
+                                        {/each}
+                                    </optgroup>
+                                {/if}
                             </select>
+                            {#if isContactSelection && selectedContact}
+                                <span class="help-text">This contact will be added as a speaker profile.</span>
+                            {/if}
                         </div>
                     {:else}
                         <div class="form-group">

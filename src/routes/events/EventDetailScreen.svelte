@@ -385,13 +385,29 @@
 
     // Invite speaker handler (organizers)
     async function handleInviteSpeaker(event) {
-        const { mode, speakerId, speakerName, speakerEmail, talkTitle, talkAbstract, duration } = event.detail;
+        const { mode, speakerId, speakerName, speakerEmail, contactName, talkTitle, talkAbstract, duration } = event.detail;
         inviteSpeakerLoading = true;
         try {
             if (mode === 'email') {
                 await inviteSpeakerByEmail(eventId, {
                     email: speakerEmail,
                     name: speakerName,
+                    talkTitle,
+                    talkAbstract,
+                    durationMinutes: duration
+                });
+            } else if (mode === 'contact') {
+                const newSpeaker = await createSpeaker({
+                    name: contactName || 'Speaker',
+                    title: null,
+                    company: null,
+                    bio: null,
+                    headshot_url: null,
+                    email: null,
+                    social_links: {},
+                    is_public: true
+                });
+                await inviteSpeaker(eventId, newSpeaker.id, {
                     talkTitle,
                     talkAbstract,
                     durationMinutes: duration
