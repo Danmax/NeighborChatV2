@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { currentUser } from '../../stores/auth.js';
     import { loadPublicProfile, fetchFavoriteMovies } from '../../services/profile.service.js';
@@ -22,6 +22,8 @@
     let isSaved = false;
     let favoriteMovies = [];
     let loadingFavorites = false;
+    let carouselIndex = 0;
+    let carouselTimer = null;
 
     $: userId = params.userId;
     $: isOwnProfile = userId === $currentUser?.user_id;
@@ -56,6 +58,28 @@
             loadingFavorites = false;
         }
     });
+
+    onMount(() => {
+        carouselTimer = setInterval(() => {
+            if (favoriteMovies.length > 0) {
+                carouselIndex = (carouselIndex + 1) % favoriteMovies.length;
+            }
+        }, 3500);
+    });
+
+    onDestroy(() => {
+        if (carouselTimer) {
+            clearInterval(carouselTimer);
+        }
+    });
+
+    function getCarouselOffset(index, total, active) {
+        if (total === 0) return 0;
+        let offset = index - active;
+        if (offset > total / 2) offset -= total;
+        if (offset < -total / 2) offset += total;
+        return offset;
+    }
 
     async function handleSaveContact() {
         if (!profile) return;
@@ -293,8 +317,14 @@
                     <p class="empty-text">No favorites yet.</p>
                 {:else}
                     <div class="movie-carousel">
-                        {#each favoriteMovies.slice(0, 8) as movie (movie.id)}
-                            <div class="movie-tile">
+                        {#each favoriteMovies as movie, index (movie.id)}
+                            {@const offset = getCarouselOffset(index, favoriteMovies.length, carouselIndex)}
+                            <div
+                                class="movie-tile"
+                                class:active={offset === 0}
+                                class:adjacent={Math.abs(offset) === 1}
+                                style={`--offset: ${offset}`}
+                            >
                                 {#if movie.poster_url}
                                     <img src={movie.poster_url} alt={movie.title} />
                                 {/if}
@@ -527,19 +557,17 @@
     }
 
     .movie-carousel {
-        display: flex;
-        gap: 12px;
+        position: relative;
+        height: 260px;
         overflow: hidden;
-        padding-bottom: 6px;
-        animation: marquee 30s linear infinite;
-    }
-
-    @keyframes marquee {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(-50%); }
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        perspective: 1000px;
     }
 
     .movie-tile {
+        position: absolute;
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -547,7 +575,10 @@
         border-radius: 12px;
         background: white;
         border: 1px solid var(--cream-dark);
-        min-width: 160px;
+        min-width: 180px;
+        transform: translateX(calc(var(--offset) * 160px)) scale(0.85);
+        opacity: 0.6;
+        transition: transform 0.6s ease, opacity 0.6s ease;
     }
 
     .movie-tile img {
@@ -561,6 +592,18 @@
         font-weight: 600;
         font-size: 13px;
         color: var(--text);
+    }
+
+    .movie-tile.active {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+        z-index: 2;
+        box-shadow: 0 16px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .movie-tile.adjacent {
+        opacity: 0.85;
+        z-index: 1;
     }
 
     .movie-grid {
