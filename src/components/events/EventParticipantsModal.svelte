@@ -8,10 +8,11 @@
     export let event = null;
     export let participants = [];
     export let loading = false;
+    export let canManage = false;
 
     const dispatch = createEventDispatcher();
 
-    $: isOrganizer = event?.created_by === $currentUser?.user_id;
+    $: isOrganizer = canManage || event?.created_by === $currentUser?.user_id;
 
     // Group participants by status
     $: goingParticipants = participants.filter(p => p.rsvp_status === 'going' && p.approval_status === 'approved');

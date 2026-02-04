@@ -65,6 +65,8 @@
     let loading = true;
     let isEditing = false;
     let isOwner = false;
+    let isAdmin = false;
+    let canManageEvent = false;
     let participants = [];
     let loadingParticipants = false;
     let subscription = null;
@@ -116,6 +118,8 @@
         }
     }
     $: isOwner = eventData?.created_by === $currentUser?.user_id;
+    $: isAdmin = $currentUser?.role === 'admin';
+    $: canManageEvent = isOwner || isAdmin;
     $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes($currentUser?.user_id));
     $: items = eventData?.items || [];
     $: eventStatus = getEventStatus(eventData?.status);
@@ -673,7 +677,7 @@
         <div class="detail-header">
             <button class="back-btn" on:click={() => push('/events')}>← Back</button>
             <h2 class="card-title">Event Details</h2>
-            {#if isOwner}
+            {#if canManageEvent}
                 <button class="btn btn-secondary btn-small" on:click={() => isEditing = !isEditing}>
                     {isEditing ? 'Close Edit' : 'Edit'}
                 </button>
@@ -940,7 +944,7 @@
                             {/if}
                         </div>
 
-                        {#if isOwner}
+                        {#if canManageEvent}
                             <div class="gift-section">
                                 <h4>Organizer Tools</h4>
                                 <button class="btn btn-secondary btn-small" on:click={handleGenerateMatches}>
@@ -973,7 +977,7 @@
             {#if isPotluck}
                 <PotluckItemsSection
                     event={eventData}
-                    {isOwner}
+                    isOwner={canManageEvent}
                     on:addItem={handleAddPotluckItem}
                     on:claim={handleClaimPotluckItem}
                     on:unclaim={handleUnclaimPotluckItem}
@@ -985,7 +989,7 @@
             {#if isDevMeetup}
                 <DevMeetupAgenda
                     event={eventData}
-                    {isOwner}
+                    isOwner={canManageEvent}
                     isAttending={myRsvpStatus === 'going'}
                     {meetingLink}
                     on:updateInvite={handleUpdateSpeakerInvite}
@@ -1007,7 +1011,7 @@
                 </div>
             {/if}
 
-            {#if isOwner}
+            {#if canManageEvent}
                 <div class="card">
                     <h3 class="card-title">Notify Community</h3>
                     <textarea
@@ -1047,6 +1051,7 @@
         event={eventData}
         {participants}
         loading={loadingParticipants}
+        canManage={canManageEvent}
         on:close={() => showParticipantsModal = false}
         on:approve={handleApproveParticipant}
         on:reject={handleRejectParticipant}

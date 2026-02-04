@@ -15,6 +15,8 @@
 
     $: category = getCelebrationCategory(celebration.category);
     $: isOwn = celebration.user_id === $currentUser?.user_id || celebration.authorId === $currentUser?.user_id;
+    $: isAdmin = $currentUser?.role === 'admin';
+    $: canEdit = isOwn || isAdmin;
     $: reactionCounts = getReactionCounts(celebration.reactions);
     $: totalReactions = Object.values(reactionCounts).reduce((a, b) => a + b, 0);
     $: commentCount = celebration.comments?.length || 0;
@@ -195,7 +197,7 @@
                 <button class="comment-btn" on:click={handleComment}>
                     💬 {commentCount > 0 ? commentCount : ''}
                 </button>
-                {#if isOwn}
+                {#if canEdit}
                     <button class="edit-btn" on:click={handleEdit}>
                         ✏️ Edit
                     </button>
