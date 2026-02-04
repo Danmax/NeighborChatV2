@@ -771,12 +771,14 @@
 
                 {#if $currentUser?.interests?.length}
                     <div class="preview-interests">
-                        <div class="preview-interests-emoji">{getInterestEmojis($currentUser.interests)}</div>
                         <div class="preview-interests-labels">
                             {#each $currentUser.interests as interestId}
                                 {@const interest = $interestOptions.find(i => i.id === interestId)}
                                 {#if interest}
-                                    <span class="interest-label">{interest.label}</span>
+                                    <span class="interest-pill" style={`--pill-color: ${interest.color || '#4CAF50'}`}>
+                                        <span class="pill-emoji">{interest.emoji}</span>
+                                        {interest.label}
+                                    </span>
                                 {/if}
                             {/each}
                         </div>
@@ -1193,6 +1195,29 @@
 
     .preview-interests-emoji {
         font-size: 18px;
+    }
+
+    .preview-interests-labels {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .interest-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #1f2f22;
+        background: color-mix(in srgb, var(--pill-color) 18%, white);
+        border: 1px solid color-mix(in srgb, var(--pill-color) 45%, white);
+    }
+
+    .pill-emoji {
+        font-size: 14px;
     }
 
     .color-picker {

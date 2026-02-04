@@ -205,14 +205,14 @@
             {#if profile.interests && profile.interests.length > 0}
                 <div class="interests-section">
                     <h4 class="section-title">Interests</h4>
-                    <div class="interests-display">
-                        {getInterestEmojis(profile.interests)}
-                    </div>
                     <div class="interests-labels">
                         {#each profile.interests as interestId}
                             {@const interest = $interestOptions.find(i => i.id === interestId)}
                             {#if interest}
-                                <span class="interest-label">{interest.label}</span>
+                                <span class="interest-pill" style={`--pill-color: ${interest.color || '#4CAF50'}`}>
+                                    <span class="pill-emoji">{interest.emoji}</span>
+                                    {interest.label}
+                                </span>
                             {/if}
                         {/each}
                     </div>
@@ -412,12 +412,6 @@
         margin-bottom: 12px;
     }
 
-    .interests-display {
-        font-size: 32px;
-        letter-spacing: 8px;
-        margin-bottom: 12px;
-    }
-
     .interests-labels {
         display: flex;
         flex-wrap: wrap;
@@ -425,13 +419,21 @@
         justify-content: center;
     }
 
-    .interest-label {
-        padding: 4px 10px;
-        background: white;
-        border: 1px solid var(--cream-dark);
-        border-radius: 12px;
+    .interest-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
         font-size: 12px;
-        color: var(--text-muted);
+        font-weight: 600;
+        color: #1f2f22;
+        background: color-mix(in srgb, var(--pill-color) 18%, white);
+        border: 1px solid color-mix(in srgb, var(--pill-color) 45%, white);
+    }
+
+    .pill-emoji {
+        font-size: 14px;
     }
 
     .profile-actions {
