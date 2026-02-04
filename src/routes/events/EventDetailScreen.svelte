@@ -38,6 +38,7 @@
     import InviteSpeakerModal from '../../components/events/InviteSpeakerModal.svelte';
     import SubmitTalkModal from '../../components/events/SubmitTalkModal.svelte';
     import { showToast } from '../../stores/toasts.js';
+    import { getSupabase } from '../../lib/supabase.js';
     import MessageList from '../../components/chat/MessageList.svelte';
     import MessageInput from '../../components/chat/MessageInput.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
@@ -46,6 +47,17 @@
         sendEventChatMessage,
         subscribeToEventChat
     } from '../../services/eventChat.service.js';
+    import {
+        fetchWishlist,
+        addWishlistItem,
+        removeWishlistItem,
+        fetchWishlistTemplates,
+        addWishlistTemplate,
+        fetchMatchForUser,
+        generateMatches,
+        assignMatch,
+        sendGiftExchangeMessage
+    } from '../../services/giftExchange.service.js';
 
     export let params = {};
 
@@ -73,6 +85,21 @@
     let eventChatLoading = false;
     let eventChatSubscription = null;
     let showEventGifPicker = false;
+    let wishlistItems = [];
+    let wishlistTemplates = [];
+    let partnerWishlist = [];
+    let giftMatch = null;
+    let partnerProfile = null;
+    let giftLoading = false;
+    let giftMessageType = 'postcard';
+    let giftMessageBody = '';
+    let manualGiver = '';
+    let manualReceiver = '';
+    let giftTitle = '';
+    let giftDescription = '';
+    let giftUrl = '';
+    let giftPrice = '';
+    let saveAsTemplate = false;
     let showHeroModal = false;
 
     // Speaker functionality state
@@ -99,6 +126,7 @@
     $: isDraft = eventData?.status === 'draft';
     $: isClosed = eventData?.status === 'closed';
     $: canChat = isOwner || !!myRsvpStatus;
+    $: isGiftExchange = eventData?.type === 'gift-exchange';
 
     onMount(async () => {
         if (!$isAuthenticated || !eventId) return;
@@ -134,6 +162,10 @@
         eventChatSubscription = await subscribeToEventChat(eventId, (message) => {
             eventChatMessages = [...eventChatMessages, message];
         });
+
+        if (isGiftExchange) {
+            loadGiftExchange();
+        }
     });
 
     onDestroy(() => {
@@ -182,6 +214,97 @@
             showToast(`Failed to send GIF: ${err.message}`, 'error');
         } finally {
             showEventGifPicker = false;
+        }
+    }
+
+    async function loadGiftExchange() {
+        if (!eventId) return;
+        giftLoading = true;
+        try {
+            wishlistItems = await fetchWishlist(eventId);
+            wishlistTemplates = await fetchWishlistTemplates();
+            giftMatch = await fetchMatchForUser(eventId);
+            if (giftMatch) {
+                const partnerId = giftMatch.giver_user_id === $currentUser?.user_id
+                    ? giftMatch.receiver_user_id
+                    : giftMatch.giver_user_id;
+                partnerWishlist = await fetchWishlist(eventId, partnerId);
+                const { data } = await getSupabase()
+                    .from('public_profiles')
+                    .select('user_id, display_name, username, avatar')
+                    .eq('user_id', partnerId)
+                    .single();
+                partnerProfile = data || null;
+            }
+        } catch (err) {
+            wishlistItems = [];
+        } finally {
+            giftLoading = false;
+        }
+    }
+
+    async function handleAddWishlistItem() {
+        if (!giftTitle.trim()) return;
+        const newItem = await addWishlistItem(eventId, {
+            title: giftTitle.trim(),
+            description: giftDescription.trim() || null,
+            url: giftUrl.trim() || null,
+            price_range: giftPrice.trim() || null
+        });
+        wishlistItems = [newItem, ...wishlistItems];
+        if (saveAsTemplate) {
+            await addWishlistTemplate({
+                title: giftTitle.trim(),
+                description: giftDescription.trim() || null,
+                url: giftUrl.trim() || null,
+                price_range: giftPrice.trim() || null
+            });
+            wishlistTemplates = await fetchWishlistTemplates();
+        }
+        giftTitle = '';
+        giftDescription = '';
+        giftUrl = '';
+        giftPrice = '';
+        saveAsTemplate = false;
+    }
+
+    async function handleRemoveWishlistItem(itemId) {
+        await removeWishlistItem(itemId);
+        wishlistItems = wishlistItems.filter(item => item.id !== itemId);
+    }
+
+    async function handleGenerateMatches() {
+        try {
+            await generateMatches(eventId);
+            await loadGiftExchange();
+            showToast('Matches generated.', 'success');
+        } catch (err) {
+            showToast(`Failed to generate matches: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleAssignMatch() {
+        if (!manualGiver || !manualReceiver) return;
+        try {
+            await assignMatch(eventId, manualGiver, manualReceiver);
+            await loadGiftExchange();
+            showToast('Match assigned.', 'success');
+        } catch (err) {
+            showToast(`Failed to assign match: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleSendGiftMessage() {
+        if (!giftMatch || !giftMessageBody.trim()) return;
+        const receiverId = giftMatch.giver_user_id === $currentUser?.user_id
+            ? giftMatch.receiver_user_id
+            : giftMatch.giver_user_id;
+        try {
+            await sendGiftExchangeMessage(eventId, receiverId, giftMessageType, giftMessageBody.trim());
+            giftMessageBody = '';
+            showToast('Message sent!', 'success');
+        } catch (err) {
+            showToast(`Failed to send: ${err.message}`, 'error');
         }
     }
 
@@ -697,6 +820,155 @@
                 {/if}
             </div>
 
+            {#if isGiftExchange}
+                <div class="card gift-exchange-card">
+                    <h3 class="card-title">🎁 Gift Exchange</h3>
+
+                    {#if giftLoading}
+                        <p>Loading gift exchange...</p>
+                    {:else}
+                        <div class="gift-section">
+                            <h4>Your Match</h4>
+                            {#if giftMatch && partnerProfile}
+                                <div class="match-row">
+                                    <Avatar avatar={partnerProfile.avatar} size="sm" />
+                                    <div>
+                                        <div class="match-name">{partnerProfile.display_name || partnerProfile.username || 'Neighbor'}</div>
+                                        <div class="match-sub">Matched partner</div>
+                                    </div>
+                                </div>
+                                <div class="gift-message">
+                                    <select bind:value={giftMessageType}>
+                                        <option value="postcard">Postcard</option>
+                                        <option value="gift">Gift</option>
+                                        <option value="favor">Favor</option>
+                                    </select>
+                                    <textarea
+                                        rows="2"
+                                        placeholder="Send a note..."
+                                        bind:value={giftMessageBody}
+                                    ></textarea>
+                                    <button class="btn btn-primary btn-small" on:click={handleSendGiftMessage} disabled={!giftMessageBody.trim()}>
+                                        Send
+                                    </button>
+                                </div>
+                            {:else}
+                                <p class="empty-text">No match yet.</p>
+                            {/if}
+                        </div>
+
+                        {#if partnerWishlist.length > 0}
+                            <div class="gift-section">
+                                <h4>Their Wish List</h4>
+                                <ul class="gift-list">
+                                    {#each partnerWishlist as item (item.id)}
+                                        <li>
+                                            <strong>{item.title}</strong>
+                                            {#if item.description}
+                                                <div class="gift-desc">{item.description}</div>
+                                            {/if}
+                                            {#if item.url}
+                                                <a href={item.url} target="_blank" rel="noreferrer">Link</a>
+                                            {/if}
+                                            {#if item.price_range}
+                                                <span class="gift-price">{item.price_range}</span>
+                                            {/if}
+                                        </li>
+                                    {/each}
+                                </ul>
+                            </div>
+                        {/if}
+
+                        <div class="gift-section">
+                            <h4>Your Wish List</h4>
+                            <div class="gift-form">
+                                <input type="text" placeholder="Item title" bind:value={giftTitle} />
+                                <input type="text" placeholder="Description" bind:value={giftDescription} />
+                                <input type="text" placeholder="Link (optional)" bind:value={giftUrl} />
+                                <input type="text" placeholder="Price range (optional)" bind:value={giftPrice} />
+                                <label class="gift-template-toggle">
+                                    <input type="checkbox" bind:checked={saveAsTemplate} />
+                                    Save as template
+                                </label>
+                                <button class="btn btn-primary btn-small" on:click={handleAddWishlistItem} disabled={!giftTitle.trim()}>
+                                    Add Item
+                                </button>
+                            </div>
+
+                            {#if wishlistTemplates.length > 0}
+                                <div class="gift-templates">
+                                    <label>Quick add template</label>
+                                    <select on:change={(e) => {
+                                        const tpl = wishlistTemplates.find(t => t.id === e.target.value);
+                                        if (tpl) {
+                                            giftTitle = tpl.title;
+                                            giftDescription = tpl.description || '';
+                                            giftUrl = tpl.url || '';
+                                            giftPrice = tpl.price_range || '';
+                                        }
+                                    }}>
+                                        <option value="">Select template</option>
+                                        {#each wishlistTemplates as tpl (tpl.id)}
+                                            <option value={tpl.id}>{tpl.title}</option>
+                                        {/each}
+                                    </select>
+                                </div>
+                            {/if}
+
+                            {#if wishlistItems.length === 0}
+                                <p class="empty-text">No items yet.</p>
+                            {:else}
+                                <ul class="gift-list">
+                                    {#each wishlistItems as item (item.id)}
+                                        <li>
+                                            <strong>{item.title}</strong>
+                                            {#if item.description}
+                                                <div class="gift-desc">{item.description}</div>
+                                            {/if}
+                                            {#if item.url}
+                                                <a href={item.url} target="_blank" rel="noreferrer">Link</a>
+                                            {/if}
+                                            {#if item.price_range}
+                                                <span class="gift-price">{item.price_range}</span>
+                                            {/if}
+                                            <button class="btn btn-secondary btn-small" on:click={() => handleRemoveWishlistItem(item.id)}>
+                                                Remove
+                                            </button>
+                                        </li>
+                                    {/each}
+                                </ul>
+                            {/if}
+                        </div>
+
+                        {#if isOwner}
+                            <div class="gift-section">
+                                <h4>Organizer Tools</h4>
+                                <button class="btn btn-secondary btn-small" on:click={handleGenerateMatches}>
+                                    Generate Matches
+                                </button>
+                                <div class="gift-manual">
+                                    <select bind:value={manualGiver}>
+                                        <option value="">Select giver</option>
+                                        {#each participants as participant (participant.profile?.user_id || participant.membership_id)}
+                                            <option value={participant.profile?.user_id}>{participant.profile?.display_name || participant.profile?.username}</option>
+                                        {/each}
+                                    </select>
+                                    <select bind:value={manualReceiver}>
+                                        <option value="">Select receiver</option>
+                                        {#each participants as participant (participant.profile?.user_id || participant.membership_id)}
+                                            <option value={participant.profile?.user_id}>{participant.profile?.display_name || participant.profile?.username}</option>
+                                        {/each}
+                                    </select>
+                                    <button class="btn btn-primary btn-small" on:click={handleAssignMatch} disabled={!manualGiver || !manualReceiver}>
+                                        Assign Match
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
+                    {/if}
+                </div>
+            {/if}
+
             <!-- Potluck Items Section -->
             {#if isPotluck}
                 <PotluckItemsSection
@@ -858,6 +1130,98 @@
 
     :global(.event-chat-body .message-list) {
         padding: 12px;
+    }
+
+    .gift-exchange-card {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .gift-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        background: var(--cream);
+    }
+
+    .match-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .match-name {
+        font-weight: 600;
+    }
+
+    .match-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .gift-message select,
+    .gift-form input,
+    .gift-templates select,
+    .gift-message textarea {
+        padding: 8px 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 8px;
+        font-size: 12px;
+        background: white;
+    }
+
+    .gift-message {
+        display: grid;
+        gap: 8px;
+    }
+
+    .gift-form {
+        display: grid;
+        gap: 8px;
+    }
+
+    .gift-template-toggle {
+        font-size: 12px;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .gift-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+    }
+
+    .gift-list li {
+        background: white;
+        border-radius: 10px;
+        padding: 10px;
+        border: 1px solid var(--cream-dark);
+        display: grid;
+        gap: 4px;
+    }
+
+    .gift-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .gift-price {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .gift-manual {
+        display: grid;
+        gap: 8px;
     }
 
     .event-hero {

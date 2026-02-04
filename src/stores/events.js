@@ -13,6 +13,7 @@ export const EVENT_TYPES = [
     { id: 'dev-meetup', label: 'Dev Meetup', emoji: '💻', color: '#5C6BC0' },
     { id: 'potluck', label: 'Potluck', emoji: '🍲', color: '#FF7043' },
     { id: 'secret-santa', label: 'Secret Santa', emoji: '🎅', color: '#EF5350' },
+    { id: 'gift-exchange', label: 'Gift Exchange', emoji: '🎁', color: '#8E24AA' },
     { id: 'workshop', label: 'Workshop', emoji: '🛠️', color: '#26A69A' },
     { id: 'meeting', label: 'Meeting', emoji: '🗓️', color: '#78909C' },
     { id: 'other', label: 'Other', emoji: '📌', color: '#90A4AE' }
