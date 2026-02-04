@@ -38,6 +38,14 @@
     import InviteSpeakerModal from '../../components/events/InviteSpeakerModal.svelte';
     import SubmitTalkModal from '../../components/events/SubmitTalkModal.svelte';
     import { showToast } from '../../stores/toasts.js';
+    import MessageList from '../../components/chat/MessageList.svelte';
+    import MessageInput from '../../components/chat/MessageInput.svelte';
+    import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
+    import {
+        fetchEventChatMessages,
+        sendEventChatMessage,
+        subscribeToEventChat
+    } from '../../services/eventChat.service.js';
 
     export let params = {};
 
@@ -61,6 +69,10 @@
     let showParticipantsModal = false;
     let rsvpLoading = false;
     let meetingLink = null;
+    let eventChatMessages = [];
+    let eventChatLoading = false;
+    let eventChatSubscription = null;
+    let showEventGifPicker = false;
     let showHeroModal = false;
 
     // Speaker functionality state
@@ -86,6 +98,7 @@
     $: isDevMeetup = eventData?.type === 'dev-meetup';
     $: isDraft = eventData?.status === 'draft';
     $: isClosed = eventData?.status === 'closed';
+    $: canChat = isOwner || !!myRsvpStatus;
 
     onMount(async () => {
         if (!$isAuthenticated || !eventId) return;
@@ -116,13 +129,61 @@
                 eventData = updated;
             }
         });
+
+        loadEventChat();
+        eventChatSubscription = await subscribeToEventChat(eventId, (message) => {
+            eventChatMessages = [...eventChatMessages, message];
+        });
     });
 
     onDestroy(() => {
         if (subscription && typeof subscription.unsubscribe === 'function') {
             subscription.unsubscribe();
         }
+        if (eventChatSubscription && typeof eventChatSubscription.unsubscribe === 'function') {
+            eventChatSubscription.unsubscribe();
+        }
     });
+
+    async function loadEventChat() {
+        if (!eventId) return;
+        eventChatLoading = true;
+        try {
+            eventChatMessages = await fetchEventChatMessages(eventId);
+        } catch (err) {
+            eventChatMessages = [];
+        } finally {
+            eventChatLoading = false;
+        }
+    }
+
+    async function handleSendEventChatMessage(event) {
+        const { message, isGif } = event.detail;
+        if (!message.trim()) return;
+        try {
+            const sent = await sendEventChatMessage(eventId, message.trim(), isGif);
+            if (sent) {
+                eventChatMessages = [...eventChatMessages, sent];
+            }
+        } catch (err) {
+            showToast(`Failed to send message: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleEventGifSelect(event) {
+        const gif = event.detail;
+        const caption = gif.message ? gif.message.trim() : '';
+        try {
+            const sent = await sendEventChatMessage(eventId, caption, true, gif.url);
+            if (sent) {
+                eventChatMessages = [...eventChatMessages, sent];
+            }
+        } catch (err) {
+            showToast(`Failed to send GIF: ${err.message}`, 'error');
+        } finally {
+            showEventGifPicker = false;
+        }
+    }
 
     async function loadParticipants() {
         if (!eventId) return;
@@ -541,6 +602,29 @@
                 {/if}
             </div>
 
+            <div class="card event-chat-card">
+                <h3 class="card-title">Event Chat</h3>
+                {#if !canChat}
+                    <p class="empty-text">RSVP to join the event chat.</p>
+                {:else if eventChatLoading}
+                    <p>Loading chat...</p>
+                {:else}
+                    <div class="event-chat-body">
+                        <MessageList messages={eventChatMessages} autoScroll={true} />
+                    </div>
+                    <GiphyPicker
+                        show={showEventGifPicker}
+                        on:select={handleEventGifSelect}
+                        on:close={() => showEventGifPicker = false}
+                    />
+                    <MessageInput
+                        placeholder="Message the event attendees..."
+                        on:send={handleSendEventChatMessage}
+                        on:openGif={() => showEventGifPicker = !showEventGifPicker}
+                    />
+                {/if}
+            </div>
+
             <!-- Potluck Items Section -->
             {#if isPotluck}
                 <PotluckItemsSection
@@ -682,6 +766,26 @@
         padding: 20px;
         margin-bottom: 16px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .event-chat-card {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .event-chat-body {
+        height: 260px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        overflow: hidden;
+        background: white;
+        display: flex;
+        flex-direction: column;
+    }
+
+    :global(.event-chat-body .message-list) {
+        padding: 12px;
     }
 
     .event-hero {

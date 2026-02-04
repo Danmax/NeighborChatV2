@@ -3,17 +3,29 @@
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
     import { inboxThreads, messagesLoading, messagesError } from '../../stores/messages.js';
-    import { fetchInbox, subscribeToInbox } from '../../services/messages.service.js';
+    import {
+        fetchInbox,
+        subscribeToInbox,
+        subscribeToMessageReactions,
+        refreshMessageReactions
+    } from '../../services/messages.service.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import { getTimeAgo } from '../../lib/utils/time.js';
 
     let subscription = null;
+    let reactionsSubscription = null;
 
-    onMount(() => {
+    onMount(async () => {
         if ($isAuthenticated) {
             fetchInbox();
             subscribeToInbox().then((channel) => {
                 subscription = channel;
+            });
+            reactionsSubscription = await subscribeToMessageReactions(async (payload) => {
+                const messageId = payload?.new?.message_id || payload?.old?.message_id;
+                if (messageId) {
+                    await refreshMessageReactions(messageId);
+                }
             });
         }
     });
@@ -21,6 +33,9 @@
     onDestroy(() => {
         if (subscription) {
             subscription.unsubscribe();
+        }
+        if (reactionsSubscription) {
+            reactionsSubscription.unsubscribe();
         }
     });
 
