@@ -1,12 +1,17 @@
 <script>
+    import { createEventDispatcher } from 'svelte';
     import Avatar from '../avatar/Avatar.svelte';
     import { push } from 'svelte-spa-router';
     import { currentUser } from '../../stores/auth.js';
     import { highlightMentions } from '../../lib/utils/mentions.js';
+    import { REACTIONS } from '../../lib/utils/reactions.js';
 
     export let message;
     export let showAvatar = true;
     export let compact = false;
+    export let enableReactions = false;
+
+    const dispatch = createEventDispatcher();
 
     $: isOwn = message.user_id === $currentUser?.user_id;
     $: formattedTime = formatTime(message.timestamp);
@@ -14,6 +19,8 @@
     $: formattedMessage = highlightMentions(escapeHtml(message.message));
     $: gifUrl = message.gif_url || (message.isGif ? message.message : null);
     $: caption = message.caption || (message.gif_url ? message.message : '');
+    $: reactionCounts = getReactionCounts(message.reactions);
+    $: totalReactions = Object.values(reactionCounts).reduce((a, b) => a + b, 0);
 
     function formatTime(timestamp) {
         const date = new Date(timestamp);
@@ -29,6 +36,36 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function getReactionCounts(reactions = {}) {
+        const counts = {};
+        Object.entries(reactions).forEach(([emoji, users]) => {
+            counts[emoji] = users.length;
+        });
+        return counts;
+    }
+
+    function hasUserReacted(emoji) {
+        if (!$currentUser) return false;
+        return message.reactions?.[emoji]?.includes($currentUser.user_id);
+    }
+
+    function handleReaction(emoji) {
+        dispatch('reaction', { message, emoji });
+    }
+
+    let showReactions = false;
+
+    function toggleReactions(event) {
+        event.stopPropagation();
+        showReactions = !showReactions;
+    }
+
+    function pickReaction(emoji, event) {
+        event.stopPropagation();
+        showReactions = false;
+        handleReaction(emoji);
     }
 </script>
 
@@ -76,6 +113,45 @@
                 {/if}
             </div>
         </div>
+
+        {#if enableReactions}
+            <div class="message-reactions">
+                {#if totalReactions > 0}
+                    <div class="reactions-summary">
+                        {#each Object.entries(reactionCounts) as [emoji, count]}
+                            <button
+                                class="reaction-badge"
+                                class:active={hasUserReacted(emoji)}
+                                type="button"
+                                on:click={() => handleReaction(emoji)}
+                            >
+                                {emoji} {count}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+                <div class="reaction-picker">
+                    <button class="reaction-toggle" type="button" on:click={toggleReactions}>
+                        😊 React
+                    </button>
+                    {#if showReactions}
+                        <div class="reaction-menu">
+                            {#each REACTIONS as emoji}
+                                <button
+                                    class="reaction-btn"
+                                    class:active={hasUserReacted(emoji)}
+                                    on:click={(event) => pickReaction(emoji, event)}
+                                    title={emoji}
+                                    type="button"
+                                >
+                                    {emoji}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+            </div>
+        {/if}
     </div>
 </div>
 
@@ -195,5 +271,77 @@
     .message.own :global(.message-text .mention) {
         background: rgba(255, 255, 255, 0.25);
         color: white;
+    }
+
+    .message-reactions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+        align-items: center;
+    }
+
+    .reactions-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .reaction-badge {
+        background: var(--cream);
+        border: 1px solid var(--cream-dark);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .reaction-badge.active {
+        background: rgba(76, 175, 80, 0.15);
+        border-color: rgba(76, 175, 80, 0.4);
+        color: var(--primary);
+    }
+
+    .reaction-picker {
+        position: relative;
+    }
+
+    .reaction-toggle {
+        background: none;
+        border: 1px dashed var(--cream-dark);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        color: var(--text-muted);
+    }
+
+    .reaction-menu {
+        position: absolute;
+        bottom: 120%;
+        left: 0;
+        background: white;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        padding: 8px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 5;
+    }
+
+    .reaction-btn {
+        border: none;
+        background: var(--cream);
+        border-radius: 8px;
+        padding: 6px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    .reaction-btn.active {
+        background: rgba(76, 175, 80, 0.2);
     }
 </style>

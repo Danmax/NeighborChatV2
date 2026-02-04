@@ -48,6 +48,14 @@ export function updateMessageRead(messageId, read) {
     );
 }
 
+export function updateMessageReactions(messageId, reactions) {
+    threadMessages.update(list =>
+        list.map(message =>
+            message.id === messageId ? { ...message, reactions: reactions || {} } : message
+        )
+    );
+}
+
 export function setMessagesError(error) {
     messagesError.set(error);
 }

@@ -8,7 +8,8 @@ import {
     setMessagesError,
     updateThreadPreview,
     upsertThread,
-    updateMessageRead
+    updateMessageRead,
+    updateMessageReactions
 } from '../stores/messages.js';
 import { get } from 'svelte/store';
 
@@ -127,8 +128,9 @@ export async function fetchThread(otherUserId) {
 
         if (error) throw error;
 
-        setThreadMessages(data || []);
-        return data || [];
+        const messagesWithReactions = await attachMessageReactions(data || []);
+        setThreadMessages(messagesWithReactions);
+        return messagesWithReactions;
     } catch (error) {
         console.error('Failed to fetch thread:', error);
         setMessagesError(error.message);
@@ -136,6 +138,75 @@ export async function fetchThread(otherUserId) {
     } finally {
         messagesLoading.set(false);
     }
+}
+
+async function fetchMessageReactions(messageIds) {
+    if (!messageIds.length) return {};
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('message_reactions')
+        .select('message_id, emoji, user_id')
+        .in('message_id', messageIds);
+
+    if (error) throw error;
+
+    return (data || []).reduce((acc, row) => {
+        if (!acc[row.message_id]) acc[row.message_id] = {};
+        if (!acc[row.message_id][row.emoji]) acc[row.message_id][row.emoji] = [];
+        acc[row.message_id][row.emoji].push(row.user_id);
+        return acc;
+    }, {});
+}
+
+export async function refreshMessageReactions(messageId) {
+    const reactionsByMessage = await fetchMessageReactions([messageId]);
+    updateMessageReactions(messageId, reactionsByMessage[messageId] || {});
+    return reactionsByMessage[messageId] || {};
+}
+
+async function attachMessageReactions(messages) {
+    if (!messages.length) return messages;
+    const reactionsByMessage = await fetchMessageReactions(messages.map(m => m.id));
+    return messages.map(message => ({
+        ...message,
+        reactions: reactionsByMessage[message.id] || {}
+    }));
+}
+
+export async function reactToMessage(messageId, emoji) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to react to messages.');
+    }
+
+    const { data, error } = await supabase.rpc('add_message_reaction', {
+        p_message_id: messageId,
+        p_emoji: emoji
+    });
+
+    if (error) throw error;
+
+    updateMessageReactions(messageId, data || {});
+    return data;
+}
+
+export async function subscribeToMessageReactions(callback) {
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return null;
+    const supabase = getSupabase();
+    const channel = supabase.channel('message-reactions');
+
+    channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions' },
+        (payload) => {
+            callback?.(payload);
+        }
+    );
+
+    channel.subscribe();
+    return channel;
 }
 
 export async function sendMessageToUser(otherUserId, body, isGif = false, gifUrl = null) {
@@ -162,7 +233,7 @@ export async function sendMessageToUser(otherUserId, body, isGif = false, gifUrl
 
     if (error) throw error;
 
-    addThreadMessage(data);
+    addThreadMessage({ ...data, reactions: {} });
     updateThreadPreview(otherUserId, {
         last_message: data.body,
         last_at: data.created_at
@@ -262,7 +333,7 @@ export async function subscribeToThread(otherUserId, callback) {
         (payload) => {
             const message = payload.new;
             if (message.sender_id !== otherUserId) return;
-            addThreadMessage(message);
+            addThreadMessage({ ...message, reactions: {} });
             updateThreadPreview(otherUserId, {
                 last_message: message.body,
                 last_at: message.created_at,
@@ -278,7 +349,7 @@ export async function subscribeToThread(otherUserId, callback) {
         (payload) => {
             const message = payload.new;
             if (message.recipient_id !== otherUserId) return;
-            addThreadMessage(message);
+            addThreadMessage({ ...message, reactions: {} });
             updateThreadPreview(otherUserId, {
                 last_message: message.body,
                 last_at: message.created_at

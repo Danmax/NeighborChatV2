@@ -8,7 +8,10 @@
         sendMessageToUser,
         markThreadRead,
         fetchProfileForUser,
-        subscribeToThread
+        subscribeToThread,
+        reactToMessage,
+        refreshMessageReactions,
+        subscribeToMessageReactions
     } from '../../services/messages.service.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import MessageList from '../../components/chat/MessageList.svelte';
@@ -21,6 +24,7 @@
     let loadingProfile = true;
     let subscription = null;
     let showGifPicker = false;
+    let reactionsSubscription = null;
 
     $: otherUserId = params.id;
 
@@ -36,7 +40,8 @@
             gif_url: msg.metadata?.gif_url,
             caption: msg.body,
             timestamp: msg.created_at,
-            read: msg.read
+            read: msg.read,
+            reactions: msg.reactions || {}
         };
     });
 
@@ -57,11 +62,23 @@
         subscription = await subscribeToThread(otherUserId, () => {
             markThreadRead(otherUserId);
         });
+
+        reactionsSubscription = await subscribeToMessageReactions(async (payload) => {
+            const messageId = payload?.new?.message_id || payload?.old?.message_id;
+            if (!messageId) return;
+            const exists = ($threadMessages || []).some(m => m.id === messageId);
+            if (exists) {
+                await refreshMessageReactions(messageId);
+            }
+        });
     });
 
     onDestroy(() => {
         if (subscription) {
             subscription.unsubscribe();
+        }
+        if (reactionsSubscription) {
+            reactionsSubscription.unsubscribe();
         }
     });
 
@@ -76,6 +93,15 @@
         const caption = gif.message ? gif.message.trim() : '';
         await sendMessageToUser(otherUserId, caption, true, gif.url);
         showGifPicker = false;
+    }
+
+    async function handleMessageReaction(event) {
+        const { message, emoji } = event.detail;
+        try {
+            await reactToMessage(message.id, emoji);
+        } catch (error) {
+            console.error('Failed to react to message:', error);
+        }
     }
 </script>
 
@@ -98,7 +124,11 @@
         </div>
 
         <div class="message-area">
-            <MessageList messages={mappedMessages} />
+            <MessageList
+                messages={mappedMessages}
+                enableReactions={true}
+                onReaction={handleMessageReaction}
+            />
         </div>
 
         <GiphyPicker

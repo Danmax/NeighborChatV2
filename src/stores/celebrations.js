@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import { currentUser } from './auth.js';
+import { REACTIONS } from '../lib/utils/reactions.js';
 
 // Celebrations state
 export const celebrations = writable([]);
@@ -21,7 +22,7 @@ export const CELEBRATION_CATEGORIES = [
 ];
 
 // Available reactions
-export const REACTIONS = ['❤️', '🎉', '👏', '🙌', '💯', '🔥', '✨', '💪'];
+export { REACTIONS };
 
 // Set celebrations
 export function setCelebrations(list) {

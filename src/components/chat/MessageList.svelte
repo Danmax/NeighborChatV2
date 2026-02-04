@@ -6,6 +6,8 @@
     export let messages = [];
     export let typingUser = null;
     export let autoScroll = true;
+    export let enableReactions = false;
+    export let onReaction = null;
 
     let containerEl;
     let isUserScrolling = false;
@@ -47,6 +49,12 @@
         const next = messages[index + 1];
         return current.user_id === next.user_id;
     }
+
+    function handleReaction(event) {
+        if (typeof onReaction === 'function') {
+            onReaction(event);
+        }
+    }
 </script>
 
 <div
@@ -66,6 +74,8 @@
                 {message}
                 showAvatar={shouldShowAvatar(i)}
                 compact={isCompact(i)}
+                {enableReactions}
+                on:reaction={handleReaction}
             />
         {/each}
     {/if}
