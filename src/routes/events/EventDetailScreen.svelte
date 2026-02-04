@@ -495,6 +495,54 @@
     function closeHeroModal() {
         showHeroModal = false;
     }
+
+    function shareEvent() {
+        if (!eventData) return;
+        const url = `${window.location.origin}/#/events/${eventData.id}`;
+        const title = eventData.title || 'Community Event';
+        const text = eventData.description ? eventData.description.slice(0, 140) : 'Join me for this event!';
+        if (navigator.share) {
+            navigator.share({ title, text, url }).catch(() => {});
+        } else {
+            navigator.clipboard?.writeText(url);
+            showToast('Event link copied!', 'success');
+        }
+    }
+
+    function downloadCalendarInvite() {
+        if (!eventData?.date) return;
+        const startDate = new Date(eventData.date);
+        if (eventData.time) {
+            const [h, m] = eventData.time.split(':');
+            startDate.setHours(parseInt(h, 10), parseInt(m || '0', 10), 0, 0);
+        }
+        const endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + 1);
+        const pad = (n) => String(n).padStart(2, '0');
+        const toIcs = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+        const uid = `${eventData.id}@neighbor-chat`;
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Neighbor Chat//EN',
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTAMP:${toIcs(new Date())}`,
+            `DTSTART:${toIcs(startDate)}`,
+            `DTEND:${toIcs(endDate)}`,
+            `SUMMARY:${eventData.title || 'Community Event'}`,
+            eventData.location ? `LOCATION:${eventData.location}` : '',
+            eventData.description ? `DESCRIPTION:${eventData.description.replace(/\n/g, '\\n')}` : '',
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].filter(Boolean).join('\n');
+        const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${(eventData.title || 'event').replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.ics`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -566,6 +614,12 @@
                         {/if}
                         <button class="btn btn-secondary" on:click={() => showParticipantsModal = true}>
                             View Attendees ({participants.length})
+                        </button>
+                        <button class="btn btn-secondary" on:click={shareEvent}>
+                            🔗 Share
+                        </button>
+                        <button class="btn btn-secondary" on:click={downloadCalendarInvite}>
+                            📅 Add to Calendar
                         </button>
                     </div>
                 </div>
