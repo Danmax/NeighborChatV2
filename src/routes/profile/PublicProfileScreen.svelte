@@ -8,6 +8,7 @@
     import { isContact } from '../../stores/contacts.js';
     import { sendChatInviteWithResponse } from '../../services/realtime.service.js';
     import { trackSentInvite, updateInviteStatus } from '../../stores/invites.js';
+    import { onlineUsers } from '../../stores/presence.js';
     import { formatPhoneNumber } from '../../lib/utils/phone.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
 
@@ -22,6 +23,7 @@
 
     $: userId = params.userId;
     $: isOwnProfile = userId === $currentUser?.user_id;
+    $: isOnline = !!$onlineUsers?.[userId];
 
     onMount(async () => {
         if (isOwnProfile) {
@@ -230,8 +232,13 @@
                         ✓ Saved
                     </button>
                 {/if}
-                <button class="btn btn-primary" on:click={handleSendInvite}>
-                    💬 Send Chat Invite
+                {#if isOnline}
+                    <button class="btn btn-primary" on:click={handleSendInvite}>
+                        💬 Send Chat Invite
+                    </button>
+                {/if}
+                <button class="btn btn-secondary" on:click={() => push(`/messages/${profile.user_id}`)}>
+                    ✉️ Send Message
                 </button>
             </div>
         </div>
