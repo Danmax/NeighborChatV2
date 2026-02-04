@@ -4,6 +4,7 @@
     import { EVENT_TYPES, EVENT_STATUSES, getEventSettings } from '../../stores/events.js';
     import { currentUser } from '../../stores/auth.js';
     import { generateEventDraft } from '../../services/ai.service.js';
+    import { toDateInputUtc, normalizeDateToUtc } from '../../lib/utils/date.js';
     import { savedContacts } from '../../stores/contacts.js';
 
     export let event = null; // For editing existing events
@@ -11,19 +12,9 @@
 
     const dispatch = createEventDispatcher();
 
-    function toDateInput(value) {
-        if (!value) return '';
-        if (typeof value === 'string' && value.includes('T')) {
-            return value.split('T')[0];
-        }
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) return '';
-        return parsed.toISOString().split('T')[0];
-    }
-
     let title = event?.title || '';
     let type = event?.type || 'meetup';
-    let date = toDateInput(event?.date) || '';
+    let date = toDateInputUtc(event?.date) || '';
     let time = event?.time || '';
     let location = event?.location || '';
     let description = event?.description || '';
@@ -43,7 +34,7 @@
     $: if (event) {
         title = event.title || '';
         type = event.type || 'meetup';
-        date = toDateInput(event.date) || '';
+        date = toDateInputUtc(event.date) || '';
         time = event.time || '';
         location = event.location || '';
         description = event.description || '';
@@ -117,10 +108,11 @@
             : [];
 
         const resolvedStatus = event?.status === 'draft' ? 'published' : status;
+        const normalizedDate = normalizeDateToUtc(date) || date;
         const eventData = {
             title: title.trim(),
             type,
-            date,
+            date: normalizedDate,
             time: time || null,
             location: location.trim() || null,
             description: description.trim() || null,

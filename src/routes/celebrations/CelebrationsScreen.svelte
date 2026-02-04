@@ -20,6 +20,7 @@
     } from '../../services/celebrations.service.js';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import { showToast } from '../../stores/toasts.js';
+    import { toDateInputUtc } from '../../lib/utils/date.js';
 
     let showCreateForm = false;
     let creating = false;
@@ -53,7 +54,7 @@
                 title: title.trim() || null,
                 message: message.trim(),
                 gif_url: selectedGif?.url || null,
-                celebration_date: celebrationDate || null
+                celebration_date: toDateInputUtc(celebrationDate) || null
             };
 
             if (editingCelebration) {
@@ -94,7 +95,7 @@
         category = celebration.category || celebration.type || 'milestone';
         title = celebration.title || '';
         message = celebration.message || '';
-        celebrationDate = celebration.celebration_date || '';
+        celebrationDate = toDateInputUtc(celebration.celebration_date) || '';
         selectedGif = celebration.gif_url ? { url: celebration.gif_url } : null;
         showCreateForm = true;
     }

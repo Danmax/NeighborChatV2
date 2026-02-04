@@ -19,6 +19,7 @@
     import { formatPhoneNumber } from '../../lib/utils/phone.js';
     import ProfilePrivacySettings from '../../components/profile/ProfilePrivacySettings.svelte';
     import { submitEventManagerRequest } from '../../services/admin.service.js';
+    import { toDateInputUtc } from '../../lib/utils/date.js';
 
     let activeTab = 'info';
     let editingAvatar = false;
@@ -131,7 +132,7 @@
     }
 
     function startEditDetails() {
-        tempBirthday = $currentUser?.birthday || '';
+        tempBirthday = toDateInputUtc($currentUser?.birthday) || '';
         tempTitle = $currentUser?.title || '';
         // Format phone for display when editing
         tempPhone = $currentUser?.phone || '';
