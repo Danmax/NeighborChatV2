@@ -31,6 +31,7 @@
     let saving = false;
     let message = '';
     let usernameError = '';
+    let showProfilePreview = false;
 
     // Profile details fields
     let tempBirthday = '';
@@ -269,6 +270,37 @@
             saving = false;
         }
     }
+
+    function getBannerStyle(color, pattern, imageUrl) {
+        let style = imageUrl
+            ? `background-image: url('${imageUrl}'); background-size: cover; background-position: center;`
+            : `background-color: ${color || '#4CAF50'};`;
+
+        if (!imageUrl) {
+            if (pattern === 'dots') {
+                style += ' background-image: radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 20px 20px;';
+            } else if (pattern === 'stripes') {
+                style += ' background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.1) 0px, rgba(255,255,255,0.1) 10px, transparent 10px, transparent 20px);';
+            } else if (pattern === 'grid') {
+                style += ' background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 20px 20px;';
+            } else if (pattern === 'sparkle') {
+                style += ' background-image: radial-gradient(circle, rgba(255,255,255,0.3) 2px, transparent 2px), radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 30px 30px, 15px 15px; background-position: 0 0, 7px 7px;';
+            }
+        }
+
+        return style;
+    }
+
+    function getInterestEmojis(interestIds) {
+        if (!interestIds || interestIds.length === 0) return '';
+        return interestIds
+            .map(id => {
+                const interest = $interestOptions.find(i => i.id === id);
+                return interest ? interest.emoji : '';
+            })
+            .filter(Boolean)
+            .join(' ');
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -279,6 +311,9 @@
                 <span class="icon">👤</span>
                 My Profile
             </h2>
+            <button class="btn btn-secondary btn-small" on:click={() => showProfilePreview = true}>
+                👁️ Preview
+            </button>
         </div>
 
         <!-- Tabs -->
@@ -702,6 +737,56 @@
     </div>
 {/if}
 
+{#if showProfilePreview}
+    <div class="modal-overlay" on:click|self={() => showProfilePreview = false}>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Profile Preview</h3>
+                <button class="modal-close" on:click={() => showProfilePreview = false}>✕</button>
+            </div>
+
+            <div class="preview-banner" style={getBannerStyle($currentUser?.banner_color, $currentUser?.banner_pattern, $currentUser?.banner_image_url)}>
+                <div class="preview-avatar">
+                    <Avatar avatar={$currentUser?.avatar} size="xl" />
+                </div>
+            </div>
+
+            <div class="preview-body">
+                <h2 class="preview-name">@{$currentUser?.username || $currentUser?.name || 'neighbor'}</h2>
+                {#if $currentUser?.bio}
+                    <p class="preview-bio">{$currentUser.bio}</p>
+                {/if}
+
+                <div class="preview-details">
+                    {#if $currentUser?.city}
+                        <div>🏙️ {$currentUser.city}</div>
+                    {/if}
+                    {#if $currentUser?.phone}
+                        <div>📱 {formatPhoneNumber($currentUser.phone)}</div>
+                    {/if}
+                    {#if $currentUser?.birthday}
+                        <div>🎂 {$currentUser.birthday}</div>
+                    {/if}
+                </div>
+
+                {#if $currentUser?.interests?.length}
+                    <div class="preview-interests">
+                        <div class="preview-interests-emoji">{getInterestEmojis($currentUser.interests)}</div>
+                        <div class="preview-interests-labels">
+                            {#each $currentUser.interests as interestId}
+                                {@const interest = $interestOptions.find(i => i.id === interestId)}
+                                {#if interest}
+                                    <span class="interest-label">{interest.label}</span>
+                                {/if}
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+{/if}
+
 <style>
     .profile-screen {
         padding-bottom: 20px;
@@ -1024,6 +1109,90 @@
         border-radius: var(--radius-sm);
         background-size: cover;
         background-position: center;
+    }
+
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 16px;
+        width: 100%;
+        max-width: 520px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--cream-dark);
+    }
+
+    .modal-close {
+        border: none;
+        background: none;
+        font-size: 18px;
+        cursor: pointer;
+    }
+
+    .preview-banner {
+        height: 140px;
+        position: relative;
+    }
+
+    .preview-avatar {
+        position: absolute;
+        left: 20px;
+        bottom: -28px;
+        background: white;
+        padding: 4px;
+        border-radius: 999px;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .preview-body {
+        padding: 36px 20px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .preview-name {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    .preview-bio {
+        margin: 0;
+        color: var(--text-muted);
+    }
+
+    .preview-details {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text);
+    }
+
+    .preview-interests {
+        display: grid;
+        gap: 6px;
+    }
+
+    .preview-interests-emoji {
+        font-size: 18px;
     }
 
     .color-picker {
