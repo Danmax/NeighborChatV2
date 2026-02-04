@@ -105,7 +105,7 @@
         <textarea
             id="recipe-ai"
             bind:value={aiPrompt}
-            placeholder="Describe the recipe you want (e.g., \"Cozy vegetarian chili for 6, smoky, weeknight friendly\")"
+            placeholder='Describe the recipe you want (e.g., "Cozy vegetarian chili for 6, smoky, weeknight friendly")'
             rows="3"
         ></textarea>
         <div class="ai-actions">
