@@ -368,6 +368,58 @@ export async function loadPublicProfile(userId) {
     };
 }
 
+export async function fetchFavoriteMovies(userId) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('favorite_movies')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+}
+
+export async function addFavoriteMovie(movie) {
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to save favorites.');
+    }
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('favorite_movies')
+        .insert([{
+            user_id: authUserId,
+            movie_id: movie.id,
+            source: 'tmdb',
+            title: movie.title,
+            poster_url: movie.poster_url || null,
+            year: movie.year || null
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function removeFavoriteMovie(movieId) {
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('You must be signed in to remove favorites.');
+    }
+    const supabase = getSupabase();
+    const { error } = await supabase
+        .from('favorite_movies')
+        .delete()
+        .eq('user_id', authUserId)
+        .eq('movie_id', movieId)
+        .eq('source', 'tmdb');
+
+    if (error) throw error;
+    return true;
+}
+
 /**
  * Update privacy settings
  */

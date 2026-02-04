@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { currentUser } from '../../stores/auth.js';
-    import { loadPublicProfile } from '../../services/profile.service.js';
+    import { loadPublicProfile, fetchFavoriteMovies } from '../../services/profile.service.js';
     import { interestOptions } from '../../stores/options.js';
     import { saveContact } from '../../services/contacts.service.js';
     import { isContact } from '../../stores/contacts.js';
@@ -20,6 +20,8 @@
     let message = '';
     let actionError = '';
     let isSaved = false;
+    let favoriteMovies = [];
+    let loadingFavorites = false;
 
     $: userId = params.userId;
     $: isOwnProfile = userId === $currentUser?.user_id;
@@ -43,11 +45,15 @@
 
             // Check if user is already in contacts
             isSaved = await isContact(userId);
+
+            loadingFavorites = true;
+            favoriteMovies = await fetchFavoriteMovies(userId);
         } catch (err) {
             console.error('Failed to load public profile:', err);
             error = 'Failed to load profile';
         } finally {
             loading = false;
+            loadingFavorites = false;
         }
     });
 
@@ -240,6 +246,41 @@
                 <button class="btn btn-secondary" on:click={() => push(`/messages/${profile.user_id}`)}>
                     ✉️ Send Message
                 </button>
+            </div>
+
+            <div class="card favorites-card">
+                <h3 class="card-title">Favorite Movies</h3>
+                {#if loadingFavorites}
+                    <p>Loading favorites...</p>
+                {:else if favoriteMovies.length === 0}
+                    <p class="empty-text">No favorites yet.</p>
+                {:else}
+                    <div class="movie-carousel">
+                        {#each favoriteMovies.slice(0, 8) as movie (movie.id)}
+                            <div class="movie-tile">
+                                {#if movie.poster_url}
+                                    <img src={movie.poster_url} alt={movie.title} />
+                                {/if}
+                                <div class="movie-tile-title">{movie.title}</div>
+                            </div>
+                        {/each}
+                    </div>
+                    <div class="movie-grid">
+                        {#each favoriteMovies as movie (movie.id)}
+                            <div class="movie-card">
+                                {#if movie.poster_url}
+                                    <img src={movie.poster_url} alt={movie.title} />
+                                {/if}
+                                <div class="movie-info">
+                                    <div class="movie-title">{movie.title}</div>
+                                    {#if movie.year}
+                                        <div class="movie-year">{movie.year}</div>
+                                    {/if}
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
             </div>
         </div>
     {/if}
@@ -453,6 +494,84 @@
         flex: 1;
     }
 
+    .favorites-card {
+        margin-top: 24px;
+    }
+
+    .movie-carousel {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(140px, 1fr);
+        gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        scroll-snap-type: x mandatory;
+    }
+
+    .movie-tile {
+        scroll-snap-align: start;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 12px;
+        background: white;
+        border: 1px solid var(--cream-dark);
+        min-width: 140px;
+    }
+
+    .movie-tile img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 10px;
+    }
+
+    .movie-tile-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text);
+    }
+
+    .movie-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .movie-card {
+        display: flex;
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        background: white;
+    }
+
+    .movie-card img {
+        width: 54px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+
+    .movie-info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+    }
+
+    .movie-title {
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .movie-year {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
     .btn {
         padding: 14px 20px;
         border: none;

@@ -12,6 +12,9 @@
         updateBio,
         updateBanner,
         uploadBannerImage,
+        addFavoriteMovie,
+        removeFavoriteMovie,
+        fetchFavoriteMovies,
         updatePrivacySettings,
         BANNER_COLORS,
         BANNER_PATTERNS
@@ -41,6 +44,11 @@
     let tempCity = '';
     let tempMagicEmail = '';
     let requestingAccess = false;
+    let favoriteMovies = [];
+    let movieQuery = '';
+    let movieResults = [];
+    let searchingMovies = false;
+    let movieError = '';
 
     // Privacy tab fields
     let editingBio = false;
@@ -269,6 +277,58 @@
         } finally {
             saving = false;
         }
+    }
+
+    async function loadFavorites() {
+        try {
+            if ($currentUser?.user_id) {
+                favoriteMovies = await fetchFavoriteMovies($currentUser.user_id);
+            }
+        } catch (err) {
+            movieError = 'Failed to load favorites.';
+        }
+    }
+
+    async function searchMovies() {
+        if (!movieQuery.trim()) return;
+        searchingMovies = true;
+        movieError = '';
+        try {
+            const res = await fetch(`/api/movie-search?q=${encodeURIComponent(movieQuery.trim())}`);
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Search failed');
+            }
+            movieResults = data.results || [];
+        } catch (err) {
+            movieError = err.message || 'Search failed';
+        } finally {
+            searchingMovies = false;
+        }
+    }
+
+    async function handleAddFavorite(movie) {
+        try {
+            const saved = await addFavoriteMovie(movie);
+            favoriteMovies = [saved, ...favoriteMovies];
+        } catch (err) {
+            movieError = err.message || 'Failed to save favorite';
+        }
+    }
+
+    async function handleRemoveFavorite(movieId) {
+        try {
+            await removeFavoriteMovie(movieId);
+            favoriteMovies = favoriteMovies.filter(m => m.movie_id !== movieId);
+        } catch (err) {
+            movieError = err.message || 'Failed to remove favorite';
+        }
+    }
+
+    let favoritesLoadedFor = null;
+    $: if ($currentUser?.user_id && favoritesLoadedFor !== $currentUser.user_id) {
+        favoritesLoadedFor = $currentUser.user_id;
+        loadFavorites();
     }
 
     function getBannerStyle(color, pattern, imageUrl) {
@@ -676,6 +736,75 @@
                         </button>
                     </div>
                 {/if}
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">
+                    <span class="icon">🎬</span>
+                    Favorite Movies
+                </h3>
+
+                <div class="movie-search">
+                    <input
+                        type="text"
+                        placeholder="Search movies..."
+                        bind:value={movieQuery}
+                        on:keydown={(e) => e.key === 'Enter' && searchMovies()}
+                    />
+                    <button class="btn btn-secondary" on:click={searchMovies} disabled={searchingMovies || !movieQuery.trim()}>
+                        {searchingMovies ? 'Searching...' : 'Search'}
+                    </button>
+                </div>
+
+                {#if movieError}
+                    <div class="movie-error">{movieError}</div>
+                {/if}
+
+                {#if movieResults.length > 0}
+                    <div class="movie-results">
+                        {#each movieResults as movie (movie.id)}
+                            <div class="movie-card">
+                                {#if movie.poster_url}
+                                    <img src={movie.poster_url} alt={movie.title} />
+                                {/if}
+                                <div class="movie-info">
+                                    <div class="movie-title">{movie.title}</div>
+                                    {#if movie.year}
+                                        <div class="movie-year">{movie.year}</div>
+                                    {/if}
+                                    <button class="btn btn-primary btn-small" on:click={() => handleAddFavorite(movie)}>
+                                        Add to Favorites
+                                    </button>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+
+                <div class="movie-favorites">
+                    {#if favoriteMovies.length === 0}
+                        <p class="empty-text">No favorite movies yet.</p>
+                    {:else}
+                        <div class="movie-grid">
+                            {#each favoriteMovies as movie (movie.id)}
+                                <div class="movie-card">
+                                    {#if movie.poster_url}
+                                        <img src={movie.poster_url} alt={movie.title} />
+                                    {/if}
+                                    <div class="movie-info">
+                                        <div class="movie-title">{movie.title}</div>
+                                        {#if movie.year}
+                                            <div class="movie-year">{movie.year}</div>
+                                        {/if}
+                                        <button class="btn btn-secondary btn-small" on:click={() => handleRemoveFavorite(movie.movie_id)}>
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
             </div>
 
             <!-- Privacy Settings -->
@@ -1195,6 +1324,72 @@
 
     .preview-interests-emoji {
         font-size: 18px;
+    }
+
+    .movie-search {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .movie-search input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid var(--cream-dark);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+    }
+
+    .movie-results,
+    .movie-favorites {
+        margin-top: 12px;
+    }
+
+    .movie-grid,
+    .movie-results {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    .movie-card {
+        display: flex;
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        background: white;
+    }
+
+    .movie-card img {
+        width: 64px;
+        height: 96px;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+
+    .movie-info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+    }
+
+    .movie-title {
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .movie-year {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .movie-error {
+        color: #c62828;
+        font-size: 12px;
+        margin-top: 6px;
     }
 
     .preview-interests-labels {
