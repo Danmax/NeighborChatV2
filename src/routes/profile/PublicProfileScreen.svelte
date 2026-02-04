@@ -302,21 +302,6 @@
                             </div>
                         {/each}
                     </div>
-                    <div class="movie-grid">
-                        {#each favoriteMovies as movie (movie.id)}
-                            <div class="movie-card">
-                                {#if movie.poster_url}
-                                    <img src={movie.poster_url} alt={movie.title} />
-                                {/if}
-                                <div class="movie-info">
-                                    <div class="movie-title">{movie.title}</div>
-                                    {#if movie.year}
-                                        <div class="movie-year">{movie.year}</div>
-                                    {/if}
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
                 {/if}
             </div>
         </div>
@@ -542,17 +527,19 @@
     }
 
     .movie-carousel {
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(140px, 1fr);
+        display: flex;
         gap: 12px;
-        overflow-x: auto;
+        overflow: hidden;
         padding-bottom: 6px;
-        scroll-snap-type: x mandatory;
+        animation: marquee 30s linear infinite;
+    }
+
+    @keyframes marquee {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
     }
 
     .movie-tile {
-        scroll-snap-align: start;
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -560,7 +547,7 @@
         border-radius: 12px;
         background: white;
         border: 1px solid var(--cream-dark);
-        min-width: 140px;
+        min-width: 160px;
     }
 
     .movie-tile img {
