@@ -142,6 +142,38 @@
             .filter(Boolean)
             .join(' ');
     }
+
+    function formatBirthdayMonth(dateStr) {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return null;
+        const month = date.getUTCMonth();
+        const labelDate = new Date(Date.UTC(2000, month, 1));
+        return labelDate.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+    }
+
+    function getPublicBirthdayMessage(dateStr) {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return null;
+        const now = new Date();
+        const currentYear = now.getUTCFullYear();
+        const target = new Date(Date.UTC(currentYear, date.getUTCMonth(), date.getUTCDate()));
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        let diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+            const next = new Date(Date.UTC(currentYear + 1, date.getUTCMonth(), date.getUTCDate()));
+            diffDays = Math.round((next - today) / (1000 * 60 * 60 * 24));
+        }
+        if (diffDays <= 5) {
+            if (diffDays === 0) return 'Birthday today 🎉';
+            return `Birthday in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+        }
+        if (today.getUTCMonth() === date.getUTCMonth()) {
+            return `Birthday this month in ${diffDays} days`;
+        }
+        return null;
+    }
 </script>
 
 <div class="public-profile-screen">
@@ -204,7 +236,12 @@
                 {#if profile.birthday}
                     <div class="profile-detail">
                         <span class="detail-icon">🎂</span>
-                        <span class="detail-text">{profile.birthday}</span>
+                        <span class="detail-text">
+                            Birthday in {formatBirthdayMonth(profile.birthday)}
+                            {#if getPublicBirthdayMessage(profile.birthday)}
+                                <span class="birthday-note">• {getPublicBirthdayMessage(profile.birthday)}</span>
+                            {/if}
+                        </span>
                     </div>
                 {/if}
             </div>
@@ -438,6 +475,12 @@
         gap: 8px;
         font-size: 14px;
         color: var(--text);
+    }
+
+    .birthday-note {
+        margin-left: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     .detail-icon {
