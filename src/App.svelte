@@ -88,6 +88,7 @@
     let ready = false;
     let authSubscription = null;
     let inviteChannel = null;
+    let showMobileMenu = false;
 
     onMount(async () => {
         try {
@@ -322,44 +323,48 @@
     <!-- Footer Navigation (hidden in chat mode) -->
     {#if $isAuthenticated}
         <footer class="app-footer" class:collapsed={isInChatMode && !showSidebar}>
-            <a href="#/" class="footer-btn active">
+            <a href="#/" class="footer-btn primary active" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">🏠</span>
                 <span class="footer-label">Home</span>
             </a>
-            <a href="#/messages" class="footer-btn">
+            <a href="#/messages" class="footer-btn primary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">✉️</span>
                 <span class="footer-label">Messages</span>
             </a>
-            <a href="#/events" class="footer-btn">
+            <a href="#/events" class="footer-btn primary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">📅</span>
                 <span class="footer-label">Events</span>
             </a>
-            <a href="#/recipes" class="footer-btn">
+            <a href="#/recipes" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">🥘</span>
                 <span class="footer-label">Recipes</span>
             </a>
-            <a href="#/celebrations" class="footer-btn">
+            <a href="#/celebrations" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">🎉</span>
                 <span class="footer-label">Celebrate</span>
             </a>
-            <a href="#/contacts" class="footer-btn">
+            <a href="#/contacts" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">👥</span>
                 <span class="footer-label">Contacts</span>
             </a>
-            <a href="#/profile" class="footer-btn">
+            <a href="#/profile" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">👤</span>
                 <span class="footer-label">Profile</span>
             </a>
-            <a href="#/feedback" class="footer-btn">
+            <a href="#/feedback" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">💬</span>
                 <span class="footer-label">Feedback</span>
             </a>
             {#if isAdmin}
-                <a href="#/admin" class="footer-btn">
+                <a href="#/admin" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                     <span class="footer-icon">🛠️</span>
                     <span class="footer-label">Admin</span>
                 </a>
             {/if}
+            <button class="footer-btn menu-toggle" type="button" on:click={() => showMobileMenu = !showMobileMenu} aria-expanded={showMobileMenu}>
+                <span class="footer-icon">{showMobileMenu ? '✕' : '☰'}</span>
+                <span class="footer-label">Menu</span>
+            </button>
         </footer>
         {#if isInChatMode}
             <button class="sidebar-toggle" on:click={() => showSidebar = !showSidebar} title="Toggle menu">
@@ -378,6 +383,57 @@
 
     <!-- Toast Notifications -->
     <ToastContainer />
+
+    {#if showMobileMenu}
+        <div class="mega-menu-overlay" on:click|self={() => showMobileMenu = false}>
+            <div class="mega-menu">
+                <div class="mega-menu-header">
+                    <h3>Menu</h3>
+                    <button class="mega-close" on:click={() => showMobileMenu = false}>✕</button>
+                </div>
+                <div class="mega-menu-grid">
+                    <a href="#/" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">🏠</span>
+                        <span class="mega-label">Home</span>
+                    </a>
+                    <a href="#/messages" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">✉️</span>
+                        <span class="mega-label">Messages</span>
+                    </a>
+                    <a href="#/events" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">📅</span>
+                        <span class="mega-label">Events</span>
+                    </a>
+                    <a href="#/recipes" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">🥘</span>
+                        <span class="mega-label">Recipes</span>
+                    </a>
+                    <a href="#/celebrations" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">🎉</span>
+                        <span class="mega-label">Celebrate</span>
+                    </a>
+                    <a href="#/contacts" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">👥</span>
+                        <span class="mega-label">Contacts</span>
+                    </a>
+                    <a href="#/profile" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">👤</span>
+                        <span class="mega-label">Profile</span>
+                    </a>
+                    <a href="#/feedback" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">💬</span>
+                        <span class="mega-label">Feedback</span>
+                    </a>
+                    {#if isAdmin}
+                        <a href="#/admin" class="mega-item" on:click={() => showMobileMenu = false}>
+                            <span class="mega-icon">🛠️</span>
+                            <span class="mega-label">Admin</span>
+                        </a>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    {/if}
 {/if}
 
 <style>
