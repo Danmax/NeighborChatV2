@@ -25,6 +25,7 @@ function transformCelebrationFromDb(row) {
         recipientId: row.recipient_id,
         message: row.message,
         gif_url: row.gif_url,
+        image_url: row.image_url,
         celebration_date: row.celebration_date,
         emoji: row.emoji || '🎂',
         authorId: row.author_id,
@@ -45,6 +46,7 @@ function transformCelebrationToDb(celebrationData, user, authUserId) {
         type: celebrationData.category || celebrationData.type || 'birthday',
         message: celebrationData.message,
         gif_url: celebrationData.gif_url || null,
+        image_url: celebrationData.image_url || null,
         celebration_date: celebrationData.celebration_date || null,
         honoree: celebrationData.title || celebrationData.honoree || null,
         recipient_name: celebrationData.recipientName || celebrationData.title || null,
@@ -174,6 +176,7 @@ export async function updateCelebrationInDb(celebrationId, updates) {
     if (updates.category !== undefined) dbUpdates.type = updates.category;
     if (updates.title !== undefined) dbUpdates.honoree = updates.title;
     if (updates.gif_url !== undefined) dbUpdates.gif_url = updates.gif_url;
+    if (updates.image_url !== undefined) dbUpdates.image_url = updates.image_url;
     if (updates.celebration_date !== undefined) dbUpdates.celebration_date = updates.celebration_date;
     if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
 
@@ -193,6 +196,32 @@ export async function updateCelebrationInDb(celebrationId, updates) {
         console.error('Failed to update celebration:', error);
         throw error;
     }
+}
+
+/**
+ * Upload a celebration image and return public URL
+ */
+export async function uploadCelebrationImage(file) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to upload images.');
+    }
+
+    const safeName = file.name.replace(/\s+/g, '_');
+    const path = `${authUserId}/${Date.now()}_${safeName}`;
+
+    const { error } = await supabase.storage
+        .from('celebration-images')
+        .upload(path, file, { upsert: false });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+        .from('celebration-images')
+        .getPublicUrl(path);
+
+    return data.publicUrl;
 }
 
 async function applyArchiveRules(celebrations) {

@@ -16,7 +16,8 @@
         updateCelebrationInDb,
         updateReactions,
         reactToCelebration,
-        postComment
+        postComment,
+        uploadCelebrationImage
     } from '../../services/celebrations.service.js';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import { showToast } from '../../stores/toasts.js';
@@ -27,6 +28,8 @@
     let showGifPicker = false;
     let selectedGif = null;
     let editingCelebration = null;
+    let imageUrl = '';
+    let uploadingImage = false;
 
     // Form fields
     let category = 'milestone';
@@ -54,6 +57,7 @@
                 title: title.trim() || null,
                 message: message.trim(),
                 gif_url: selectedGif?.url || null,
+                image_url: imageUrl || null,
                 celebration_date: toDateInputUtc(celebrationDate) || null
             };
 
@@ -71,6 +75,7 @@
             message = '';
             celebrationDate = '';
             selectedGif = null;
+            imageUrl = '';
             editingCelebration = null;
             showCreateForm = false;
         } catch (err) {
@@ -97,7 +102,21 @@
         message = celebration.message || '';
         celebrationDate = toDateInputUtc(celebration.celebration_date) || '';
         selectedGif = celebration.gif_url ? { url: celebration.gif_url } : null;
+        imageUrl = celebration.image_url || '';
         showCreateForm = true;
+    }
+
+    async function handleImageUpload(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        uploadingImage = true;
+        try {
+            imageUrl = await uploadCelebrationImage(file);
+        } catch (err) {
+            showToast(`Failed to upload image: ${err.message}`, 'error');
+        } finally {
+            uploadingImage = false;
+        }
     }
 
     async function handleArchive() {
@@ -232,6 +251,23 @@
                         <button class="btn btn-secondary btn-small" on:click={() => showGifPicker = true}>
                             Add GIF
                         </button>
+                    {/if}
+                </fieldset>
+
+                <fieldset class="form-group">
+                    <legend>Image (optional)</legend>
+                    {#if imageUrl}
+                        <div class="gif-preview">
+                            <img src={imageUrl} alt="Celebration image" />
+                            <button class="btn btn-secondary btn-small" on:click={() => imageUrl = ''}>
+                                Remove
+                            </button>
+                        </div>
+                    {:else}
+                        <input type="file" accept="image/*" on:change={handleImageUpload} />
+                        {#if uploadingImage}
+                            <span class="helper-text">Uploading image…</span>
+                        {/if}
                     {/if}
                 </fieldset>
 

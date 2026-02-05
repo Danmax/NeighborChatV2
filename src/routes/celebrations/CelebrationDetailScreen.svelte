@@ -4,7 +4,7 @@
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import { celebrations, CELEBRATION_CATEGORIES } from '../../stores/celebrations.js';
-    import { fetchCelebrationById, postComment, reactToCelebration, updateCelebrationInDb } from '../../services/celebrations.service.js';
+    import { fetchCelebrationById, postComment, reactToCelebration, updateCelebrationInDb, uploadCelebrationImage } from '../../services/celebrations.service.js';
     import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
     import Avatar from '../../components/avatar/Avatar.svelte';
@@ -25,8 +25,10 @@
     let editMessage = '';
     let editDate = '';
     let editGif = null;
+    let editImageUrl = '';
     let savingEdit = false;
     let showEditGifPicker = false;
+    let uploadingEditImage = false;
 
     $: replyCount = celebration?.comments?.length || 0;
     $: isOwner = celebration?.authorId === $currentUser?.user_id || celebration?.user_id === $currentUser?.user_id;
@@ -107,6 +109,7 @@
         editMessage = target.message || '';
         editDate = toDateInputUtc(target.celebration_date) || '';
         editGif = target.gif_url ? { url: target.gif_url } : null;
+        editImageUrl = target.image_url || '';
         isEditing = true;
     }
 
@@ -123,6 +126,7 @@
                 title: editTitle.trim() || null,
                 message: editMessage.trim() || null,
                 gif_url: editGif?.url || null,
+                image_url: editImageUrl || null,
                 celebration_date: toDateInputUtc(editDate) || null
             });
             celebration = await fetchCelebrationById(celebration.id);
@@ -143,6 +147,19 @@
     function handleEditGifSelect(event) {
         editGif = event.detail;
         showEditGifPicker = false;
+    }
+
+    async function handleEditImageUpload(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        uploadingEditImage = true;
+        try {
+            editImageUrl = await uploadCelebrationImage(file);
+        } catch (err) {
+            showToast(`Failed to upload image: ${err.message}`, 'error');
+        } finally {
+            uploadingEditImage = false;
+        }
     }
 </script>
 
@@ -185,6 +202,22 @@
                     <label>
                         Message
                         <textarea bind:value={editMessage} rows="3" maxlength="500"></textarea>
+                    </label>
+                    <label>
+                        Image
+                        {#if editImageUrl}
+                            <div class="gif-preview">
+                                <img src={editImageUrl} alt="Celebration image" />
+                                <button class="btn btn-secondary btn-small" on:click={() => editImageUrl = ''}>
+                                    Remove
+                                </button>
+                            </div>
+                        {:else}
+                            <input type="file" accept="image/*" on:change={handleEditImageUpload} />
+                            {#if uploadingEditImage}
+                                <span class="helper-text">Uploading image…</span>
+                            {/if}
+                        {/if}
                     </label>
                     {#if editCategory === 'birthday' || editCategory === 'anniversary'}
                         <label>
