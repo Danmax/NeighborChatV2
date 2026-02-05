@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireClerkUser } from './_clerk.js';
 
 function getSupabaseAdmin() {
     const url = process.env.SUPABASE_URL;
@@ -38,15 +39,13 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabaseAdmin();
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token || !supabase) {
-        res.status(401).json({ error: 'Unauthorized' });
+    if (!supabase) {
+        res.status(500).json({ error: 'Server misconfigured' });
         return;
     }
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData?.user) {
-        res.status(401).json({ error: 'Unauthorized' });
+    const authResult = await requireClerkUser(req);
+    if (authResult?.error) {
+        res.status(authResult.status || 401).json({ error: authResult.error });
         return;
     }
 

@@ -1,9 +1,7 @@
-import { getSupabase } from '../lib/supabase.js';
+import { getClerkToken } from '../lib/clerk.js';
 
 export async function generateEventDraft({ prompt, context = {} }) {
-    const supabase = getSupabase();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
+    const accessToken = await getClerkToken();
 
     if (!accessToken) {
         throw new Error('Please sign in to use AI drafts.');
@@ -27,9 +25,7 @@ export async function generateEventDraft({ prompt, context = {} }) {
 }
 
 export async function generateRecipeDraft({ prompt, context = {} }) {
-    const supabase = getSupabase();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
+    const accessToken = await getClerkToken();
 
     if (!accessToken) {
         throw new Error('Please sign in to use AI drafts.');

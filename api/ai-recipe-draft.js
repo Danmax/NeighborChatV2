@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireClerkUser } from './_clerk.js';
 
 const DEFAULTS = {
     is_public: true
@@ -112,24 +113,16 @@ export default async function handler(req, res) {
         auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-    if (!token) {
-        res.status(401).json({ error: 'Missing auth token' });
-        return;
-    }
-
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData?.user) {
-        res.status(401).json({ error: 'Invalid auth token' });
+    const authResult = await requireClerkUser(req);
+    if (authResult?.error) {
+        res.status(authResult.status || 401).json({ error: authResult.error });
         return;
     }
 
     const { data: profile } = await supabase
         .from('user_profiles')
         .select('role')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', authResult.userId)
         .maybeSingle();
 
     const role = profile?.role || 'user';

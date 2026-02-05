@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireClerkUser } from './_clerk.js';
 
 const EVENT_TYPES = [
     'meetup',
@@ -151,21 +152,13 @@ export default async function handler(req, res) {
         auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-    if (!token) {
-        res.status(401).json({ error: 'Missing auth token' });
+    const authResult = await requireClerkUser(req);
+    if (authResult?.error) {
+        res.status(authResult.status || 401).json({ error: authResult.error });
         return;
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData?.user) {
-        res.status(401).json({ error: 'Invalid auth token' });
-        return;
-    }
-
-    const userId = userData.user.id;
+    const userId = authResult.userId;
 
     const { data: profile } = await supabase
         .from('user_profiles')

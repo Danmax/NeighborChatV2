@@ -4,6 +4,7 @@
     import { currentUser, updateCurrentUser } from '../../stores/auth.js';
     import { showTopMenu } from '../../stores/ui.js';
     import { getSupabase } from '../../lib/supabase.js';
+    import { getClerkUser } from '../../lib/clerk.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
 import { interestOptions } from '../../stores/options.js';
@@ -31,8 +32,8 @@ import { interestOptions } from '../../stores/options.js';
 
         try {
             const supabase = getSupabase();
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (!authUser) return;
+            const authUser = await getClerkUser();
+            if (!authUser?.id) return;
 
             const { data: profile } = await supabase
                 .from('user_profiles')
@@ -128,11 +129,9 @@ import { interestOptions } from '../../stores/options.js';
 
         try {
             const supabase = getSupabase();
+            const authUser = await getClerkUser();
 
-            // Get the authenticated user from Supabase
-            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-
-            if (authError || !authUser) {
+            if (!authUser?.id) {
                 throw new Error('User authentication not found. Please log in again.');
             }
 

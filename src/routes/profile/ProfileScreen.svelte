@@ -24,6 +24,7 @@
     import ProfilePrivacySettings from '../../components/profile/ProfilePrivacySettings.svelte';
     import { submitEventManagerRequest } from '../../services/admin.service.js';
     import { toDateInputUtc } from '../../lib/utils/date.js';
+    import { getClerkToken } from '../../lib/clerk.js';
 
     let activeTab = 'info';
     let editingAvatar = false;
@@ -294,7 +295,12 @@
         searchingMovies = true;
         movieError = '';
         try {
-            const res = await fetch(`/api/movie-search?q=${encodeURIComponent(movieQuery.trim())}`);
+            const accessToken = await getClerkToken();
+            const res = await fetch(`/api/movie-search?q=${encodeURIComponent(movieQuery.trim())}`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                }
+            });
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data.error || 'Search failed');

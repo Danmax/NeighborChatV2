@@ -1,5 +1,6 @@
 // Supabase client initialization
 import { createClient } from '@supabase/supabase-js';
+import { getClerkToken, getClerkUser } from './clerk.js';
 
 let supabaseClient = null;
 let config = null;
@@ -44,10 +45,16 @@ export async function initSupabase() {
         // Initialize Supabase client
         supabaseClient = createClient(
             config.supabase.url,
-            config.supabase.anonKey
+            config.supabase.anonKey,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false,
+                    detectSessionInUrl: false
+                },
+                accessToken: async () => getClerkToken()
+            }
         );
-
-        await handleOAuthRedirect();
 
         console.log('✅ Supabase initialized securely from API');
         return supabaseClient;
@@ -84,10 +91,16 @@ async function initLocalConfig() {
 
     supabaseClient = createClient(
         config.supabase.url,
-        config.supabase.anonKey
+        config.supabase.anonKey,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+                detectSessionInUrl: false
+            },
+            accessToken: async () => getClerkToken()
+        }
     );
-
-    await handleOAuthRedirect();
 
     console.log('✅ Supabase initialized (local mode)');
     return supabaseClient;
@@ -104,30 +117,7 @@ export function getSupabase() {
 }
 
 async function handleOAuthRedirect() {
-    if (typeof window === 'undefined' || !supabaseClient) return;
-
-    try {
-        const url = new URL(window.location.href);
-        const hasCode = url.searchParams.get('code');
-
-        if (hasCode) {
-            const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
-            if (error) {
-                console.error('❌ OAuth exchange failed:', error);
-            }
-
-            url.searchParams.delete('code');
-            url.searchParams.delete('state');
-            url.searchParams.delete('error');
-            url.searchParams.delete('error_description');
-
-            const search = url.searchParams.toString();
-            const cleaned = `${url.pathname}${search ? `?${search}` : ''}${url.hash}`;
-            window.history.replaceState({}, document.title, cleaned);
-        }
-    } catch (error) {
-        console.error('❌ OAuth redirect handling failed:', error);
-    }
+    return;
 }
 
 /**
@@ -142,20 +132,15 @@ export function getConfig() {
  * @returns {Promise<{authenticated: boolean, userId: string|null}>}
  */
 export async function checkSupabaseAuth() {
-    if (!supabaseClient) {
-        return { authenticated: false, userId: null };
-    }
-
     try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session?.user?.id) {
-            return { authenticated: true, userId: session.user.id };
+        const user = await getClerkUser();
+        if (user?.id) {
+            return { authenticated: true, userId: user.id };
         }
-        return { authenticated: false, userId: null };
     } catch (error) {
         console.error('Failed to check auth:', error);
-        return { authenticated: false, userId: null };
     }
+    return { authenticated: false, userId: null };
 }
 
 /**
@@ -165,14 +150,5 @@ export async function checkSupabaseAuth() {
 export async function getAuthUserId() {
     const { authenticated, userId } = await checkSupabaseAuth();
     if (authenticated && userId) return userId;
-
-    if (!supabaseClient) return null;
-
-    try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        return user?.id || null;
-    } catch (error) {
-        console.error('Failed to fetch auth user:', error);
-        return null;
-    }
+    return null;
 }

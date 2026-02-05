@@ -1,118 +1,37 @@
-// Auth service - Supabase authentication operations
+// Auth service - Clerk authentication operations
 import { getSupabase } from '../lib/supabase.js';
 import { currentUser, authUser, setCurrentUser, updateCurrentUser, clearAuth } from '../stores/auth.js';
 import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
 import { InputValidator } from '../lib/security.js';
+import { addClerkListener, clerkSignOut, getClerkUser, getClerkSession } from '../lib/clerk.js';
 
 /**
  * Sign in with Google OAuth
  */
 export async function signInWithGoogle() {
-    const supabase = getSupabase();
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            redirectTo: `${window.location.origin}/`,
-            scopes: 'profile email'
-        }
-    });
-
-    if (error) throw error;
-    return { success: true, data };
+    throw new Error('Use the Clerk sign-in widget to authenticate.');
 }
 
 /**
  * Sign in with GitHub OAuth
  */
 export async function signInWithGitHub() {
-    const supabase = getSupabase();
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-            redirectTo: `${window.location.origin}/`,
-            scopes: 'read:user user:email'
-        }
-    });
-
-    if (error) throw error;
-    return { success: true, data };
+    throw new Error('Use the Clerk sign-in widget to authenticate.');
 }
 
 /**
  * Sign in with email and password
  */
 export async function signInWithPassword(email, password) {
-    const supabase = getSupabase();
-
-    if (!email) throw new Error('Please enter your email');
-    if (!password) throw new Error('Please enter your password');
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password
-    });
-
-    if (error) throw error;
-
-    // Fast path: set basic user data immediately
-    const basicUserData = createBasicUserData(data.user);
-    setCurrentUser(basicUserData);
-    authUser.set(data.user);
-
-    // Background: fetch full profile
-    if (basicUserData?.user_id) {
-        fetchAndUpdateUserProfile(basicUserData.user_id);
-    }
-
-    return { success: true, user: basicUserData };
+    throw new Error('Password sign-in is disabled. Use Clerk sign-in.');
 }
 
 /**
  * Sign up with email and password
  */
 export async function signUp(name, email, password) {
-    const supabase = getSupabase();
-
-    const validatedName = InputValidator.validateDisplayName(name);
-    const validatedEmail = InputValidator.validateEmail(email);
-
-    // Validate password
-    if (password.length < 8) {
-        throw new Error('Password must be at least 8 characters');
-    }
-
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-        throw new Error('Password must contain uppercase, lowercase, and number');
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-        email: validatedEmail,
-        password: password,
-        options: {
-            data: {
-                display_name: validatedName,
-                avatar: generateRandomAvatar()
-            },
-            emailRedirectTo: window.location.origin
-        }
-    });
-
-    if (error) throw error;
-
-    // Check if email confirmation required
-    if (data.user && !data.session) {
-        return { success: true, confirmationRequired: true };
-    }
-
-    // No confirmation needed, set user (await async function)
-    const userData = await createUserDataFromSession(data.user);
-    setCurrentUser(userData);
-    authUser.set(data.user);
-
-    return { success: true, user: userData };
+    throw new Error('Use Clerk sign-up to create an account.');
 }
 
 /**
@@ -190,11 +109,7 @@ export async function createUserProfile(userData, onboardingData = {}) {
  * Sign out
  */
 export async function signOut() {
-    const supabase = getSupabase();
-
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-
+    await clerkSignOut();
     clearAuth();
     return { success: true };
 }
@@ -215,20 +130,14 @@ function withTimeout(promise, timeoutMs, label) {
  */
 export async function checkExistingAuth() {
     try {
-        const supabase = getSupabase();
-        const { data: { session } } = await withTimeout(
-            supabase.auth.getSession(),
-            3000,
-            'getSession'
-        );
+        const session = await getClerkSession();
+        const user = await getClerkUser();
 
-        if (session && session.user) {
-            // Fast path: set basic user data immediately
-            const basicUserData = createBasicUserData(session.user);
+        if (session && user) {
+            const basicUserData = createBasicUserDataFromClerk(user);
             setCurrentUser(basicUserData);
-            authUser.set(session.user);
+            authUser.set(user);
 
-            // Background: fetch full profile
             if (basicUserData?.user_id) {
                 fetchAndUpdateUserProfile(basicUserData.user_id);
             }
@@ -250,25 +159,23 @@ export async function checkExistingAuth() {
  * Set up auth state change listener with onboarding routing
  */
 export function setupAuthListener(callback) {
-    const supabase = getSupabase();
     let lastHandledUserId = null;
     let lastHandledEvent = null;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const unsubscribePromise = addClerkListener(({ session, user }) => {
+        const event = session && user ? 'SIGNED_IN' : 'SIGNED_OUT';
         console.log('Auth state changed:', event);
 
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-            const currentUserId = session.user?.id || null;
-            if (event === 'INITIAL_SESSION' && lastHandledUserId === currentUserId && lastHandledEvent === 'SIGNED_IN') {
+        if (event === 'SIGNED_IN') {
+            const currentUserId = user?.id || null;
+            if (lastHandledUserId === currentUserId && lastHandledEvent === 'SIGNED_IN') {
                 return;
             }
 
-            // Fast path: set basic user data immediately (no await, no database query)
-            const basicUserData = createBasicUserData(session.user);
+            const basicUserData = createBasicUserDataFromClerk(user);
             setCurrentUser(basicUserData);
-            authUser.set(session.user);
+            authUser.set(user);
 
-            // Determine if onboarding needed (based on basic data)
             const shouldOnboard = basicUserData?.onboardingCompleted === false;
 
             callback?.({
@@ -277,26 +184,26 @@ export function setupAuthListener(callback) {
                 shouldOnboard
             });
 
-            // Background: fetch full profile in parallel (non-blocking)
             if (basicUserData?.user_id) {
                 fetchAndUpdateUserProfile(basicUserData.user_id);
             }
 
             lastHandledUserId = currentUserId;
             lastHandledEvent = event;
-        }
-
-        if (event === 'SIGNED_OUT') {
+        } else {
             clearAuth();
             callback?.({ event, user: null });
         }
-
-        if (event === 'TOKEN_REFRESHED') {
-            console.log('Token refreshed');
-        }
     });
 
-    return subscription;
+    return {
+        unsubscribe: async () => {
+            const unsubscribe = await unsubscribePromise;
+            if (typeof unsubscribe === 'function') {
+                unsubscribe();
+            }
+        }
+    };
 }
 
 /**
@@ -382,6 +289,18 @@ function buildBaseUserData(user) {
     };
 }
 
+function buildBaseUserDataFromClerk(user) {
+    const email = user?.primaryEmailAddress?.emailAddress || null;
+    const emailFallback = email ? email.split('@')[0] : 'User';
+    return {
+        user_id: user?.id,
+        email,
+        name: user?.username || user?.fullName || emailFallback,
+        avatar: user?.imageUrl || generateRandomAvatar(),
+        loginTime: Date.now()
+    };
+}
+
 /**
  * Create basic user data immediately (no database query)
  * Used for fast initial auth completion
@@ -398,6 +317,23 @@ function createBasicUserData(user) {
     }
 
     // Return base data with flags indicating profile is loading
+    return {
+        ...baseData,
+        profileLoading: true,
+        onboardingCompleted: false
+    };
+}
+
+function createBasicUserDataFromClerk(user) {
+    if (!user) return null;
+
+    const baseData = buildBaseUserDataFromClerk(user);
+
+    const cachedUser = getCachedUserForSession(baseData);
+    if (cachedUser) {
+        return cachedUser;
+    }
+
     return {
         ...baseData,
         profileLoading: true,
@@ -468,8 +404,9 @@ export async function fetchAndUpdateUserProfile(userId) {
 
 function getCachedUserForSession(user) {
     const cached = getCachedData('currentUser', null);
-    if (!cached || !user?.id) return null;
-    if (cached.user_id !== user.id) return null;
+    const userId = user?.user_id || user?.id;
+    if (!cached || !userId) return null;
+    if (cached.user_id !== userId) return null;
     return cached;
 }
 

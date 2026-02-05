@@ -1,39 +1,10 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
-
-    const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_c29jaWFsLWVzY2FyZ290LTAuY2xlcmsuYWNjb3VudHMuZGV2JA';
-    const CLERK_SCRIPT_SRC = 'https://social-escargot-0.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+    import { loadClerk } from '../../lib/clerk.js';
 
     let loading = true;
     let error = '';
     let pricingNode;
-
-    async function loadClerk() {
-        if (window.Clerk) {
-            return window.Clerk;
-        }
-
-        await new Promise((resolve, reject) => {
-            const existing = document.querySelector(`script[src="${CLERK_SCRIPT_SRC}"]`);
-            if (existing) {
-                existing.addEventListener('load', () => resolve());
-                existing.addEventListener('error', () => reject(new Error('Failed to load Clerk')));
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = CLERK_SCRIPT_SRC;
-            script.async = true;
-            script.defer = true;
-            script.crossOrigin = 'anonymous';
-            script.setAttribute('data-clerk-publishable-key', CLERK_PUBLISHABLE_KEY);
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load Clerk'));
-            document.head.appendChild(script);
-        });
-
-        return window.Clerk;
-    }
 
     onMount(async () => {
         try {

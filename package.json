@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/backend": "^2.16.0",
     "@supabase/supabase-js": "^2.93.3",
     "emoji-picker-element": "^1.28.1",
     "svelte": "^4.0.0",
