@@ -3,9 +3,18 @@
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
     import { gameTemplates, gameTemplatesLoading, gameTemplatesError } from '../../stores/games.js';
-    import { fetchGameTemplates } from '../../services/games.service.js';
+    import { fetchGameTemplates, createGameSession } from '../../services/games.service.js';
+    import { showToast } from '../../stores/toasts.js';
 
     let selectedTemplate = null;
+    let showSessionModal = false;
+    let sessionName = '';
+    let sessionDate = '';
+    let sessionTime = '';
+    let sessionDuration = '';
+    let heatCount = '';
+    let championshipEnabled = true;
+    let savingSession = false;
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -15,6 +24,37 @@
 
     function selectTemplate(template) {
         selectedTemplate = template;
+    }
+
+    function openSessionModal() {
+        if (!selectedTemplate) return;
+        sessionName = `${selectedTemplate.name} Session`;
+        sessionDuration = selectedTemplate.estimatedDuration || 60;
+        heatCount = selectedTemplate?.config?.sessions?.rounds || 4;
+        championshipEnabled = true;
+        showSessionModal = true;
+    }
+
+    async function handleCreateSession() {
+        if (!sessionDate || !sessionTime || savingSession) return;
+        savingSession = true;
+        try {
+            const scheduledStart = new Date(`${sessionDate}T${sessionTime}`).toISOString();
+            await createGameSession({
+                template: selectedTemplate,
+                name: sessionName,
+                scheduledStart,
+                durationMinutes: Number(sessionDuration) || selectedTemplate.estimatedDuration || 60,
+                heatCount: Number(heatCount) || 4,
+                championshipEnabled
+            });
+            showToast('Game session scheduled!', 'success');
+            showSessionModal = false;
+        } catch (err) {
+            showToast(err.message || 'Failed to create session', 'error');
+        } finally {
+            savingSession = false;
+        }
     }
 
     function getRulesList(template) {
@@ -90,6 +130,11 @@
                         <span class="badge">{selectedTemplate.estimatedDuration} min</span>
                     </div>
                 </div>
+                <div class="detail-actions">
+                    <button class="btn btn-primary btn-small" on:click={openSessionModal}>
+                        Schedule Session
+                    </button>
+                </div>
 
                 <div class="detail-grid">
                     <div class="detail-section">
@@ -148,6 +193,53 @@
                     <p>Sponsors: {selectedTemplate.config?.sponsors || 'Invite community sponsors'}</p>
                     <p>Prize model: {selectedTemplate.config?.prizes || 'Points + rewards'}</p>
                     <p>Winner rules: {selectedTemplate.config?.winner_rules || 'Highest points wins'}</p>
+                </div>
+            </div>
+        {/if}
+
+        {#if showSessionModal}
+            <div class="session-modal" role="dialog" aria-modal="true" on:click|self={() => showSessionModal = false}>
+                <div class="session-modal-content">
+                    <div class="session-modal-header">
+                        <h3>Schedule Game Session</h3>
+                        <button class="modal-close" on:click={() => showSessionModal = false}>✕</button>
+                    </div>
+                    <div class="session-form">
+                        <label>
+                            Session Name
+                            <input type="text" bind:value={sessionName} />
+                        </label>
+                        <div class="session-row">
+                            <label>
+                                Date
+                                <input type="date" bind:value={sessionDate} />
+                            </label>
+                            <label>
+                                Time
+                                <input type="time" bind:value={sessionTime} />
+                            </label>
+                        </div>
+                        <div class="session-row">
+                            <label>
+                                Duration (minutes)
+                                <input type="number" min="10" max="240" bind:value={sessionDuration} />
+                            </label>
+                            <label>
+                                Heats / Rounds
+                                <input type="number" min="1" max="20" bind:value={heatCount} />
+                            </label>
+                        </div>
+                        <label class="session-toggle">
+                            <input type="checkbox" bind:checked={championshipEnabled} />
+                            Championship round enabled
+                        </label>
+                        <div class="session-actions">
+                            <button class="btn btn-secondary" on:click={() => showSessionModal = false}>Cancel</button>
+                            <button class="btn btn-primary" on:click={handleCreateSession} disabled={savingSession || !sessionDate || !sessionTime}>
+                                {savingSession ? 'Saving...' : 'Create Session'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         {/if}
@@ -241,6 +333,12 @@
         align-items: flex-start;
     }
 
+    .detail-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
     .detail-badges {
         display: flex;
         gap: 8px;
@@ -269,6 +367,76 @@
     .detail-section ul {
         padding-left: 18px;
         margin: 8px 0 0;
+    }
+
+    .session-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 200;
+    }
+
+    .session-modal-content {
+        width: min(520px, 100%);
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .session-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+
+    .session-form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .session-form label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .session-form input[type=\"text\"],
+    .session-form input[type=\"date\"],
+    .session-form input[type=\"time\"],
+    .session-form input[type=\"number\"] {
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .session-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+
+    .session-toggle {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--text);
+    }
+
+    .session-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
     }
 
     @media (max-width: 640px) {

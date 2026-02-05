@@ -1,9 +1,10 @@
-import { getSupabase } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId } from '../lib/supabase.js';
 import {
     setGameTemplates,
     gameTemplatesLoading,
     gameTemplatesError
 } from '../stores/games.js';
+import { getActiveMembershipId } from './events.service.js';
 
 function transformTemplate(row) {
     return {
@@ -48,4 +49,54 @@ export async function fetchGameTemplates() {
     } finally {
         gameTemplatesLoading.set(false);
     }
+}
+
+export async function createGameSession({ template, name, scheduledStart, durationMinutes, heatCount, championshipEnabled }) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to create game sessions.');
+    }
+
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Join a community to create game sessions.');
+    }
+
+    const { data: membership, error: membershipError } = await supabase
+        .from('instance_memberships')
+        .select('instance_id')
+        .eq('id', membershipId)
+        .single();
+
+    if (membershipError || !membership?.instance_id) {
+        throw new Error('Unable to resolve instance.');
+    }
+
+    const sessionId = `game_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        id: sessionId,
+        instance_id: membership.instance_id,
+        template_id: template.id,
+        name: name || template.name,
+        description: template.description || null,
+        scheduled_start: scheduledStart,
+        status: 'scheduled',
+        host_membership_id: membershipId,
+        settings: {
+            duration_minutes: durationMinutes,
+            heat_count: heatCount,
+            championship_enabled: championshipEnabled,
+            game_type: template.gameType
+        }
+    };
+
+    const { data, error } = await supabase
+        .from('game_sessions')
+        .insert([payload])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
 }
