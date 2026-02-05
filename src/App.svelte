@@ -49,6 +49,7 @@
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
     import FeedbackScreen from './routes/feedback/FeedbackScreen.svelte';
+    import GamesScreen from './routes/games/GamesScreen.svelte';
     import RecipesScreen from './routes/recipes/RecipesScreen.svelte';
     import RecipeDetailScreen from './routes/recipes/RecipeDetailScreen.svelte';
     import AdminScreen from './routes/admin/AdminScreen.svelte';
@@ -78,6 +79,7 @@
         '/profile': ProfileScreen,
         '/profile/view/:userId': PublicProfileScreen,
         '/feedback': FeedbackScreen,
+        '/games': GamesScreen,
         '/recipes': RecipesScreen,
         '/recipes/:id': RecipeDetailScreen,
         '/admin': AdminScreen,
@@ -339,6 +341,10 @@
                 <span class="footer-icon">🥘</span>
                 <span class="footer-label">Recipes</span>
             </a>
+            <a href="#/games" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
+                <span class="footer-icon">🎮</span>
+                <span class="footer-label">Games</span>
+            </a>
             <a href="#/celebrations" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">🎉</span>
                 <span class="footer-label">Celebrate</span>
@@ -407,6 +413,10 @@
                     <a href="#/recipes" class="mega-item" on:click={() => showMobileMenu = false}>
                         <span class="mega-icon">🥘</span>
                         <span class="mega-label">Recipes</span>
+                    </a>
+                    <a href="#/games" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">🎮</span>
+                        <span class="mega-label">Games</span>
                     </a>
                     <a href="#/celebrations" class="mega-item" on:click={() => showMobileMenu = false}>
                         <span class="mega-icon">🎉</span>
