@@ -126,6 +126,18 @@ export default async function handler(req, res) {
         return;
     }
 
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', userData.user.id)
+        .maybeSingle();
+
+    const role = profile?.role || 'user';
+    if (!['admin', 'event_manager'].includes(role)) {
+        res.status(403).json({ error: 'Not authorized' });
+        return;
+    }
+
     const { data: aiSettingsRow } = await supabase
         .from('app_settings')
         .select('value')
@@ -140,6 +152,10 @@ export default async function handler(req, res) {
     const { prompt, context = {} } = req.body || {};
     if (!prompt || !String(prompt).trim()) {
         res.status(400).json({ error: 'Prompt required' });
+        return;
+    }
+    if (String(prompt).length > 1000) {
+        res.status(400).json({ error: 'Prompt too long' });
         return;
     }
 

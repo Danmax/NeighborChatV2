@@ -537,6 +537,12 @@ export async function uploadBannerImage(file) {
     if (!authUserId) {
         throw new Error('Please sign in to upload banner images.');
     }
+    if (!file || !file.type?.startsWith('image/')) {
+        throw new Error('Please upload a valid image file.');
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image must be 5MB or smaller.');
+    }
 
     const safeName = file.name.replace(/\s+/g, '_');
     const path = `${authUserId}/${Date.now()}_${safeName}`;

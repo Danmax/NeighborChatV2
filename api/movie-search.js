@@ -37,6 +37,19 @@ export default async function handler(req, res) {
         return;
     }
 
+    const supabase = getSupabaseAdmin();
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token || !supabase) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+    }
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData?.user) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+    }
+
     const apiKey = process.env.TMDB_API_KEY;
     if (!apiKey) {
         res.status(500).json({ error: 'TMDB_API_KEY not configured' });
