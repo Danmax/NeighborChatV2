@@ -152,3 +152,25 @@ export async function getAuthUserId() {
     if (authenticated && userId) return userId;
     return null;
 }
+
+/**
+ * Resolve the current user's internal UUID via RPC (hybrid Clerk setup)
+ * @returns {Promise<string|null>}
+ */
+export async function getAuthUserUuid() {
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return null;
+
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.rpc('current_user_uuid');
+        if (error) {
+            console.error('Failed to resolve current_user_uuid:', error);
+            return null;
+        }
+        return data || null;
+    } catch (error) {
+        console.error('Failed to resolve current_user_uuid:', error);
+        return null;
+    }
+}

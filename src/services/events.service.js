@@ -1,5 +1,5 @@
 // Events service - Supabase operations for community events
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setEvents,
@@ -14,13 +14,13 @@ import { get } from 'svelte/store';
 
 export async function getActiveMembershipId() {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return null;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return null;
 
     const { data, error } = await supabase
         .from('instance_memberships')
         .select('id')
-        .eq('user_id', authUserId)
+        .eq('user_id', authUserUuid)
         .eq('status', 'active')
         .limit(1)
         .single();
