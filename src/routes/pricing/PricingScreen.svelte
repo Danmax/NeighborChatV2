@@ -1,11 +1,12 @@
 <script>
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, tick } from 'svelte';
 
     const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_c29jaWFsLWVzY2FyZ290LTAuY2xlcmsuYWNjb3VudHMuZGV2JA';
     const CLERK_SCRIPT_SRC = 'https://social-escargot-0.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
 
     let loading = true;
     let error = '';
+    let pricingNode;
 
     async function loadClerk() {
         if (window.Clerk) {
@@ -38,7 +39,11 @@
         try {
             const clerk = await loadClerk();
             await clerk.load();
-            clerk.mountPricingTable('#clerk-pricing');
+            await tick();
+            if (!pricingNode) {
+                throw new Error('Pricing container not found');
+            }
+            clerk.mountPricingTable(pricingNode);
         } catch (err) {
             error = err.message || 'Unable to load pricing table';
         } finally {
@@ -48,7 +53,9 @@
 
     onDestroy(() => {
         if (window.Clerk?.unmountPricingTable) {
-            window.Clerk.unmountPricingTable('#clerk-pricing');
+            if (pricingNode) {
+                window.Clerk.unmountPricingTable(pricingNode);
+            }
         }
     });
 </script>
@@ -67,9 +74,8 @@
         </div>
     {:else if error}
         <div class="error-state">{error}</div>
-    {:else}
-        <div id="clerk-pricing" class="pricing-table"></div>
     {/if}
+    <div id="clerk-pricing" class="pricing-table" bind:this={pricingNode}></div>
 </div>
 
 <style>
