@@ -9,7 +9,7 @@ import { getCachedData, cacheData, removeCachedData, clearAllCachedData } from '
 export const currentUser = writable(getCachedData('currentUser', null));
 
 /**
- * Supabase auth user (from session)
+ * Clerk auth user (raw Clerk user object)
  * @type {import('svelte/store').Writable<Object|null>}
  */
 export const authUser = writable(null);

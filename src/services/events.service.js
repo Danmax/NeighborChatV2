@@ -95,8 +95,8 @@ function transformEventFromDb(row) {
     };
 }
 
-// Transform app format to database row (authUserId must be the actual auth.uid())
-function transformEventToDb(eventData, user, authUserId) {
+// Transform app format to database row (authUserUuid must be internal UUID from user_profiles)
+function transformEventToDb(eventData, user, authUserUuid) {
     const extraData = {
         time: eventData.time,
         creator_avatar: user?.avatar,
@@ -116,7 +116,7 @@ function transformEventToDb(eventData, user, authUserId) {
         location: eventData.location || null,
         description: eventData.description || null,
         created_by: user?.name,
-        created_by_id: authUserId, // Must be auth.uid() for RLS
+        created_by_id: authUserUuid, // UUID from user_profiles for FK constraint
         created_at: new Date().toISOString(),
         participants: [],
         visibility: eventData.visibility || 'public',
@@ -220,7 +220,7 @@ export async function fetchEventById(eventId) {
 }
 /**
  * Create a new event
- * Note: RLS requires authenticated Supabase users (auth.uid() = created_by_id)
+ * Note: RLS requires internal UUID from user_profiles (via Clerk auth)
  */
 export async function createEvent(eventData) {
     const supabase = getSupabase();
@@ -230,13 +230,13 @@ export async function createEvent(eventData) {
         throw new Error('Must be logged in to create events');
     }
 
-    // Check if user is actually authenticated via Supabase (not a guest)
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    // Get internal UUID from user_profiles (ensures profile exists)
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in with your email to create events. Guest users can only view content.');
     }
 
-    const dbEvent = transformEventToDb(eventData, user, authUserId);
+    const dbEvent = transformEventToDb(eventData, user, authUserUuid);
 
     try {
         const { data, error } = await supabase

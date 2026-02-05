@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { requireClerkUser } from './_clerk.js';
+import { rateLimitMiddleware } from './_rateLimit.js';
 
 function getSupabaseAdmin() {
     const url = process.env.SUPABASE_URL;
@@ -46,6 +47,11 @@ export default async function handler(req, res) {
     const authResult = await requireClerkUser(req);
     if (authResult?.error) {
         res.status(authResult.status || 401).json({ error: authResult.error });
+        return;
+    }
+
+    // Rate limit: 100 requests per hour per user
+    if (!rateLimitMiddleware(req, res, authResult.userId)) {
         return;
     }
 

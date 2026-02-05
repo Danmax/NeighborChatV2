@@ -195,6 +195,7 @@ export default async function handler(req, res) {
         .from('ai_generation_requests')
         .insert({
             id: requestId,
+            user_id: userId,
             request_type: 'event_draft',
             prompt: String(prompt).trim(),
             parameters: { model, context },

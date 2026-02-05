@@ -4,7 +4,6 @@
     import { currentUser, updateCurrentUser } from '../../stores/auth.js';
     import { showTopMenu } from '../../stores/ui.js';
     import { getSupabase } from '../../lib/supabase.js';
-    import { getClerkUser } from '../../lib/clerk.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
 import { interestOptions } from '../../stores/options.js';
@@ -30,15 +29,17 @@ import { interestOptions } from '../../stores/options.js';
     onMount(async () => {
         console.log('Onboarding mounted - user:', $currentUser?.name);
 
+        // Use user_id from store (set by auth listener)
+        const userId = $currentUser?.user_id;
+        if (!userId) return;
+
         try {
             const supabase = getSupabase();
-            const authUser = await getClerkUser();
-            if (!authUser?.id) return;
 
             const { data: profile } = await supabase
                 .from('user_profiles')
                 .select('display_name, avatar, interests, username, onboarding_completed')
-                .eq('user_id', authUser.id)
+                .eq('user_id', userId)
                 .maybeSingle();
 
             if (profile) {
@@ -129,15 +130,15 @@ import { interestOptions } from '../../stores/options.js';
 
         try {
             const supabase = getSupabase();
-            const authUser = await getClerkUser();
+            const userId = $currentUser?.user_id;
 
-            if (!authUser?.id) {
+            if (!userId) {
                 throw new Error('User authentication not found. Please log in again.');
             }
 
             // Prepare profile data
             const profileData = {
-                user_id: authUser.id,
+                user_id: userId,
                 display_name: displayName,
                 avatar: avatar,
                 interests: selectedInterests,

@@ -39,8 +39,8 @@ function transformCelebrationFromDb(row) {
     };
 }
 
-// Transform app format to database row (authUserId must be the actual auth.uid())
-function transformCelebrationToDb(celebrationData, user, authUserId) {
+// Transform app format to database row (authUserUuid must be internal UUID from user_profiles)
+function transformCelebrationToDb(celebrationData, user, authUserUuid) {
     return {
         id: `celeb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: celebrationData.category || celebrationData.type || 'birthday',
@@ -51,7 +51,7 @@ function transformCelebrationToDb(celebrationData, user, authUserId) {
         honoree: celebrationData.title || celebrationData.honoree || null,
         recipient_name: celebrationData.recipientName || celebrationData.title || null,
         recipient_id: celebrationData.recipientId || null,
-        author_id: authUserId, // Must be auth.uid() for RLS
+        author_id: authUserUuid, // UUID from user_profiles for FK constraint
         author_name: user?.name || 'Anonymous',
         timestamp_ms: Date.now(),
         emoji: celebrationData.emoji || '🎂',
