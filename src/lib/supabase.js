@@ -163,14 +163,14 @@ export async function getAuthUserUuid() {
 
     try {
         const supabase = getSupabase();
-        const { data, error } = await supabase.rpc('current_user_uuid');
+        const { data, error } = await supabase.rpc('ensure_current_user_profile');
         if (error) {
-            console.error('Failed to resolve current_user_uuid:', error);
+            console.error('Failed to resolve ensure_current_user_profile:', error);
             return null;
         }
         return data || null;
     } catch (error) {
-        console.error('Failed to resolve current_user_uuid:', error);
+        console.error('Failed to resolve ensure_current_user_profile:', error);
         return null;
     }
 }
