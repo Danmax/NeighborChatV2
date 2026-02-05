@@ -2,8 +2,15 @@
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated } from '../../stores/auth.js';
-    import { gameTemplates, gameTemplatesLoading, gameTemplatesError } from '../../stores/games.js';
-    import { fetchGameTemplates, createGameSession } from '../../services/games.service.js';
+    import {
+        gameTemplates,
+        gameTemplatesLoading,
+        gameTemplatesError,
+        gameSessions,
+        gameSessionsLoading,
+        gameSessionsError
+    } from '../../stores/games.js';
+    import { fetchGameTemplates, fetchGameSessions, createGameSession } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
 
     let selectedTemplate = null;
@@ -19,6 +26,7 @@
     onMount(() => {
         if ($isAuthenticated) {
             fetchGameTemplates();
+            fetchGameSessions();
         }
     });
 
@@ -48,6 +56,7 @@
                 heatCount: Number(heatCount) || 4,
                 championshipEnabled
             });
+            await fetchGameSessions();
             showToast('Game session scheduled!', 'success');
             showSessionModal = false;
         } catch (err) {
@@ -73,6 +82,22 @@
     function getStages(template) {
         return template?.config?.stages || [];
     }
+
+    function formatSessionDate(value) {
+        if (!value) return 'TBD';
+        const date = new Date(value);
+        return date.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    function formatSessionTime(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -84,6 +109,48 @@
 
         <div class="screen-subtitle">
             Use these templates to run community game nights: teams, points, scoreboards, and championships.
+        </div>
+
+        <div class="sessions-card">
+            <div class="sessions-header">
+                <h3>Scheduled Sessions</h3>
+                <span class="sessions-count">{($gameSessions || []).length} scheduled</span>
+            </div>
+            {#if $gameSessionsLoading}
+                <div class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Loading sessions...</p>
+                </div>
+            {:else if $gameSessionsError}
+                <div class="empty-state">
+                    <p>{$gameSessionsError}</p>
+                </div>
+            {:else if !$gameSessions?.length}
+                <div class="empty-state">
+                    <p>No sessions scheduled yet. Pick a template to schedule one.</p>
+                </div>
+            {:else}
+                <div class="sessions-list">
+                    {#each $gameSessions as session (session.id)}
+                        <div class="session-item">
+                            <div>
+                                <h4>{session.name}</h4>
+                                <p>
+                                    {formatSessionDate(session.scheduledStart)}
+                                    {#if formatSessionTime(session.scheduledStart)}
+                                        · {formatSessionTime(session.scheduledStart)}
+                                    {/if}
+                                </p>
+                            </div>
+                            <div class="session-meta">
+                                <span class="badge">{session.settings?.game_type || 'Session'}</span>
+                                <span class="badge">{session.settings?.duration_minutes || 60} min</span>
+                                <span class="status-pill {session.status}">{session.status}</span>
+                            </div>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
         </div>
 
         {#if $gameTemplatesLoading}
@@ -279,6 +346,93 @@
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 16px;
         margin-bottom: 24px;
+    }
+
+    .sessions-card {
+        background: white;
+        border-radius: var(--radius-md);
+        padding: 18px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .sessions-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+
+    .sessions-header h3 {
+        margin: 0;
+    }
+
+    .sessions-count {
+        font-size: 12px;
+        color: var(--text-muted);
+        background: #f5f5f5;
+        padding: 4px 10px;
+        border-radius: 999px;
+    }
+
+    .sessions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .session-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid #eee;
+        background: #fffaf1;
+    }
+
+    .session-item h4 {
+        margin: 0 0 6px;
+    }
+
+    .session-item p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+
+    .session-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .status-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+        background: #e0e0e0;
+        color: #424242;
+    }
+
+    .status-pill.scheduled {
+        background: #e3f2fd;
+        color: #1a73e8;
+    }
+
+    .status-pill.active {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .status-pill.completed {
+        background: #ede7f6;
+        color: #5e35b1;
     }
 
     .template-card {

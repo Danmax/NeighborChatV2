@@ -3,9 +3,16 @@ import { writable } from 'svelte/store';
 export const gameTemplates = writable([]);
 export const gameTemplatesLoading = writable(false);
 export const gameTemplatesError = writable(null);
+export const gameSessions = writable([]);
+export const gameSessionsLoading = writable(false);
+export const gameSessionsError = writable(null);
 
 export function setGameTemplates(list) {
     gameTemplates.set(list);
+}
+
+export function setGameSessions(list) {
+    gameSessions.set(list);
 }
 
 export function updateGameTemplate(templateId, updates) {

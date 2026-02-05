@@ -2,7 +2,10 @@ import { getSupabase, getAuthUserId } from '../lib/supabase.js';
 import {
     setGameTemplates,
     gameTemplatesLoading,
-    gameTemplatesError
+    gameTemplatesError,
+    setGameSessions,
+    gameSessionsLoading,
+    gameSessionsError
 } from '../stores/games.js';
 import { getActiveMembershipId } from './events.service.js';
 
@@ -99,4 +102,60 @@ export async function createGameSession({ template, name, scheduledStart, durati
 
     if (error) throw error;
     return data;
+}
+
+export async function fetchGameSessions() {
+    const supabase = getSupabase();
+    gameSessionsLoading.set(true);
+    gameSessionsError.set(null);
+
+    try {
+        const authUserId = await getAuthUserId();
+        if (!authUserId) {
+            setGameSessions([]);
+            return [];
+        }
+
+        const membershipId = await getActiveMembershipId();
+        if (!membershipId) {
+            setGameSessions([]);
+            return [];
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+            .from('instance_memberships')
+            .select('instance_id')
+            .eq('id', membershipId)
+            .single();
+
+        if (membershipError || !membership?.instance_id) {
+            throw new Error('Unable to resolve instance.');
+        }
+
+        const { data, error } = await supabase
+            .from('game_sessions')
+            .select('id, name, scheduled_start, status, settings, template_id, created_at')
+            .eq('instance_id', membership.instance_id)
+            .order('scheduled_start', { ascending: true });
+
+        if (error) throw error;
+        const sessions = (data || []).map(row => ({
+            id: row.id,
+            name: row.name,
+            scheduledStart: row.scheduled_start,
+            status: row.status,
+            settings: row.settings || {},
+            templateId: row.template_id,
+            createdAt: row.created_at
+        }));
+        setGameSessions(sessions);
+        return sessions;
+    } catch (error) {
+        console.error('Failed to fetch game sessions:', error);
+        gameSessionsError.set(error.message);
+        setGameSessions([]);
+        return [];
+    } finally {
+        gameSessionsLoading.set(false);
+    }
 }
