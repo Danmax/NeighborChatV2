@@ -22,6 +22,55 @@
     let heatCount = '';
     let championshipEnabled = true;
     let savingSession = false;
+    let scoringMode = 'team';
+    let scoresVersion = 0;
+
+    const sessionTeams = new Map();
+    const sessionPlayers = new Map();
+
+    function getTeams(sessionId) {
+        if (!sessionTeams.has(sessionId)) {
+            sessionTeams.set(sessionId, [
+                { id: `team_${sessionId}_1`, name: 'Team A', points: 0 },
+                { id: `team_${sessionId}_2`, name: 'Team B', points: 0 }
+            ]);
+        }
+        return sessionTeams.get(sessionId);
+    }
+
+    function getPlayers(sessionId) {
+        if (!sessionPlayers.has(sessionId)) {
+            sessionPlayers.set(sessionId, [
+                { id: `player_${sessionId}_1`, name: 'Player 1', points: 0 },
+                { id: `player_${sessionId}_2`, name: 'Player 2', points: 0 }
+            ]);
+        }
+        return sessionPlayers.get(sessionId);
+    }
+
+    function addTeam(sessionId) {
+        const teams = getTeams(sessionId);
+        const nextIndex = teams.length + 1;
+        teams.push({ id: `team_${sessionId}_${nextIndex}`, name: `Team ${nextIndex}`, points: 0 });
+        sessionTeams.set(sessionId, [...teams]);
+        scoresVersion += 1;
+    }
+
+    function addPlayer(sessionId) {
+        const players = getPlayers(sessionId);
+        const nextIndex = players.length + 1;
+        players.push({ id: `player_${sessionId}_${nextIndex}`, name: `Player ${nextIndex}`, points: 0 });
+        sessionPlayers.set(sessionId, [...players]);
+        scoresVersion += 1;
+    }
+
+    function updatePoints(list, itemId, delta, map, sessionId) {
+        const updated = list.map(item =>
+            item.id === itemId ? { ...item, points: Math.max(0, item.points + delta) } : item
+        );
+        map.set(sessionId, updated);
+        scoresVersion += 1;
+    }
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -98,6 +147,19 @@
         const date = new Date(value);
         return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
+
+    function getSessionMode(session) {
+        return session?.settings?.scoring_mode || scoringMode;
+    }
+
+    function setSessionMode(sessionId, mode) {
+        const sessions = ($gameSessions || []).map(session =>
+            session.id === sessionId
+                ? { ...session, settings: { ...session.settings, scoring_mode: mode } }
+                : session
+        );
+        gameSessions.set(sessions);
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -147,6 +209,61 @@
                                 <span class="badge">{session.settings?.duration_minutes || 60} min</span>
                                 <span class="status-pill {session.status}">{session.status}</span>
                             </div>
+                        </div>
+                        <div class="session-card">
+                            <div class="session-card-header">
+                                <h5>Live Scoreboard</h5>
+                                <div class="session-modes">
+                                    <button
+                                        class="mode-btn {getSessionMode(session) === 'team' ? 'active' : ''}"
+                                        on:click={() => setSessionMode(session.id, 'team')}
+                                    >
+                                        Team
+                                    </button>
+                                    <button
+                                        class="mode-btn {getSessionMode(session) === 'individual' ? 'active' : ''}"
+                                        on:click={() => setSessionMode(session.id, 'individual')}
+                                    >
+                                        Individual
+                                    </button>
+                                </div>
+                            </div>
+
+                            {#if getSessionMode(session) === 'team'}
+                                <div class="score-grid">
+                                    {#each getTeams(session.id) as team (team.id)}
+                                        <div class="score-card">
+                                            <div>
+                                                <input class="score-name" bind:value={team.name} />
+                                                <p class="score-points">{team.points} pts</p>
+                                            </div>
+                                            <div class="score-actions">
+                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, 1, sessionTeams, session.id)}>+1</button>
+                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, 5, sessionTeams, session.id)}>+5</button>
+                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, -1, sessionTeams, session.id)}>-1</button>
+                                            </div>
+                                        </div>
+                                    {/each}
+                                </div>
+                                <button class="btn btn-secondary btn-small" on:click={() => addTeam(session.id)}>Add team</button>
+                            {:else}
+                                <div class="score-grid">
+                                    {#each getPlayers(session.id) as player (player.id)}
+                                        <div class="score-card">
+                                            <div>
+                                                <input class="score-name" bind:value={player.name} />
+                                                <p class="score-points">{player.points} pts</p>
+                                            </div>
+                                            <div class="score-actions">
+                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, 1, sessionPlayers, session.id)}>+1</button>
+                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, 5, sessionPlayers, session.id)}>+5</button>
+                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, -1, sessionPlayers, session.id)}>-1</button>
+                                            </div>
+                                        </div>
+                                    {/each}
+                                </div>
+                                <button class="btn btn-secondary btn-small" on:click={() => addPlayer(session.id)}>Add player</button>
+                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -300,6 +417,13 @@
                             <input type="checkbox" bind:checked={championshipEnabled} />
                             Championship round enabled
                         </label>
+                        <label>
+                            Scoring Mode
+                            <select bind:value={scoringMode}>
+                                <option value="team">Team-based</option>
+                                <option value="individual">Individual</option>
+                            </select>
+                        </label>
                         <div class="session-actions">
                             <button class="btn btn-secondary" on:click={() => showSessionModal = false}>Cancel</button>
                             <button class="btn btn-primary" on:click={handleCreateSession} disabled={savingSession || !sessionDate || !sessionTime}>
@@ -433,6 +557,106 @@
     .status-pill.completed {
         background: #ede7f6;
         color: #5e35b1;
+    }
+
+    .session-card {
+        margin-top: 10px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #f7f4ff;
+        border: 1px solid #e6defa;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .session-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .session-card-header h5 {
+        margin: 0;
+    }
+
+    .session-modes {
+        display: flex;
+        gap: 8px;
+    }
+
+    .mode-btn {
+        border: 1px solid #d6c9f7;
+        background: white;
+        color: #51318c;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .mode-btn.active {
+        background: #5c34a5;
+        color: white;
+        border-color: #5c34a5;
+    }
+
+    .score-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+
+    .score-card {
+        background: white;
+        border-radius: 14px;
+        padding: 12px;
+        border: 1px solid #ece6ff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .score-name {
+        border: none;
+        font-weight: 600;
+        font-size: 14px;
+        background: transparent;
+        width: 120px;
+    }
+
+    .score-name:focus {
+        outline: none;
+    }
+
+    .score-points {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .score-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .score-actions button {
+        border: none;
+        background: #f0eaff;
+        color: #5c34a5;
+        padding: 4px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .score-actions button:hover {
+        background: #e0d5ff;
     }
 
     .template-card {
@@ -571,6 +795,14 @@
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         font-size: 14px;
+    }
+
+    .session-form select {
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        font-size: 14px;
+        background: white;
     }
 
     .session-row {
