@@ -1,5 +1,5 @@
 // Celebrations service - Supabase operations for celebration wall
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setCelebrations,
@@ -132,12 +132,12 @@ export async function createCelebration(celebrationData) {
     }
 
     // Check if user is actually authenticated via Supabase (not a guest)
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in with your email to post celebrations. Guest users can only view content.');
     }
 
-    const dbCelebration = transformCelebrationToDb(celebrationData, user, authUserId);
+    const dbCelebration = transformCelebrationToDb(celebrationData, user, authUserUuid);
 
     try {
         const { data, error } = await supabase
