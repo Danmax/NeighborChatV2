@@ -11,12 +11,12 @@ DROP POLICY IF EXISTS "event_manager_requests_admin_update" ON public.event_mana
 CREATE POLICY "event_manager_requests_read_own"
 ON public.event_manager_requests FOR SELECT
 TO authenticated
-USING (user_id = auth.uid()::text OR public.can_manage_event_access());
+USING (user_id::text = auth.uid()::text OR public.can_manage_event_access());
 
 CREATE POLICY "event_manager_requests_insert_own"
 ON public.event_manager_requests FOR INSERT
 TO authenticated
-WITH CHECK (user_id = auth.uid()::text);
+WITH CHECK (user_id::text = auth.uid()::text);
 
 CREATE POLICY "event_manager_requests_admin_update"
 ON public.event_manager_requests FOR UPDATE
