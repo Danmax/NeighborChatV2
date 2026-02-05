@@ -1,6 +1,6 @@
--- Migration 053: Clerk auth (text subject) support
+-- Migration 053: Clerk auth (hybrid: UUID internal, Clerk text external)
 -- Date: 2026-02-05
--- Description: Switch auth comparisons to text sub and convert user_id columns to text
+-- Description: Add clerk_user_id mapping + update RLS to use UUIDs
 
 BEGIN;
 
@@ -12,6 +12,77 @@ STABLE
 AS $$
     SELECT auth.jwt() ->> 'sub';
 $$;
+
+-- Add Clerk mapping column
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'user_profiles'
+          AND column_name = 'clerk_user_id'
+    ) THEN
+        ALTER TABLE public.user_profiles
+        ADD COLUMN clerk_user_id text;
+    END IF;
+END $$;
+
+-- Helper: Internal UUID from Clerk user id
+CREATE OR REPLACE FUNCTION public.current_user_uuid()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT up.id
+    FROM public.user_profiles up
+    WHERE up.clerk_user_id = public.current_user_id()
+    LIMIT 1;
+$$;
+
+-- Ensure uniqueness for clerk_user_id
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'user_profiles_clerk_user_id_key'
+          AND conrelid = 'public.user_profiles'::regclass
+    ) THEN
+        ALTER TABLE public.user_profiles
+        ADD CONSTRAINT user_profiles_clerk_user_id_key UNIQUE (clerk_user_id);
+    END IF;
+END $$;
+
+-- Auto-fill clerk_user_id on insert when missing
+CREATE OR REPLACE FUNCTION public.set_clerk_user_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.clerk_user_id IS NULL OR btrim(NEW.clerk_user_id) = '' THEN
+        NEW.clerk_user_id := public.current_user_id();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = 'user_profiles_set_clerk_user_id'
+          AND tgrelid = 'public.user_profiles'::regclass
+    ) THEN
+        CREATE TRIGGER user_profiles_set_clerk_user_id
+        BEFORE INSERT ON public.user_profiles
+        FOR EACH ROW
+        EXECUTE FUNCTION public.set_clerk_user_id();
+    END IF;
+END $$;
 
 -- Admin helpers
 CREATE OR REPLACE FUNCTION public.is_platform_admin()
@@ -34,7 +105,7 @@ BEGIN
     SELECT EXISTS (
         SELECT 1
         FROM public.user_profiles
-        WHERE user_id = v_user_id
+        WHERE clerk_user_id = v_user_id
           AND role = 'admin'
     ) INTO v_allowed;
 
@@ -62,7 +133,7 @@ BEGIN
     SELECT EXISTS (
         SELECT 1
         FROM public.user_profiles
-        WHERE user_id = v_user_id
+        WHERE clerk_user_id = v_user_id
           AND role IN ('admin', 'event_manager')
     ) INTO v_allowed;
 
@@ -70,18 +141,15 @@ BEGIN
 END;
 $$;
 
--- Instance memberships (user_id)
+-- Instance memberships policies
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'instance_memberships'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'instance_memberships'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.instance_memberships', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.instance_memberships', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.instance_memberships
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE POLICY "View instance memberships"
 ON public.instance_memberships FOR SELECT
@@ -90,15 +158,57 @@ USING (
     instance_id IN (
         SELECT im.instance_id
         FROM public.instance_memberships im
-        WHERE im.user_id = public.current_user_id()
+        WHERE im.user_id = public.current_user_uuid()
     )
 );
 
 CREATE POLICY "Manage own membership"
 ON public.instance_memberships FOR ALL
 TO authenticated
-USING (user_id = public.current_user_id())
-WITH CHECK (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid())
+WITH CHECK (user_id = public.current_user_uuid());
+
+-- Game stats
+DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'game_stats'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.game_stats', r.policyname);
+    END LOOP;
+END $$;
+
+CREATE POLICY "View own game stats"
+ON public.game_stats FOR SELECT
+TO authenticated
+USING (
+    membership_id IN (
+        SELECT im.id
+        FROM public.instance_memberships im
+        WHERE im.user_id = public.current_user_uuid()
+    )
+);
+
+-- Training progress
+DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'training_progress'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.training_progress', r.policyname);
+    END LOOP;
+END $$;
+
+CREATE POLICY "View own progress"
+ON public.training_progress FOR SELECT
+TO authenticated
+USING (
+    membership_id IN (
+        SELECT im.id
+        FROM public.instance_memberships im
+        WHERE im.user_id = public.current_user_uuid()
+    )
+);
 
 -- is_instance_member helper
 CREATE OR REPLACE FUNCTION public.is_instance_member(p_instance_id text)
@@ -111,51 +221,51 @@ BEGIN
     RETURN EXISTS (
         SELECT 1
         FROM public.instance_memberships
-        WHERE user_id = public.current_user_id()
+        WHERE user_id = public.current_user_uuid()
           AND instance_id = p_instance_id
           AND status = 'active'
     );
 END;
 $$;
 
--- User profiles
+-- User profiles policies (use clerk_user_id)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.user_profiles', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.user_profiles', r.policyname);
     END LOOP;
 END $$;
 
 CREATE POLICY "Allow users to view their own profile"
 ON public.user_profiles FOR SELECT
 TO authenticated
-USING (public.current_user_id() = user_id);
+USING (public.current_user_id() = clerk_user_id);
 
 CREATE POLICY "Allow users to create their own profile"
 ON public.user_profiles FOR INSERT
 TO authenticated
-WITH CHECK (public.current_user_id() = user_id);
+WITH CHECK (public.current_user_id() = clerk_user_id);
 
 CREATE POLICY "Allow users to update their own profile"
 ON public.user_profiles FOR UPDATE
 TO authenticated
-USING (public.current_user_id() = user_id)
-WITH CHECK (public.current_user_id() = user_id);
+USING (public.current_user_id() = clerk_user_id)
+WITH CHECK (public.current_user_id() = clerk_user_id);
 
 CREATE POLICY "Allow users to delete their own profile"
 ON public.user_profiles FOR DELETE
 TO authenticated
-USING (public.current_user_id() = user_id);
+USING (public.current_user_id() = clerk_user_id);
 
--- Saved contacts
+-- Saved contacts (owner_id is text, store Clerk id)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'saved_contacts'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'saved_contacts'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.saved_contacts', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.saved_contacts', r.policyname);
     END LOOP;
 END $$;
 
@@ -165,86 +275,76 @@ TO authenticated
 USING (owner_id = public.current_user_id())
 WITH CHECK (owner_id = public.current_user_id());
 
--- Messages (sender/recipient)
+-- Messages (UUID sender/recipient)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'messages'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'messages'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.messages', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.messages', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.messages
-ALTER COLUMN sender_id TYPE text USING sender_id::text,
-ALTER COLUMN recipient_id TYPE text USING recipient_id::text;
 
 CREATE POLICY "Users can view own messages"
 ON public.messages FOR SELECT
 TO authenticated
-USING (public.current_user_id() = sender_id OR public.current_user_id() = recipient_id);
+USING (public.current_user_uuid() = sender_id OR public.current_user_uuid() = recipient_id);
 
 CREATE POLICY "Users can send messages"
 ON public.messages FOR INSERT
 TO authenticated
-WITH CHECK (public.current_user_id() = sender_id);
+WITH CHECK (public.current_user_uuid() = sender_id);
 
 CREATE POLICY "Recipients can mark messages read"
 ON public.messages FOR UPDATE
 TO authenticated
-USING (public.current_user_id() = recipient_id)
-WITH CHECK (public.current_user_id() = recipient_id);
+USING (public.current_user_uuid() = recipient_id)
+WITH CHECK (public.current_user_uuid() = recipient_id);
 
--- Celebrations
+-- Celebrations (author_id uuid, recipient_id text)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'celebrations'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'celebrations'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.celebrations', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.celebrations', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.celebrations
-ALTER COLUMN author_id TYPE text USING author_id::text;
 
 CREATE POLICY "Anyone can view public celebrations"
 ON public.celebrations FOR SELECT
 TO authenticated
-USING (visibility = 'public');
+USING (true);
 
 CREATE POLICY "Users can view their celebrations"
 ON public.celebrations FOR SELECT
 TO authenticated
-USING (public.current_user_id() = author_id OR public.current_user_id() = recipient_id);
+USING (public.current_user_uuid() = author_id OR public.current_user_id() = recipient_id);
 
 CREATE POLICY "Authenticated users can create celebrations"
 ON public.celebrations FOR INSERT
 TO authenticated
-WITH CHECK (public.current_user_id() = author_id);
+WITH CHECK (public.current_user_uuid() = author_id);
 
 CREATE POLICY "Users can update their own celebrations"
 ON public.celebrations FOR UPDATE
 TO authenticated
-USING (public.current_user_id() = author_id);
+USING (public.current_user_uuid() = author_id);
 
 CREATE POLICY "Users can delete their own celebrations"
 ON public.celebrations FOR DELETE
 TO authenticated
-USING (public.current_user_id() = author_id);
+USING (public.current_user_uuid() = author_id);
 
--- Community events
+-- Community events (created_by_id uuid)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'community_events'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'community_events'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.community_events', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.community_events', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.community_events
-ALTER COLUMN created_by_id TYPE text USING created_by_id::text;
 
 CREATE POLICY "Anyone can view public events"
 ON public.community_events FOR SELECT
@@ -254,30 +354,30 @@ USING (visibility = 'public');
 CREATE POLICY "Users can view their own events"
 ON public.community_events FOR SELECT
 TO authenticated
-USING (public.current_user_id() = created_by_id);
+USING (public.current_user_uuid() = created_by_id);
 
 CREATE POLICY "Authenticated users can create events"
 ON public.community_events FOR INSERT
 TO authenticated
-WITH CHECK (public.current_user_id() = created_by_id);
+WITH CHECK (public.current_user_uuid() = created_by_id);
 
 CREATE POLICY "Users can update their own events"
 ON public.community_events FOR UPDATE
 TO authenticated
-USING (public.current_user_id() = created_by_id);
+USING (public.current_user_uuid() = created_by_id);
 
 CREATE POLICY "Users can delete their own events"
 ON public.community_events FOR DELETE
 TO authenticated
-USING (public.current_user_id() = created_by_id);
+USING (public.current_user_uuid() = created_by_id);
 
 -- Event participants (membership-based)
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'event_participants'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'event_participants'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.event_participants', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.event_participants', r.policyname);
     END LOOP;
 END $$;
 
@@ -289,7 +389,7 @@ USING (
         SELECT 1
         FROM public.community_events e
         WHERE e.id = event_participants.event_id
-          AND (e.visibility = 'public' OR e.created_by_id = public.current_user_id())
+          AND (e.visibility = 'public' OR e.created_by_id = public.current_user_uuid())
     )
 );
 
@@ -300,7 +400,7 @@ WITH CHECK (
     EXISTS (
         SELECT 1 FROM public.instance_memberships im
         WHERE im.id = event_participants.membership_id
-          AND im.user_id = public.current_user_id()
+          AND im.user_id = public.current_user_uuid()
     )
 );
 
@@ -311,7 +411,7 @@ USING (
     EXISTS (
         SELECT 1 FROM public.instance_memberships im
         WHERE im.id = event_participants.membership_id
-          AND im.user_id = public.current_user_id()
+          AND im.user_id = public.current_user_uuid()
     )
 );
 
@@ -319,86 +419,77 @@ USING (
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'notifications'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'notifications'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.notifications', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.notifications', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.notifications
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE POLICY "notifications_select_own"
 ON public.notifications FOR SELECT
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "notifications_insert_own"
 ON public.notifications FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "notifications_update_own"
 ON public.notifications FOR UPDATE
 TO authenticated
-USING (user_id = public.current_user_id())
-WITH CHECK (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid())
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "notifications_delete_own"
 ON public.notifications FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 -- Favorite movies
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'favorite_movies'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'favorite_movies'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.favorite_movies', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.favorite_movies', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.favorite_movies
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE POLICY "favorite_movies_select_own"
 ON public.favorite_movies FOR SELECT
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "favorite_movies_insert_own"
 ON public.favorite_movies FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "favorite_movies_delete_own"
 ON public.favorite_movies FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 -- Feedback
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'feedback'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'feedback'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.feedback', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.feedback', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.feedback
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE POLICY "feedback_select_own"
 ON public.feedback FOR SELECT
 TO authenticated
-USING (user_id = public.current_user_id() OR public.is_platform_admin());
+USING (user_id = public.current_user_uuid() OR public.is_platform_admin());
 
 CREATE POLICY "feedback_insert_own"
 ON public.feedback FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "feedback_admin_update"
 ON public.feedback FOR UPDATE
@@ -410,14 +501,11 @@ WITH CHECK (public.is_platform_admin());
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'event_chat_messages'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'event_chat_messages'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.event_chat_messages', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.event_chat_messages', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.event_chat_messages
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE OR REPLACE FUNCTION public.can_access_event_chat(p_event_id text)
 RETURNS boolean
@@ -426,10 +514,10 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
+    v_user_uuid uuid;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RETURN false;
     END IF;
 
@@ -437,7 +525,7 @@ BEGIN
         SELECT 1
         FROM public.community_events e
         WHERE e.id = p_event_id
-          AND e.created_by_id = v_user_id
+          AND e.created_by_id = v_user_uuid
     ) THEN
         RETURN true;
     END IF;
@@ -448,7 +536,7 @@ BEGIN
         JOIN public.instance_memberships im
             ON im.id = ep.membership_id
         WHERE ep.event_id = p_event_id
-          AND im.user_id = v_user_id
+          AND im.user_id = v_user_uuid
           AND im.status = 'active'
           AND ep.approval_status IN ('approved', 'pending')
     );
@@ -464,20 +552,20 @@ CREATE POLICY "event_chat_insert"
 ON public.event_chat_messages FOR INSERT
 TO authenticated
 WITH CHECK (
-    user_id = public.current_user_id()
+    user_id = public.current_user_uuid()
     AND public.can_access_event_chat(event_id)
 );
 
 CREATE POLICY "event_chat_update_own"
 ON public.event_chat_messages FOR UPDATE
 TO authenticated
-USING (user_id = public.current_user_id())
-WITH CHECK (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid())
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "event_chat_delete_own"
 ON public.event_chat_messages FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE OR REPLACE FUNCTION public.add_event_chat_message(
     p_event_id text,
@@ -491,12 +579,12 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
+    v_user_uuid uuid;
     v_membership_id text;
     v_inserted record;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
@@ -510,7 +598,7 @@ BEGIN
 
     SELECT id INTO v_membership_id
     FROM public.instance_memberships
-    WHERE user_id = v_user_id
+    WHERE user_id = v_user_uuid
       AND status = 'active'
     LIMIT 1;
 
@@ -524,7 +612,7 @@ BEGIN
     )
     VALUES (
         p_event_id,
-        v_user_id,
+        v_user_uuid,
         v_membership_id,
         p_body,
         COALESCE(p_message_type, 'text'),
@@ -544,29 +632,26 @@ $$;
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'message_reactions'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'message_reactions'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.message_reactions', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.message_reactions', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.message_reactions
-ALTER COLUMN user_id TYPE text USING user_id::text;
 
 CREATE POLICY "message_reactions_select_own"
 ON public.message_reactions FOR SELECT
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "message_reactions_insert_own"
 ON public.message_reactions FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "message_reactions_delete_own"
 ON public.message_reactions FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE OR REPLACE FUNCTION public.add_message_reaction(
     p_message_id uuid,
@@ -578,12 +663,12 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
+    v_user_uuid uuid;
     v_existing record;
     v_row record;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
@@ -594,7 +679,7 @@ BEGIN
     SELECT * INTO v_existing
     FROM public.message_reactions
     WHERE message_id = p_message_id
-      AND user_id = v_user_id
+      AND user_id = v_user_uuid
     LIMIT 1;
 
     IF v_existing IS NOT NULL THEN
@@ -611,7 +696,7 @@ BEGIN
     END IF;
 
     INSERT INTO public.message_reactions (message_id, user_id, emoji)
-    VALUES (p_message_id, v_user_id, p_emoji)
+    VALUES (p_message_id, v_user_uuid, p_emoji)
     RETURNING * INTO v_row;
 
     RETURN to_jsonb(v_row);
@@ -622,171 +707,149 @@ $$;
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'recipes'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'recipes'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.recipes', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.recipes', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.recipes
-ALTER COLUMN created_by_id TYPE text USING created_by_id::text;
 
 CREATE POLICY "Recipes are public or own"
 ON public.recipes FOR SELECT
 TO authenticated
-USING (
-    visibility = 'public'
-    OR created_by_id = public.current_user_id()
-);
+USING (is_public = true OR created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Recipes insert own"
 ON public.recipes FOR INSERT
 TO authenticated
-WITH CHECK (created_by_id = public.current_user_id());
+WITH CHECK (created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Recipes update own"
 ON public.recipes FOR UPDATE
 TO authenticated
-USING (created_by_id = public.current_user_id())
-WITH CHECK (created_by_id = public.current_user_id());
+USING (created_by_id = public.current_user_uuid())
+WITH CHECK (created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Recipes delete own"
 ON public.recipes FOR DELETE
 TO authenticated
-USING (created_by_id = public.current_user_id());
+USING (created_by_id = public.current_user_uuid());
 
 -- Speakers
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'speakers'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'speakers'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.speakers', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.speakers', r.policyname);
     END LOOP;
 END $$;
-
-ALTER TABLE public.speakers
-ALTER COLUMN created_by_id TYPE text USING created_by_id::text;
 
 CREATE POLICY "Speakers are public or own"
 ON public.speakers FOR SELECT
 TO authenticated
-USING (
-    visibility = 'public'
-    OR created_by_id = public.current_user_id()
-);
+USING (is_public = true OR created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Speakers insert own"
 ON public.speakers FOR INSERT
 TO authenticated
-WITH CHECK (created_by_id = public.current_user_id());
+WITH CHECK (created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Speakers update own"
 ON public.speakers FOR UPDATE
 TO authenticated
-USING (created_by_id = public.current_user_id())
-WITH CHECK (created_by_id = public.current_user_id());
+USING (created_by_id = public.current_user_uuid())
+WITH CHECK (created_by_id = public.current_user_uuid());
 
 CREATE POLICY "Speakers delete own"
 ON public.speakers FOR DELETE
 TO authenticated
-USING (created_by_id = public.current_user_id());
+USING (created_by_id = public.current_user_uuid());
 
 -- Gift exchange tables
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename IN (
+    FOR r IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' AND tablename IN (
         'gift_exchange_wishlist_items',
         'gift_exchange_wishlist_templates',
         'gift_exchange_matches'
     )
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', r.polname, r.tablename);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', r.policyname, r.tablename);
     END LOOP;
 END $$;
-
-ALTER TABLE public.gift_exchange_wishlist_items
-ALTER COLUMN user_id TYPE text USING user_id::text;
-
-ALTER TABLE public.gift_exchange_wishlist_templates
-ALTER COLUMN user_id TYPE text USING user_id::text;
-
-ALTER TABLE public.gift_exchange_matches
-ALTER COLUMN giver_user_id TYPE text USING giver_user_id::text,
-ALTER COLUMN receiver_user_id TYPE text USING receiver_user_id::text;
 
 CREATE POLICY "gift_wishlist_select"
 ON public.gift_exchange_wishlist_items FOR SELECT
 TO authenticated
 USING (
-    user_id = public.current_user_id()
+    user_id = public.current_user_uuid()
     OR EXISTS (
         SELECT 1 FROM public.gift_exchange_matches m
         WHERE m.event_id = gift_exchange_wishlist_items.event_id
-          AND m.giver_user_id = public.current_user_id()
+          AND m.giver_user_id = public.current_user_uuid()
           AND m.receiver_user_id = gift_exchange_wishlist_items.user_id
     )
     OR EXISTS (
         SELECT 1 FROM public.gift_exchange_matches m
         WHERE m.event_id = gift_exchange_wishlist_items.event_id
-          AND m.receiver_user_id = public.current_user_id()
+          AND m.receiver_user_id = public.current_user_uuid()
           AND m.giver_user_id = gift_exchange_wishlist_items.user_id
     )
     OR EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = gift_exchange_wishlist_items.event_id
-          AND e.created_by_id = public.current_user_id()
+          AND e.created_by_id = public.current_user_uuid()
     )
 );
 
 CREATE POLICY "gift_wishlist_insert"
 ON public.gift_exchange_wishlist_items FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_wishlist_update"
 ON public.gift_exchange_wishlist_items FOR UPDATE
 TO authenticated
-USING (user_id = public.current_user_id())
-WITH CHECK (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid())
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_wishlist_delete"
 ON public.gift_exchange_wishlist_items FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_template_select"
 ON public.gift_exchange_wishlist_templates FOR SELECT
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_template_insert"
 ON public.gift_exchange_wishlist_templates FOR INSERT
 TO authenticated
-WITH CHECK (user_id = public.current_user_id());
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_template_update"
 ON public.gift_exchange_wishlist_templates FOR UPDATE
 TO authenticated
-USING (user_id = public.current_user_id())
-WITH CHECK (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid())
+WITH CHECK (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_template_delete"
 ON public.gift_exchange_wishlist_templates FOR DELETE
 TO authenticated
-USING (user_id = public.current_user_id());
+USING (user_id = public.current_user_uuid());
 
 CREATE POLICY "gift_matches_select"
 ON public.gift_exchange_matches FOR SELECT
 TO authenticated
 USING (
-    giver_user_id = public.current_user_id()
-    OR receiver_user_id = public.current_user_id()
+    giver_user_id = public.current_user_uuid()
+    OR receiver_user_id = public.current_user_uuid()
     OR EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = gift_exchange_matches.event_id
-          AND e.created_by_id = public.current_user_id()
+          AND e.created_by_id = public.current_user_uuid()
     )
 );
 
@@ -797,7 +860,7 @@ WITH CHECK (
     EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = gift_exchange_matches.event_id
-          AND e.created_by_id = public.current_user_id()
+          AND e.created_by_id = public.current_user_uuid()
     )
 );
 
@@ -808,14 +871,14 @@ USING (
     EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = gift_exchange_matches.event_id
-          AND e.created_by_id = public.current_user_id()
+          AND e.created_by_id = public.current_user_uuid()
     )
 )
 WITH CHECK (
     EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = gift_exchange_matches.event_id
-          AND e.created_by_id = public.current_user_id()
+          AND e.created_by_id = public.current_user_uuid()
     )
 );
 
@@ -828,21 +891,21 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
-    v_users text[];
+    v_user_uuid uuid;
+    v_users uuid[];
     v_count integer := 0;
     v_len integer;
     v_i integer;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
     IF NOT EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = p_event_id
-          AND e.created_by_id = v_user_id
+          AND e.created_by_id = v_user_uuid
     ) THEN
         RAISE EXCEPTION 'Not allowed';
     END IF;
@@ -880,8 +943,8 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.assign_gift_exchange_match(
     p_event_id text,
-    p_giver_user_id text,
-    p_receiver_user_id text
+    p_giver_user_id uuid,
+    p_receiver_user_id uuid
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -889,17 +952,17 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
+    v_user_uuid uuid;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
     IF NOT EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = p_event_id
-          AND e.created_by_id = v_user_id
+          AND e.created_by_id = v_user_uuid
     ) THEN
         RAISE EXCEPTION 'Not allowed';
     END IF;
@@ -915,7 +978,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.send_gift_exchange_message(
     p_event_id text,
-    p_receiver_id text,
+    p_receiver_id uuid,
     p_kind text,
     p_body text
 )
@@ -925,12 +988,12 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_id text;
+    v_user_uuid uuid;
     v_match boolean := false;
     v_msg record;
 BEGIN
-    v_user_id := public.current_user_id();
-    IF v_user_id IS NULL THEN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
@@ -941,12 +1004,12 @@ BEGIN
     v_match := EXISTS (
         SELECT 1 FROM public.gift_exchange_matches m
         WHERE m.event_id = p_event_id
-          AND m.giver_user_id = v_user_id
+          AND m.giver_user_id = v_user_uuid
           AND m.receiver_user_id = p_receiver_id
     ) OR EXISTS (
         SELECT 1 FROM public.community_events e
         WHERE e.id = p_event_id
-          AND e.created_by_id = v_user_id
+          AND e.created_by_id = v_user_uuid
     );
 
     IF NOT v_match THEN
@@ -955,7 +1018,7 @@ BEGIN
 
     INSERT INTO public.messages (sender_id, recipient_id, message_type, body, read, metadata)
     VALUES (
-        v_user_id,
+        v_user_uuid,
         p_receiver_id,
         'direct',
         p_body,
@@ -968,13 +1031,13 @@ BEGIN
 END;
 $$;
 
--- Game sessions policies (depends on instance_memberships.user_id)
+-- Game sessions policies
 DO $$
 DECLARE r record;
 BEGIN
-    FOR r IN SELECT polname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'game_sessions'
+    FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'game_sessions'
     LOOP
-        EXECUTE format('DROP POLICY IF EXISTS %I ON public.game_sessions', r.polname);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.game_sessions', r.policyname);
     END LOOP;
 END $$;
 
@@ -991,7 +1054,7 @@ WITH CHECK (
     AND host_membership_id IN (
         SELECT id
         FROM public.instance_memberships
-        WHERE user_id = public.current_user_id()
+        WHERE user_id = public.current_user_uuid()
           AND status = 'active'
           AND instance_id = game_sessions.instance_id
     )
@@ -1004,7 +1067,7 @@ USING (
     host_membership_id IN (
         SELECT id
         FROM public.instance_memberships
-        WHERE user_id = public.current_user_id()
+        WHERE user_id = public.current_user_uuid()
           AND status = 'active'
           AND instance_id = game_sessions.instance_id
     )
@@ -1013,7 +1076,7 @@ WITH CHECK (
     host_membership_id IN (
         SELECT id
         FROM public.instance_memberships
-        WHERE user_id = public.current_user_id()
+        WHERE user_id = public.current_user_uuid()
           AND status = 'active'
           AND instance_id = game_sessions.instance_id
     )
