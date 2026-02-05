@@ -49,6 +49,7 @@
     import ProfileScreen from './routes/profile/ProfileScreen.svelte';
     import PublicProfileScreen from './routes/profile/PublicProfileScreen.svelte';
     import FeedbackScreen from './routes/feedback/FeedbackScreen.svelte';
+    import PricingScreen from './routes/pricing/PricingScreen.svelte';
     import GamesScreen from './routes/games/GamesScreen.svelte';
     import RecipesScreen from './routes/recipes/RecipesScreen.svelte';
     import RecipeDetailScreen from './routes/recipes/RecipeDetailScreen.svelte';
@@ -79,6 +80,7 @@
         '/profile': ProfileScreen,
         '/profile/view/:userId': PublicProfileScreen,
         '/feedback': FeedbackScreen,
+        '/pricing': PricingScreen,
         '/games': GamesScreen,
         '/recipes': RecipesScreen,
         '/recipes/:id': RecipeDetailScreen,
@@ -361,6 +363,10 @@
                 <span class="footer-icon">💬</span>
                 <span class="footer-label">Feedback</span>
             </a>
+            <a href="#/pricing" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
+                <span class="footer-icon">💳</span>
+                <span class="footer-label">Pricing</span>
+            </a>
             {#if isAdmin}
                 <a href="#/admin" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
                     <span class="footer-icon">🛠️</span>
@@ -433,6 +439,10 @@
                     <a href="#/feedback" class="mega-item" on:click={() => showMobileMenu = false}>
                         <span class="mega-icon">💬</span>
                         <span class="mega-label">Feedback</span>
+                    </a>
+                    <a href="#/pricing" class="mega-item" on:click={() => showMobileMenu = false}>
+                        <span class="mega-icon">💳</span>
+                        <span class="mega-label">Pricing</span>
                     </a>
                     {#if isAdmin}
                         <a href="#/admin" class="mega-item" on:click={() => showMobileMenu = false}>
