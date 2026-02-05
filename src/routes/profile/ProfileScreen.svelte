@@ -907,6 +907,9 @@
                     <span class="icon">🚪</span>
                     Account
                 </h3>
+                <a class="btn btn-secondary btn-full" href="#/pricing">
+                    💳 Billing & Plans
+                </a>
                 <button class="btn btn-danger btn-full" on:click={handleSignOut}>
                     Sign Out
                 </button>

@@ -83,6 +83,9 @@
             {/if}
 
             <div class="auth-actions">
+                <a class="btn btn-clerk btn-full" href="#/pricing">
+                    View Plans & Billing
+                </a>
                 <button
                     class="btn btn-google btn-full"
                     on:click={handleGoogleAuth}
@@ -294,6 +297,18 @@
     .btn-github:disabled {
         background: #6a737d;
         cursor: not-allowed;
+    }
+
+    .btn-clerk {
+        background: #111827;
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .btn-clerk:hover {
+        background: #0b1220;
     }
 
     .oauth-icon {
