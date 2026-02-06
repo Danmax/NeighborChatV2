@@ -18,6 +18,7 @@
     import MessageList from '../../components/chat/MessageList.svelte';
     import MessageInput from '../../components/chat/MessageInput.svelte';
     import GiphyPicker from '../../components/chat/GiphyPicker.svelte';
+    import { showToast } from '../../stores/toasts.js';
 
     export let params = {};
 
