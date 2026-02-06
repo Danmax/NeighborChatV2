@@ -331,48 +331,22 @@
                 <span class="footer-icon">🏠</span>
                 <span class="footer-label">Home</span>
             </a>
-            <a href="#/messages" class="footer-btn primary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">✉️</span>
-                <span class="footer-label">Messages</span>
+            <a href="#/celebrations" class="footer-btn primary" on:click={() => showMobileMenu = false}>
+                <span class="footer-icon">🎉</span>
+                <span class="footer-label">Celebrate</span>
             </a>
             <a href="#/events" class="footer-btn primary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">📅</span>
                 <span class="footer-label">Events</span>
             </a>
-            <a href="#/recipes" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">🥘</span>
-                <span class="footer-label">Recipes</span>
+            <a href="#/messages" class="footer-btn primary" on:click={() => showMobileMenu = false}>
+                <span class="footer-icon">✉️</span>
+                <span class="footer-label">Messages</span>
             </a>
-            <a href="#/games" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">🎮</span>
-                <span class="footer-label">Games</span>
-            </a>
-            <a href="#/celebrations" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">🎉</span>
-                <span class="footer-label">Celebrate</span>
-            </a>
-            <a href="#/contacts" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">👥</span>
-                <span class="footer-label">Contacts</span>
-            </a>
-            <a href="#/profile" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
+            <a href="#/profile" class="footer-btn primary" on:click={() => showMobileMenu = false}>
                 <span class="footer-icon">👤</span>
                 <span class="footer-label">Profile</span>
             </a>
-            <a href="#/feedback" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">💬</span>
-                <span class="footer-label">Feedback</span>
-            </a>
-            <a href="#/pricing" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                <span class="footer-icon">💳</span>
-                <span class="footer-label">Pricing</span>
-            </a>
-            {#if isAdmin}
-                <a href="#/admin" class="footer-btn secondary" on:click={() => showMobileMenu = false}>
-                    <span class="footer-icon">🛠️</span>
-                    <span class="footer-label">Admin</span>
-                </a>
-            {/if}
             <button class="footer-btn menu-toggle" type="button" on:click={() => showMobileMenu = !showMobileMenu} aria-expanded={showMobileMenu}>
                 <span class="footer-icon">{showMobileMenu ? '✕' : '☰'}</span>
                 <span class="footer-label">Menu</span>
