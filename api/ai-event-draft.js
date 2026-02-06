@@ -163,7 +163,7 @@ export default async function handler(req, res) {
     const { data: profile } = await supabase
         .from('user_profiles')
         .select('role')
-        .eq('user_id', userId)
+        .eq('clerk_user_id', userId)
         .maybeSingle();
 
     const role = profile?.role || 'user';
@@ -195,7 +195,6 @@ export default async function handler(req, res) {
         .from('ai_generation_requests')
         .insert({
             id: requestId,
-            user_id: userId,
             request_type: 'event_draft',
             prompt: String(prompt).trim(),
             parameters: { model, context },

@@ -11,6 +11,25 @@ import {
 } from '../stores/contacts.js';
 import { get } from 'svelte/store';
 
+function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
+}
+
+async function resolveUserUuid(userId) {
+    if (!userId) return null;
+    if (isUuid(userId)) return userId;
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('clerk_user_id', userId)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data?.id || null;
+}
+
 // Transform database row to app format
 function transformContactFromDb(row) {
     return {
@@ -35,7 +54,7 @@ function transformContactToDb(contactData, ownerId) {
     return {
         id: contactData.id || generateUUID(),
         owner_id: ownerId,
-        contact_user_id: contactData.user_id,
+        contact_user_id: contactData.user_id || null,
         contact_name: contactData.name,
         contact_avatar: contactData.avatar || {},
         contact_interests: contactData.interests || [],
@@ -100,7 +119,8 @@ export async function saveContact(contactData) {
         throw new Error('You must be signed in to save contacts.');
     }
 
-    const dbContact = transformContactToDb(contactData, authUserUuid);
+    const resolvedContactUserId = await resolveUserUuid(contactData.user_id);
+    const dbContact = transformContactToDb({ ...contactData, user_id: resolvedContactUserId }, authUserUuid);
 
     try {
         const { data, error } = await supabase
@@ -142,12 +162,17 @@ export async function updateContactInDb(userId, updates) {
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
     if (updates.favorite !== undefined) dbUpdates.favorite = updates.favorite;
 
+    const resolvedUserId = await resolveUserUuid(userId);
+    if (!resolvedUserId) {
+        throw new Error('Contact user not found.');
+    }
+
     try {
         const { data, error } = await supabase
             .from('saved_contacts')
             .update(dbUpdates)
             .eq('owner_id', authUserUuid)
-            .eq('contact_user_id', userId)
+            .eq('contact_user_id', resolvedUserId)
             .select()
             .single();
 
@@ -176,12 +201,17 @@ export async function deleteContact(userId) {
         throw new Error('You must be signed in to remove contacts.');
     }
 
+    const resolvedUserId = await resolveUserUuid(userId);
+    if (!resolvedUserId) {
+        throw new Error('Contact user not found.');
+    }
+
     try {
         const { error } = await supabase
             .from('saved_contacts')
             .delete()
             .eq('owner_id', authUserUuid)
-            .eq('contact_user_id', userId);
+            .eq('contact_user_id', resolvedUserId);
 
         if (error) throw error;
 
