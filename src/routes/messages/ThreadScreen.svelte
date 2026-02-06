@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
+    import { getSupabase } from '../../lib/supabase.js';
     import { threadMessages, messagesLoading } from '../../stores/messages.js';
     import {
         fetchThread,
@@ -27,6 +28,7 @@
     let reactionsSubscription = null;
 
     $: otherUserId = params.id;
+    let resolvedUserId = null;
 
     $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
     $: mappedMessages = ($threadMessages || []).map(msg => {
@@ -46,22 +48,46 @@
         };
     });
 
+    async function resolveUserId(value) {
+        if (!value) return null;
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        if (isUuid) return value;
+
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('clerk_user_id', value)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Failed to resolve user id:', error);
+            return null;
+        }
+        return data?.id || null;
+    }
+
     onMount(async () => {
         if (!$isAuthenticated || !otherUserId) return;
+        resolvedUserId = await resolveUserId(otherUserId);
+        if (!resolvedUserId) {
+            showToast('Unable to load this conversation.', 'error');
+            return;
+        }
         try {
             loadingProfile = true;
-            recipientProfile = await fetchProfileForUser(otherUserId);
+            recipientProfile = await fetchProfileForUser(resolvedUserId);
         } catch (error) {
             console.error('Failed to load profile:', error);
         } finally {
             loadingProfile = false;
         }
 
-        await fetchThread(otherUserId);
-        await markThreadRead(otherUserId);
+        await fetchThread(resolvedUserId);
+        await markThreadRead(resolvedUserId);
 
-        subscription = await subscribeToThread(otherUserId, () => {
-            markThreadRead(otherUserId);
+        subscription = await subscribeToThread(resolvedUserId, () => {
+            markThreadRead(resolvedUserId);
         });
 
         reactionsSubscription = await subscribeToMessageReactions(async (payload) => {
@@ -86,13 +112,15 @@
     async function handleSendMessage(event) {
         const { message, isGif } = event.detail;
         if (!message.trim()) return;
-        await sendMessageToUser(otherUserId, message, isGif);
+        if (!resolvedUserId) return;
+        await sendMessageToUser(resolvedUserId, message, isGif);
     }
 
     async function handleGifSelect(event) {
         const gif = event.detail;
         const caption = gif.message ? gif.message.trim() : '';
-        await sendMessageToUser(otherUserId, caption, true, gif.url);
+        if (!resolvedUserId) return;
+        await sendMessageToUser(resolvedUserId, caption, true, gif.url);
         showGifPicker = false;
     }
 
