@@ -3,7 +3,7 @@
     import { push } from 'svelte-spa-router';
     import { currentUser, updateCurrentUser } from '../../stores/auth.js';
     import { showTopMenu } from '../../stores/ui.js';
-    import { getSupabase } from '../../lib/supabase.js';
+    import { getSupabase, getAuthUserUuid } from '../../lib/supabase.js';
     import Avatar from '../../components/avatar/Avatar.svelte';
     import AvatarCreator from '../../components/avatar/AvatarCreator.svelte';
 import { interestOptions } from '../../stores/options.js';
@@ -29,9 +29,9 @@ import { interestOptions } from '../../stores/options.js';
     onMount(async () => {
         console.log('Onboarding mounted - user:', $currentUser?.name);
 
-        // Use user_id from store (set by auth listener)
-        const userId = $currentUser?.user_id;
-        if (!userId) return;
+        // Use Clerk user id from store
+        const clerkUserId = $currentUser?.user_id;
+        if (!clerkUserId) return;
 
         try {
             const supabase = getSupabase();
@@ -39,7 +39,7 @@ import { interestOptions } from '../../stores/options.js';
             const { data: profile } = await supabase
                 .from('user_profiles')
                 .select('display_name, avatar, interests, username, onboarding_completed')
-                .eq('user_id', userId)
+                .eq('clerk_user_id', clerkUserId)
                 .maybeSingle();
 
             if (profile) {
@@ -130,15 +130,15 @@ import { interestOptions } from '../../stores/options.js';
 
         try {
             const supabase = getSupabase();
-            const userId = $currentUser?.user_id;
+            const clerkUserId = $currentUser?.user_id;
 
-            if (!userId) {
+            if (!clerkUserId) {
                 throw new Error('User authentication not found. Please log in again.');
             }
 
             // Prepare profile data
             const profileData = {
-                user_id: userId,
+                clerk_user_id: clerkUserId,
                 display_name: displayName,
                 avatar: avatar,
                 interests: selectedInterests,
@@ -151,7 +151,7 @@ import { interestOptions } from '../../stores/options.js';
             // Upsert profile in database (handles existing users)
             const { data: savedProfile, error: profileError } = await supabase
                 .from('user_profiles')
-                .upsert(profileData, { onConflict: 'user_id' })
+                .upsert(profileData, { onConflict: 'clerk_user_id' })
                 .select()
                 .single();
 
@@ -169,6 +169,10 @@ import { interestOptions } from '../../stores/options.js';
                 username: displayName.trim().toLowerCase(),
                 onboardingCompleted: true
             });
+            const userUuid = await getAuthUserUuid();
+            if (userUuid) {
+                updateCurrentUser({ user_uuid: userUuid });
+            }
 
             console.log('✅ Onboarding complete! Redirecting to lobby...');
             showTopMenu.set(true);
