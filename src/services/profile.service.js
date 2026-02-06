@@ -1,5 +1,5 @@
 // Profile service - Supabase profile operations
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser, updateCurrentUser } from '../stores/auth.js';
 import { get } from 'svelte/store';
 import { cacheData, getCachedData } from '../lib/utils/cache.js';
@@ -19,7 +19,7 @@ export async function loadUserProfile(userId) {
     const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('user_id', userId)
+        .eq('clerk_user_id', userId)
         .single();
 
     if (error && error.code !== 'PGRST116') {
@@ -43,7 +43,7 @@ export async function saveUserProfile(profileData) {
 
     // Build upsert data with all provided fields
     const upsertData = {
-        user_id: user.user_id,
+        clerk_user_id: user.user_id,
         updated_at: new Date().toISOString()
     };
 
@@ -83,7 +83,7 @@ export async function saveUserProfile(profileData) {
     const { data, error } = await supabase
         .from('user_profiles')
         .upsert(upsertData, {
-            onConflict: 'user_id'
+            onConflict: 'clerk_user_id'
         })
         .select()
         .single();
@@ -138,7 +138,7 @@ export async function updateAvatar(avatar) {
     const { error } = await supabase
         .from('user_profiles')
         .update({ avatar })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 
@@ -163,7 +163,7 @@ export async function updateInterests(interests) {
     const { error } = await supabase
         .from('user_profiles')
         .update({ interests })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 
@@ -199,7 +199,7 @@ export async function updateUsername(username) {
     const supabase = getSupabase();
 
     // Check availability (exclude current user)
-    const availability = await checkUsernameAvailability(sanitized, supabase, user.user_id);
+    const availability = await checkUsernameAvailability(sanitized, supabase, user.user_uuid || user.user_id);
     if (!availability.available) {
         throw new Error(availability.error || 'Username is not available');
     }
@@ -212,7 +212,7 @@ export async function updateUsername(username) {
             display_name: sanitized,
             updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) {
         // Handle unique constraint violation
@@ -258,7 +258,7 @@ export async function updateProfileDetails(details) {
             magic_email: sanitizedDetails.magic_email,
             updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 
@@ -381,15 +381,15 @@ export async function fetchFavoriteMovies(userId) {
 }
 
 export async function addFavoriteMovie(movie) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('You must be signed in to save favorites.');
     }
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('favorite_movies')
         .insert([{
-            user_id: authUserId,
+            user_id: authUserUuid,
             movie_id: movie.id,
             source: 'tmdb',
             title: movie.title,
@@ -404,15 +404,15 @@ export async function addFavoriteMovie(movie) {
 }
 
 export async function removeFavoriteMovie(movieId) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('You must be signed in to remove favorites.');
     }
     const supabase = getSupabase();
     const { error } = await supabase
         .from('favorite_movies')
         .delete()
-        .eq('user_id', authUserId)
+        .eq('user_id', authUserUuid)
         .eq('movie_id', movieId)
         .eq('source', 'tmdb');
 
@@ -442,7 +442,7 @@ export async function updatePrivacySettings(settings) {
             show_interests: settings.show_interests ?? true,
             updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 
@@ -471,7 +471,7 @@ export async function updateBio(bio) {
             bio: bio?.trim() || null,
             updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 
@@ -518,7 +518,7 @@ export async function updateBanner(bannerColor, bannerPattern, bannerImageUrl = 
             ...updates,
             updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.user_id);
+        .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;
 

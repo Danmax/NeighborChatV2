@@ -164,7 +164,7 @@
                 {@const category = getItemCategory(item.category)}
                 {@const available = calculateAvailableSlots(item)}
                 {@const claimed = calculateClaimedQuantity(item)}
-                {@const myClaim = getUserClaim(item, $currentUser?.user_id)}
+                {@const myClaim = getUserClaim(item, $currentUser?.user_uuid || $currentUser?.user_id)}
                 {@const progressPercent = getProgressPercent(item)}
                 {@const canAttachRecipe = settings.potluck_allow_recipes && item.allow_recipe !== false}
                 {@const canSuggestRecipe = canAttachRecipe && (canAddItems || myClaim)}

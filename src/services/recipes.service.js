@@ -1,5 +1,5 @@
 // Recipes service - CRUD operations for potluck recipes
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import {
     setRecipes,
     addRecipe,
@@ -72,9 +72,9 @@ export async function fetchRecipes(filters = {}) {
             query = query.ilike('title', `%${filters.searchTerm}%`);
         }
         if (filters.myRecipesOnly) {
-            const authUserId = await getAuthUserId();
-            if (authUserId) {
-                query = query.eq('created_by_id', authUserId);
+            const authUserUuid = await getAuthUserUuid();
+            if (authUserUuid) {
+                query = query.eq('created_by_id', authUserUuid);
             }
         }
 
@@ -121,13 +121,13 @@ export async function fetchRecipeById(recipeId) {
  */
 export async function createRecipe(recipeData) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
+    const authUserUuid = await getAuthUserUuid();
 
-    if (!authUserId) {
+    if (!authUserUuid) {
         throw new Error('Please sign in to create recipes.');
     }
 
-    const dbRecipe = transformRecipeToDb(recipeData, authUserId);
+    const dbRecipe = transformRecipeToDb(recipeData, authUserUuid);
 
     try {
         const { data, error } = await supabase

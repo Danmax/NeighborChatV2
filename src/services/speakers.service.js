@@ -1,5 +1,5 @@
 // Speakers service - CRUD operations for dev meetup speakers
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import {
     setSpeakers,
     addSpeaker,
@@ -65,9 +65,9 @@ export async function fetchSpeakers(filters = {}) {
             query = query.or(`name.ilike.%${filters.searchTerm}%,company.ilike.%${filters.searchTerm}%`);
         }
         if (filters.mySpeakersOnly) {
-            const authUserId = await getAuthUserId();
-            if (authUserId) {
-                query = query.eq('created_by_id', authUserId);
+            const authUserUuid = await getAuthUserUuid();
+            if (authUserUuid) {
+                query = query.eq('created_by_id', authUserUuid);
             }
         }
 
@@ -114,13 +114,13 @@ export async function fetchSpeakerById(speakerId) {
  */
 export async function createSpeaker(speakerData) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
+    const authUserUuid = await getAuthUserUuid();
 
-    if (!authUserId) {
+    if (!authUserUuid) {
         throw new Error('Please sign in to create speaker profiles.');
     }
 
-    const dbSpeaker = transformSpeakerToDb(speakerData, authUserId);
+    const dbSpeaker = transformSpeakerToDb(speakerData, authUserUuid);
 
     try {
         const { data, error } = await supabase

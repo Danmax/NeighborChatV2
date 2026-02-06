@@ -283,7 +283,7 @@
     async function loadFavorites() {
         try {
             if ($currentUser?.user_id) {
-                favoriteMovies = await fetchFavoriteMovies($currentUser.user_id);
+                favoriteMovies = await fetchFavoriteMovies($currentUser.user_uuid || $currentUser.user_id);
             }
         } catch (err) {
             movieError = 'Failed to load favorites.';
@@ -334,8 +334,8 @@
     $: favoriteMovieIds = new Set(favoriteMovies.map(m => m.movie_id));
 
     let favoritesLoadedFor = null;
-    $: if ($currentUser?.user_id && favoritesLoadedFor !== $currentUser.user_id) {
-        favoritesLoadedFor = $currentUser.user_id;
+    $: if ($currentUser?.user_id && favoritesLoadedFor !== ($currentUser.user_uuid || $currentUser.user_id)) {
+        favoritesLoadedFor = $currentUser.user_uuid || $currentUser.user_id;
         loadFavorites();
     }
 

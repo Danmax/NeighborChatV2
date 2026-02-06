@@ -1,5 +1,5 @@
 // Notifications service - Supabase for authenticated users, localStorage for guests
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setNotifications,
@@ -86,23 +86,24 @@ export async function fetchNotifications(limit = 50) {
     notificationsLoading.set(true);
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId) {
+        if (authUserUuid) {
             // Authenticated user - fetch from Supabase
             const supabase = getSupabase();
             const { data, error } = await supabase
                 .from('notifications')
                 .select('*')
-                .eq('user_id', authUserId)
+                .eq('user_id', authUserUuid)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
             if (error) {
                 if (isTableMissing(error)) {
                     const allNotifications = getStoredNotifications();
+                    const currentId = user.user_uuid || user.user_id;
                     const userNotifications = allNotifications
-                        .filter(n => n.user_id === user.user_id)
+                        .filter(n => n.user_id === currentId)
                         .slice(0, limit);
                     setNotifications(userNotifications);
                     return userNotifications;
@@ -116,8 +117,9 @@ export async function fetchNotifications(limit = 50) {
         } else {
             // Guest user - use localStorage
             const allNotifications = getStoredNotifications();
+            const currentId = user.user_uuid || user.user_id;
             const userNotifications = allNotifications
-                .filter(n => n.user_id === user.user_id)
+                .filter(n => n.user_id === currentId)
                 .slice(0, limit);
 
             setNotifications(userNotifications);
@@ -139,12 +141,12 @@ export async function createNotification(notificationData) {
     if (!user) return null;
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId && notificationData.user_id === authUserId) {
+        if (authUserUuid && notificationData.user_id === authUserUuid) {
             // Create in Supabase for authenticated user
             const supabase = getSupabase();
-            const dbNotification = transformNotificationToDb(notificationData, authUserId);
+            const dbNotification = transformNotificationToDb(notificationData, authUserUuid);
 
             const { data, error } = await supabase
                 .from('notifications')
@@ -185,7 +187,7 @@ export async function createNotification(notificationData) {
             notifications.unshift(notification);
             saveNotifications(notifications);
 
-            if (notification.user_id === user.user_id) {
+            if (notification.user_id === (user.user_uuid || user.user_id)) {
                 addNotification(notification);
             }
 
@@ -208,16 +210,16 @@ export async function markNotificationRead(notificationId) {
     markAsRead(notificationId);
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId) {
+        if (authUserUuid) {
             // Update in Supabase
             const supabase = getSupabase();
             const { error } = await supabase
                 .from('notifications')
                 .update({ read: true })
                 .eq('id', notificationId)
-                .eq('user_id', authUserId);
+                .eq('user_id', authUserUuid);
 
             if (error) {
                 if (isTableMissing(error)) {
@@ -249,15 +251,15 @@ export async function markAllNotificationsRead() {
     markAllAsRead();
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId) {
+        if (authUserUuid) {
             // Update in Supabase
             const supabase = getSupabase();
             const { error } = await supabase
                 .from('notifications')
                 .update({ read: true })
-                .eq('user_id', authUserId)
+                .eq('user_id', authUserUuid)
                 .eq('read', false);
 
             if (error) {
@@ -269,8 +271,9 @@ export async function markAllNotificationsRead() {
         } else {
             // Update in localStorage
             const notifications = getStoredNotifications();
+            const currentId = user.user_uuid || user.user_id;
             const updated = notifications.map(n =>
-                n.user_id === user.user_id ? { ...n, read: true } : n
+                n.user_id === currentId ? { ...n, read: true } : n
             );
             saveNotifications(updated);
         }
@@ -290,16 +293,16 @@ export async function deleteNotification(notificationId) {
     removeNotification(notificationId);
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId) {
+        if (authUserUuid) {
             // Delete from Supabase
             const supabase = getSupabase();
             const { error } = await supabase
                 .from('notifications')
                 .delete()
                 .eq('id', notificationId)
-                .eq('user_id', authUserId);
+                .eq('user_id', authUserUuid);
 
             if (error) {
                 if (isTableMissing(error)) {
@@ -329,15 +332,15 @@ export async function clearAllNotifications() {
     clearNotifications();
 
     try {
-        const authUserId = await getAuthUserId();
+        const authUserUuid = await getAuthUserUuid();
 
-        if (authUserId) {
+        if (authUserUuid) {
             // Delete from Supabase
             const supabase = getSupabase();
             const { error } = await supabase
                 .from('notifications')
                 .delete()
-                .eq('user_id', authUserId);
+                .eq('user_id', authUserUuid);
 
             if (error) {
                 if (isTableMissing(error)) {
@@ -348,7 +351,8 @@ export async function clearAllNotifications() {
         } else {
             // Clear from localStorage
             const notifications = getStoredNotifications();
-            const updated = notifications.filter(n => n.user_id !== user.user_id);
+            const currentId = user.user_uuid || user.user_id;
+            const updated = notifications.filter(n => n.user_id !== currentId);
             saveNotifications(updated);
         }
     } catch (error) {
@@ -360,8 +364,8 @@ export async function clearAllNotifications() {
  * Subscribe to notification changes (real-time)
  */
 export async function subscribeToNotifications(callback) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         // Guests don't get real-time notifications
         return null;
     }
@@ -375,7 +379,7 @@ export async function subscribeToNotifications(callback) {
                 event: '*',
                 schema: 'public',
                 table: 'notifications',
-                filter: `user_id=eq.${authUserId}`
+                filter: `user_id=eq.${authUserUuid}`
             },
             (payload) => {
                 if (payload.eventType === 'INSERT') {
@@ -423,12 +427,12 @@ export function addLocalNotification(type, title, message, data = {}) {
     addNotification(notification);
 
     // Also try to save to Supabase asynchronously (if authenticated)
-    getAuthUserId().then(authUserId => {
-        if (authUserId && user.user_id === authUserId) {
+    getAuthUserUuid().then(authUserUuid => {
+        if (authUserUuid && (user.user_uuid || user.user_id) === authUserUuid) {
             const supabase = getSupabase();
             supabase
                 .from('notifications')
-                .insert([transformNotificationToDb(notification, authUserId)])
+                .insert([transformNotificationToDb(notification, authUserUuid)])
                 .then(({ error }) => {
                     if (error) console.error('Failed to sync notification to Supabase:', error);
                 });
@@ -449,7 +453,7 @@ export function sendChatInviteNotification(targetUserId, fromUser) {
         title: 'Chat Invite',
         message: `${fromUser.name} wants to chat with you!`,
         data: {
-            from_user_id: fromUser.user_id,
+            from_user_id: fromUser.user_uuid || fromUser.user_id,
             from_user_name: fromUser.name,
             from_user_avatar: fromUser.avatar
         },
@@ -478,7 +482,7 @@ export function sendEventInviteNotification(targetUserId, event, fromUser) {
         data: {
             event_id: event.id,
             event_title: event.title,
-            from_user_id: fromUser.user_id,
+            from_user_id: fromUser.user_uuid || fromUser.user_id,
             from_user_name: fromUser.name
         },
         read: false,
@@ -508,7 +512,7 @@ export function sendMentionNotification(targetUserId, fromUser, channelName, mes
         title: 'You were mentioned',
         message: `${fromUser.name} mentioned you in #${channelName}: "${messagePreview.substring(0, 50)}${messagePreview.length > 50 ? '...' : ''}"`,
         data: {
-            from_user_id: fromUser.user_id,
+            from_user_id: fromUser.user_uuid || fromUser.user_id,
             from_user_name: fromUser.name,
             from_user_avatar: fromUser.avatar,
             channel: channelName,

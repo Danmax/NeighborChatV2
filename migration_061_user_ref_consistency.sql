@@ -129,6 +129,7 @@ DROP COLUMN IF EXISTS user_id;
 CREATE VIEW public.public_profiles AS
 SELECT
     id AS user_id,
+    clerk_user_id,
     display_name,
     username,
     avatar,

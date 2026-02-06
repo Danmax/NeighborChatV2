@@ -39,7 +39,8 @@ export function startChat(partner) {
 
     // Create consistent room ID (sorted user IDs)
     // Use user_id for consistency across the app
-    const ids = [user.user_id, partner.user_id].sort();
+    const currentId = user.user_uuid || user.user_id;
+    const ids = [currentId, partner.user_id].sort();
     const roomId = `chat_${ids[0]}_${ids[1]}`;
 
     chatPartner.set(partner);

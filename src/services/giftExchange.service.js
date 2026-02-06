@@ -1,4 +1,4 @@
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 
 export async function fetchWishlist(eventId, userId = null) {
     const supabase = getSupabase();
@@ -16,14 +16,14 @@ export async function fetchWishlist(eventId, userId = null) {
 }
 
 export async function addWishlistItem(eventId, item) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) throw new Error('Please sign in to add items.');
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) throw new Error('Please sign in to add items.');
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('gift_exchange_wishlist_items')
         .insert([{
             event_id: eventId,
-            user_id: authUserId,
+            user_id: authUserUuid,
             title: item.title,
             description: item.description || null,
             url: item.url || null,
@@ -56,13 +56,13 @@ export async function fetchWishlistTemplates() {
 }
 
 export async function addWishlistTemplate(item) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) throw new Error('Please sign in to save templates.');
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) throw new Error('Please sign in to save templates.');
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('gift_exchange_wishlist_templates')
         .insert([{
-            user_id: authUserId,
+            user_id: authUserUuid,
             title: item.title,
             description: item.description || null,
             url: item.url || null,
@@ -75,14 +75,14 @@ export async function addWishlistTemplate(item) {
 }
 
 export async function fetchMatchForUser(eventId) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) throw new Error('Please sign in.');
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) throw new Error('Please sign in.');
     const supabase = getSupabase();
     const { data, error } = await supabase
         .from('gift_exchange_matches')
         .select('*')
         .eq('event_id', eventId)
-        .or(`giver_user_id.eq.${authUserId},receiver_user_id.eq.${authUserId}`)
+        .or(`giver_user_id.eq.${authUserUuid},receiver_user_id.eq.${authUserUuid}`)
         .limit(1)
         .single();
     if (error) return null;

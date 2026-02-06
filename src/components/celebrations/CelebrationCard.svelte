@@ -34,7 +34,8 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        return celebration.reactions?.[emoji]?.includes($currentUser.user_id);
+        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+        return celebration.reactions?.[emoji]?.includes(currentId);
     }
 
     function formatTime(timestamp) {

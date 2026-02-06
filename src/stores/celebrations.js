@@ -50,6 +50,7 @@ export function removeCelebration(celebrationId) {
 export function addReaction(celebrationId, emoji) {
     const user = get(currentUser);
     if (!user) return;
+    const currentId = user.user_uuid || user.user_id;
 
     celebrations.update(list =>
         list.map(c => {
@@ -58,8 +59,8 @@ export function addReaction(celebrationId, emoji) {
                 if (!reactions[emoji]) {
                     reactions[emoji] = [];
                 }
-                if (!reactions[emoji].includes(user.user_id)) {
-                    reactions[emoji] = [...reactions[emoji], user.user_id];
+                if (!reactions[emoji].includes(currentId)) {
+                    reactions[emoji] = [...reactions[emoji], currentId];
                 }
                 return { ...c, reactions };
             }
@@ -72,13 +73,14 @@ export function addReaction(celebrationId, emoji) {
 export function removeReaction(celebrationId, emoji) {
     const user = get(currentUser);
     if (!user) return;
+    const currentId = user.user_uuid || user.user_id;
 
     celebrations.update(list =>
         list.map(c => {
             if (c.id === celebrationId) {
                 const reactions = { ...(c.reactions || {}) };
                 if (reactions[emoji]) {
-                    reactions[emoji] = reactions[emoji].filter(id => id !== user.user_id);
+                    reactions[emoji] = reactions[emoji].filter(id => id !== currentId);
                     if (reactions[emoji].length === 0) {
                         delete reactions[emoji];
                     }

@@ -1,4 +1,4 @@
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setInboxThreads,
@@ -75,8 +75,8 @@ export async function fetchInbox() {
     setMessagesError(null);
 
     try {
-        const authUserId = await getAuthUserId();
-        if (!authUserId) {
+        const authUserUuid = await getAuthUserUuid();
+        if (!authUserUuid) {
             throw new Error('You must be signed in to view messages.');
         }
 
@@ -84,7 +84,7 @@ export async function fetchInbox() {
         const { data, error } = await supabase
             .from('messages')
             .select('*')
-            .or(`sender_id.eq.${authUserId},recipient_id.eq.${authUserId}`)
+            .or(`sender_id.eq.${authUserUuid},recipient_id.eq.${authUserUuid}`)
             .order('created_at', { ascending: false })
             .limit(200);
 
@@ -92,10 +92,10 @@ export async function fetchInbox() {
 
         const messageList = data || [];
         const userIds = Array.from(new Set(messageList.flatMap(m => [m.sender_id, m.recipient_id])))
-            .filter(id => id !== authUserId);
+            .filter(id => id !== authUserUuid);
         const profilesById = await fetchProfilesByIds(userIds);
 
-        const threads = buildThreads(messageList, authUserId, profilesById);
+        const threads = buildThreads(messageList, authUserUuid, profilesById);
         setInboxThreads(threads);
         return threads;
     } catch (error) {
@@ -112,8 +112,8 @@ export async function fetchThread(otherUserId) {
     setMessagesError(null);
 
     try {
-        const authUserId = await getAuthUserId();
-        if (!authUserId) {
+        const authUserUuid = await getAuthUserUuid();
+        if (!authUserUuid) {
             throw new Error('You must be signed in to view messages.');
         }
 
@@ -122,7 +122,7 @@ export async function fetchThread(otherUserId) {
             .from('messages')
             .select('*')
             .or(
-                `and(sender_id.eq.${authUserId},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${authUserId})`
+                `and(sender_id.eq.${authUserUuid},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${authUserUuid})`
             )
             .order('created_at', { ascending: true });
 
@@ -175,8 +175,8 @@ async function attachMessageReactions(messages) {
 
 export async function reactToMessage(messageId, emoji) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('You must be signed in to react to messages.');
     }
 
@@ -192,8 +192,8 @@ export async function reactToMessage(messageId, emoji) {
 }
 
 export async function subscribeToMessageReactions(callback) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return null;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return null;
     const supabase = getSupabase();
     const channel = supabase.channel('message-reactions');
 
@@ -210,14 +210,14 @@ export async function subscribeToMessageReactions(callback) {
 }
 
 export async function sendMessageToUser(otherUserId, body, isGif = false, gifUrl = null) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('You must be signed in to send messages.');
     }
 
     const supabase = getSupabase();
     const payload = {
-        sender_id: authUserId,
+        sender_id: authUserUuid,
         recipient_id: otherUserId,
         body: body.trim(),
         message_type: isGif ? 'gif' : 'direct',
@@ -242,14 +242,14 @@ export async function sendMessageToUser(otherUserId, body, isGif = false, gifUrl
 }
 
 export async function markThreadRead(otherUserId) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return;
 
     const supabase = getSupabase();
     const { error } = await supabase
         .from('messages')
         .update({ read: true })
-        .eq('recipient_id', authUserId)
+        .eq('recipient_id', authUserUuid)
         .eq('sender_id', otherUserId)
         .eq('read', false);
 
@@ -273,15 +273,15 @@ export async function fetchProfileForUser(otherUserId) {
 }
 
 export async function subscribeToInbox(callback) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return null;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return null;
 
     const supabase = getSupabase();
     const channel = supabase.channel('messages-inbox');
 
     channel.on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${authUserId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${authUserUuid}` },
         async (payload) => {
             const message = payload.new;
             const otherUserId = message.sender_id;
@@ -300,7 +300,7 @@ export async function subscribeToInbox(callback) {
 
     channel.on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserUuid}` },
         async (payload) => {
             const message = payload.new;
             const otherUserId = message.recipient_id;
@@ -321,15 +321,15 @@ export async function subscribeToInbox(callback) {
 }
 
 export async function subscribeToThread(otherUserId, callback) {
-    const authUserId = await getAuthUserId();
-    if (!authUserId || !otherUserId) return null;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid || !otherUserId) return null;
 
     const supabase = getSupabase();
     const channel = supabase.channel(`messages-thread-${otherUserId}`);
 
     channel.on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${authUserId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${authUserUuid}` },
         (payload) => {
             const message = payload.new;
             if (message.sender_id !== otherUserId) return;
@@ -345,7 +345,7 @@ export async function subscribeToThread(otherUserId, callback) {
 
     channel.on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserUuid}` },
         (payload) => {
             const message = payload.new;
             if (message.recipient_id !== otherUserId) return;
@@ -360,7 +360,7 @@ export async function subscribeToThread(otherUserId, callback) {
 
     channel.on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserId}` },
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserUuid}` },
         (payload) => {
             const message = payload.new;
             if (message.recipient_id !== otherUserId) return;

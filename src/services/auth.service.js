@@ -1,5 +1,5 @@
 // Auth service - Clerk authentication operations
-import { getSupabase } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import { currentUser, authUser, setCurrentUser, updateCurrentUser, clearAuth } from '../stores/auth.js';
 import { generateRandomAvatar } from '../lib/utils/avatar.js';
 import { getCachedData } from '../lib/utils/cache.js';
@@ -64,7 +64,7 @@ export async function createUserProfile(userData, onboardingData = {}) {
 
     // Prepare profile data
     const profileInsert = {
-        user_id: userData.user_id,
+        clerk_user_id: userData.user_id,
         display_name: consolidatedName,
         avatar: onboardingData.avatar || userData.avatar,
         interests: onboardingData.interests || [],
@@ -141,6 +141,10 @@ export async function checkExistingAuth() {
             if (basicUserData?.user_id) {
                 fetchAndUpdateUserProfile(basicUserData.user_id);
             }
+            const userUuid = await getAuthUserUuid();
+            if (userUuid) {
+                updateCurrentUser({ user_uuid: userUuid });
+            }
 
             return basicUserData;
         }
@@ -187,6 +191,11 @@ export function setupAuthListener(callback) {
             if (basicUserData?.user_id) {
                 fetchAndUpdateUserProfile(basicUserData.user_id);
             }
+            getAuthUserUuid().then(userUuid => {
+                if (userUuid) {
+                    updateCurrentUser({ user_uuid: userUuid });
+                }
+            });
 
             lastHandledUserId = currentUserId;
             lastHandledEvent = event;
@@ -221,7 +230,7 @@ async function createUserDataFromSession(user) {
             supabase
                 .from('user_profiles')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('clerk_user_id', user.id)
                 .maybeSingle(),
             4000,
             'fetchUserProfile'
@@ -354,7 +363,7 @@ export async function fetchAndUpdateUserProfile(userId) {
             supabase
                 .from('user_profiles')
                 .select('*')
-                .eq('user_id', userId)
+                .eq('clerk_user_id', userId)
                 .maybeSingle(),
             4000,
             'fetchUserProfile'
@@ -391,6 +400,10 @@ export async function fetchAndUpdateUserProfile(userId) {
                 firstLoginAt: profile.first_login_at,
                 profileLoading: false
             });
+            const userUuid = await getAuthUserUuid();
+            if (userUuid) {
+                updateCurrentUser({ user_uuid: userUuid });
+            }
         } else {
             // No profile found - mark as loaded
             updateCurrentUser({ profileLoading: false });

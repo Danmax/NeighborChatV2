@@ -48,7 +48,8 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        return message.reactions?.[emoji]?.includes($currentUser.user_id);
+        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+        return message.reactions?.[emoji]?.includes(currentId);
     }
 
     function handleReaction(emoji) {

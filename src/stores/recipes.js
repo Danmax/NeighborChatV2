@@ -28,12 +28,14 @@ export const RECIPE_TAGS = [
 // Derived: my recipes
 export const myRecipes = derived([recipes, currentUser], ([$recipes, $currentUser]) => {
     if (!$currentUser) return [];
-    return $recipes.filter(r => r.createdById === $currentUser.user_id);
+    const currentId = $currentUser.user_uuid || $currentUser.user_id;
+    return $recipes.filter(r => r.createdById === currentId);
 });
 
 // Derived: public recipes (not mine)
 export const publicRecipes = derived([recipes, currentUser], ([$recipes, $currentUser]) => {
-    return $recipes.filter(r => r.isPublic && (!$currentUser || r.createdById !== $currentUser.user_id));
+    const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    return $recipes.filter(r => r.isPublic && (!$currentUser || r.createdById !== currentId));
 });
 
 // Set recipes

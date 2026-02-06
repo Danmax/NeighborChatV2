@@ -5,12 +5,13 @@ import { currentUser } from '../stores/auth.js';
 export async function submitFeedback({ category, title, message }) {
     const supabase = getSupabase();
     const user = get(currentUser);
-    if (!user?.user_id) {
+    const currentId = user?.user_uuid || user?.user_id;
+    if (!currentId) {
         throw new Error('Please sign in to submit feedback.');
     }
 
     const payload = {
-        user_id: user.user_id,
+        user_id: currentId,
         username: user.username || user.name || null,
         category,
         title: title?.trim() || null,
@@ -30,12 +31,13 @@ export async function submitFeedback({ category, title, message }) {
 export async function fetchMyFeedback() {
     const supabase = getSupabase();
     const user = get(currentUser);
-    if (!user?.user_id) return [];
+    const currentId = user?.user_uuid || user?.user_id;
+    if (!currentId) return [];
 
     const { data, error } = await supabase
         .from('feedback')
         .select('*')
-        .eq('user_id', user.user_id)
+        .eq('user_id', currentId)
         .order('created_at', { ascending: false });
 
     if (error) throw error;

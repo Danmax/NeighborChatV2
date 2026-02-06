@@ -17,12 +17,14 @@ export const INVITE_STATUSES = [
 // Derived: my speakers (created by me)
 export const mySpeakers = derived([speakers, currentUser], ([$speakers, $currentUser]) => {
     if (!$currentUser) return [];
-    return $speakers.filter(s => s.createdById === $currentUser.user_id);
+    const currentId = $currentUser.user_uuid || $currentUser.user_id;
+    return $speakers.filter(s => s.createdById === currentId);
 });
 
 // Derived: public speakers (not mine)
 export const publicSpeakers = derived([speakers, currentUser], ([$speakers, $currentUser]) => {
-    return $speakers.filter(s => s.isPublic && (!$currentUser || s.createdById !== $currentUser.user_id));
+    const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    return $speakers.filter(s => s.isPublic && (!$currentUser || s.createdById !== currentId));
 });
 
 // Set speakers

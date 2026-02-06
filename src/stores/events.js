@@ -54,9 +54,10 @@ export const upcomingEvents = derived(events, ($events) => {
 // Derived: my events (created by or attending)
 export const myEvents = derived([events, currentUser], ([$events, $currentUser]) => {
     if (!$currentUser) return [];
+    const currentId = $currentUser.user_uuid || $currentUser.user_id;
     return $events.filter(e =>
-        e.created_by === $currentUser.user_id ||
-        e.attendees?.includes($currentUser.user_id)
+        e.created_by === currentId ||
+        e.attendees?.includes(currentId)
     );
 });
 
@@ -71,8 +72,9 @@ export const pastEvents = derived(events, ($events) => {
 // Derived: draft events (visible only to organizers)
 export const draftEvents = derived([events, currentUser], ([$events, $currentUser]) => {
     if (!$currentUser) return [];
+    const currentId = $currentUser.user_uuid || $currentUser.user_id;
     return $events
-        .filter(e => e.status === 'draft' && e.created_by === $currentUser.user_id)
+        .filter(e => e.status === 'draft' && e.created_by === currentId)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 });
 
@@ -116,13 +118,14 @@ export function removeEvent(eventId) {
 export function joinEvent(eventId) {
     const user = get(currentUser);
     if (!user) return;
+    const currentId = user.user_uuid || user.user_id;
 
     events.update(list =>
         list.map(e => {
-            if (e.id === eventId && !e.attendees?.includes(user.user_id)) {
+            if (e.id === eventId && !e.attendees?.includes(currentId)) {
                 return {
                     ...e,
-                    attendees: [...(e.attendees || []), user.user_id]
+                    attendees: [...(e.attendees || []), currentId]
                 };
             }
             return e;
@@ -134,13 +137,14 @@ export function joinEvent(eventId) {
 export function leaveEvent(eventId) {
     const user = get(currentUser);
     if (!user) return;
+    const currentId = user.user_uuid || user.user_id;
 
     events.update(list =>
         list.map(e => {
             if (e.id === eventId) {
                 return {
                     ...e,
-                    attendees: (e.attendees || []).filter(id => id !== user.user_id)
+                    attendees: (e.attendees || []).filter(id => id !== currentId)
                 };
             }
             return e;

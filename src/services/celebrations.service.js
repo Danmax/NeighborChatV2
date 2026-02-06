@@ -203,7 +203,7 @@ export async function updateCelebrationInDb(celebrationId, updates) {
  */
 export async function uploadCelebrationImage(file) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
+    const authUserUuid = await getAuthUserUuid();
     if (!authUserId) {
         throw new Error('Please sign in to upload images.');
     }
@@ -233,7 +233,7 @@ export async function uploadCelebrationImage(file) {
 async function applyArchiveRules(celebrations) {
     if (!celebrations.length) return celebrations;
     const now = new Date();
-    const authUserId = await getAuthUserId();
+    const authUserUuid = await getAuthUserUuid();
     const supabase = getSupabase();
 
     const updates = celebrations.map(async (celebration) => {
@@ -244,7 +244,7 @@ async function applyArchiveRules(celebrations) {
         expiresAt.setDate(expiresAt.getDate() + 7);
 
         if (now > expiresAt && !celebration.archived) {
-            if (authUserId && celebration.authorId === authUserId) {
+            if (authUserUuid && celebration.authorId === authUserUuid) {
                 try {
                     await supabase
                         .from('celebrations')
@@ -265,8 +265,8 @@ async function applyArchiveRules(celebrations) {
 
 async function sendCelebrationMentions(celebration, message) {
     if (!message) return;
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return;
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return;
 
     const mentions = extractMentions(message);
     if (mentions.length === 0) return;
@@ -298,10 +298,10 @@ async function sendCelebrationMentions(celebration, message) {
             }
         }
 
-        if (target && target.user_id !== authUserId) {
+        if (target && target.user_id !== authUserUuid) {
             await supabase.rpc('send_celebration_mention_notification', {
                 target_user_id: target.user_id,
-                from_user_id: authUserId,
+                from_user_id: authUserUuid,
                 celebration_id: celebration.id,
                 mention_message: message
             });
@@ -317,8 +317,8 @@ export async function updateReactions(celebrationId, reactions) {
     const supabase = getSupabase();
 
     // Check if user is authenticated
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in to react to celebrations.');
     }
 
@@ -348,8 +348,8 @@ export async function updateReactions(celebrationId, reactions) {
 export async function reactToCelebration(celebrationId, emoji) {
     const supabase = getSupabase();
 
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in to react to celebrations.');
     }
 
@@ -384,8 +384,8 @@ export async function postComment(celebrationId, commentText, gifUrl = null) {
     }
 
     // Check if user is authenticated
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in with your email to comment. Guest users can only view content.');
     }
 

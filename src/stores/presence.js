@@ -35,8 +35,9 @@ export const onlineCount = derived(onlineUsers, $users => Object.keys($users).le
 export const onlineUsersList = derived(
     [onlineUsers, currentUser],
     ([$users, $currentUser]) => {
+        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
         return Object.values($users).filter(user =>
-            user.user_id !== $currentUser?.user_id
+            user.user_id !== currentId
         );
     }
 );
@@ -50,9 +51,10 @@ export const onlineContactsList = derived(
     ([$users, $currentUser, $contacts]) => {
         // Create a Set of contact user IDs for fast lookup
         const contactIds = new Set($contacts.map(c => c.user_id));
+        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
 
         return Object.values($users).filter(user =>
-            user.user_id !== $currentUser?.user_id &&
+            user.user_id !== currentId &&
             contactIds.has(user.user_id)
         );
     }

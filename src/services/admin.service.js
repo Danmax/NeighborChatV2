@@ -1,4 +1,4 @@
-import { getSupabase } from '../lib/supabase.js';
+import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import { get } from 'svelte/store';
 import { currentUser } from '../stores/auth.js';
 
@@ -107,14 +107,14 @@ export async function fetchEventManagerRequests() {
 
     const { data: profiles, error: profileError } = await supabase
         .from('user_profiles')
-        .select('user_id, username, display_name')
-        .in('user_id', userIds);
+        .select('id, username, display_name')
+        .in('id', userIds);
 
     if (profileError) {
         return requests;
     }
 
-    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
     return requests.map(req => ({
         ...req,
         username: profileMap.get(req.user_id)?.username || null,
@@ -125,12 +125,13 @@ export async function fetchEventManagerRequests() {
 export async function submitEventManagerRequest(reason) {
     const supabase = getSupabase();
     const user = get(currentUser);
-    if (!user?.user_id) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!user?.user_id || !authUserUuid) {
         throw new Error('Please sign in.');
     }
     const { data, error } = await supabase
         .from('event_manager_requests')
-        .insert({ user_id: user.user_id, reason })
+        .insert({ user_id: authUserUuid, reason })
         .select()
         .single();
     if (error) throw error;
