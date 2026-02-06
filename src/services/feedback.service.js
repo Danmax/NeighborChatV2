@@ -57,26 +57,11 @@ export async function fetchAllFeedback() {
 
 export async function updateFeedbackStatus(id, status, resolutionNote = null) {
     const supabase = getSupabase();
-    let metadata = null;
-    if (resolutionNote && resolutionNote.trim()) {
-        const { data: current, error: fetchError } = await supabase
-            .from('feedback')
-            .select('metadata')
-            .eq('id', id)
-            .single();
-        if (fetchError) throw fetchError;
-        metadata = {
-            ...(current?.metadata || {}),
-            resolution_note: resolutionNote.trim(),
-            resolved_at: new Date().toISOString()
-        };
-    }
-    const { data, error } = await supabase
-        .from('feedback')
-        .update(metadata ? { status, metadata } : { status })
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase.rpc('admin_update_feedback', {
+        p_id: id,
+        p_status: status,
+        p_resolution_note: resolutionNote || null
+    });
 
     if (error) throw error;
     return data;
