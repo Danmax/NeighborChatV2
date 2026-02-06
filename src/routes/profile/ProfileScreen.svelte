@@ -51,6 +51,10 @@
     let movieResults = [];
     let searchingMovies = false;
     let movieError = '';
+    let spotifyQuery = '';
+    let spotifyResults = [];
+    let searchingSpotify = false;
+    let spotifyError = '';
 
     // Privacy tab fields
     let editingBio = false;
@@ -328,6 +332,36 @@
         }
     }
 
+    async function searchSpotifyTracks() {
+        if (!spotifyQuery.trim()) return;
+        searchingSpotify = true;
+        spotifyError = '';
+        try {
+            const accessToken = await getClerkToken();
+            const res = await fetch(`/api/spotify-search?q=${encodeURIComponent(spotifyQuery.trim())}`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Search failed');
+            }
+            spotifyResults = data.results || [];
+        } catch (err) {
+            spotifyError = err.message || 'Search failed';
+        } finally {
+            searchingSpotify = false;
+        }
+    }
+
+    function handleSelectSpotifyTrack(track) {
+        tempSpotifyTrackUrl = track?.url || track?.uri || '';
+        spotifyResults = [];
+        spotifyQuery = '';
+        spotifyError = '';
+    }
+
     async function handleAddFavorite(movie) {
         try {
             const saved = await addFavoriteMovie(movie);
@@ -603,6 +637,49 @@
                                 maxlength="400"
                             />
                             <span class="field-hint">Paste a Spotify track link to show on your public profile</span>
+                            <div class="spotify-search">
+                                <div class="spotify-search-row">
+                                    <input
+                                        type="text"
+                                        placeholder="Search for a song..."
+                                        bind:value={spotifyQuery}
+                                        on:keydown={(e) => e.key === 'Enter' && searchSpotifyTracks()}
+                                    />
+                                    <button
+                                        class="btn btn-secondary"
+                                        on:click={searchSpotifyTracks}
+                                        disabled={searchingSpotify || !spotifyQuery.trim()}
+                                    >
+                                        {searchingSpotify ? 'Searching...' : 'Search'}
+                                    </button>
+                                </div>
+                                {#if spotifyError}
+                                    <div class="spotify-error">{spotifyError}</div>
+                                {/if}
+                                {#if spotifyResults.length > 0}
+                                    <div class="spotify-results">
+                                        {#each spotifyResults as track (track.id)}
+                                            <div class="spotify-track-card">
+                                                {#if track.image_url}
+                                                    <img src={track.image_url} alt={track.title} />
+                                                {/if}
+                                                <div class="spotify-track-info">
+                                                    <div class="spotify-track-title">{track.title}</div>
+                                                    <div class="spotify-track-meta">
+                                                        {track.artists}{#if track.album} • {track.album}{/if}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    class="btn btn-secondary btn-small"
+                                                    on:click={() => handleSelectSpotifyTrack(track)}
+                                                >
+                                                    Use
+                                                </button>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
                         </div>
 
                         <div class="form-actions">
@@ -1479,6 +1556,64 @@
         color: #c62828;
         font-size: 12px;
         margin-top: 6px;
+    }
+
+    .spotify-search {
+        margin-top: 12px;
+    }
+
+    .spotify-search-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .spotify-search-row input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid var(--cream-dark);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+    }
+
+    .spotify-error {
+        color: #c62828;
+        font-size: 12px;
+        margin-top: 6px;
+    }
+
+    .spotify-results {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .spotify-track-card {
+        display: grid;
+        grid-template-columns: 54px 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
+        background: white;
+    }
+
+    .spotify-track-card img {
+        width: 54px;
+        height: 54px;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+
+    .spotify-track-title {
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .spotify-track-meta {
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     .preview-interests-labels {

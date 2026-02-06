@@ -172,6 +172,10 @@ export async function createCelebration(celebrationData) {
  */
 export async function updateCelebrationInDb(celebrationId, updates) {
     const supabase = getSupabase();
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
+        throw new Error('Please sign in to update celebrations.');
+    }
 
     const dbUpdates = {};
     if (updates.message !== undefined) dbUpdates.message = updates.message;
@@ -183,6 +187,8 @@ export async function updateCelebrationInDb(celebrationId, updates) {
     if (updates.music_url !== undefined) dbUpdates.music_url = updates.music_url;
     if (updates.celebration_date !== undefined) dbUpdates.celebration_date = updates.celebration_date;
     if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
+    // Ensure ownership remains consistent with RLS (and claim orphaned rows)
+    dbUpdates.author_id = authUserUuid;
 
     try {
         const { data, error } = await supabase
@@ -190,9 +196,12 @@ export async function updateCelebrationInDb(celebrationId, updates) {
             .update(dbUpdates)
             .eq('id', celebrationId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+            throw new Error('Not authorized to update this celebration or it no longer exists.');
+        }
 
         updateCelebration(celebrationId, transformCelebrationFromDb(data));
         return data;

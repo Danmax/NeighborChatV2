@@ -21,6 +21,7 @@
     let inviteTimeoutId = null;
     let inviteCountdown = 0;
     let inviteCountdownId = null;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
 
     // Get unique interests from available users
     $: userInterests = [...new Set(
@@ -28,9 +29,13 @@
     )];
 
     // Filter users by interest
+    $: baseUsers = currentId
+        ? $availableUsers.filter(u => u.user_id !== currentId)
+        : $availableUsers;
+
     $: filteredUsers = filterInterest === 'all'
-        ? $availableUsers
-        : $availableUsers.filter(u => u.interests?.includes(filterInterest));
+        ? baseUsers
+        : baseUsers.filter(u => u.interests?.includes(filterInterest));
 
     onMount(() => {
         if ($isAuthenticated) {
