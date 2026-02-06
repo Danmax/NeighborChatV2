@@ -677,8 +677,8 @@ async function attachParticipants(events, partial = false) {
  */
 export async function rsvpToEventV2(eventId, { rsvpStatus = 'going', guestCount = 0, notes = null } = {}) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
         throw new Error('Please sign in to RSVP.');
     }
 
