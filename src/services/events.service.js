@@ -1,5 +1,6 @@
 // Events service - Supabase operations for community events
 import { getSupabase, getAuthUserId, getAuthUserUuid } from '../lib/supabase.js';
+import { getClerkToken } from '../lib/clerk.js';
 import { currentUser } from '../stores/auth.js';
 import {
     setEvents,
@@ -167,9 +168,8 @@ export async function fetchEvents() {
  * Upload a cover image to Supabase Storage and return public URL
  */
 export async function uploadEventImage(file) {
-    const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
+    const accessToken = await getClerkToken();
+    if (!accessToken) {
         throw new Error('Please sign in to upload images.');
     }
     if (!file || !file.type?.startsWith('image/')) {
@@ -179,20 +179,36 @@ export async function uploadEventImage(file) {
         throw new Error('Image must be 5MB or smaller.');
     }
 
-    const safeName = file.name.replace(/\s+/g, '_');
-    const path = `${authUserId}/${Date.now()}_${safeName}`;
+    const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result || '');
+            const [, payload] = result.split('base64,');
+            resolve(payload || '');
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
 
-    const { error } = await supabase.storage
-        .from('event-images')
-        .upload(path, file, { upsert: false });
+    const response = await fetch('/api/upload-event-image', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            base64
+        })
+    });
 
-    if (error) throw error;
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(payload.error || 'Upload failed');
+    }
 
-    const { data } = supabase.storage
-        .from('event-images')
-        .getPublicUrl(path);
-
-    return data.publicUrl;
+    return payload.publicUrl;
 }
 
 /**
