@@ -262,6 +262,7 @@ async function createUserDataFromSession(user) {
             banner_color: profile.banner_color,
             banner_pattern: profile.banner_pattern,
             banner_image_url: profile.banner_image_url,
+            spotify_track_url: profile.spotify_track_url,
             // Privacy settings
             show_city: profile.show_city ?? true,
             show_phone: profile.show_phone ?? false,
@@ -391,6 +392,7 @@ export async function fetchAndUpdateUserProfile(userId) {
                 banner_color: profile.banner_color,
                 banner_pattern: profile.banner_pattern,
                 banner_image_url: profile.banner_image_url,
+                spotify_track_url: profile.spotify_track_url,
                 show_city: profile.show_city ?? true,
                 show_phone: profile.show_phone ?? false,
                 show_email: profile.show_email ?? false,

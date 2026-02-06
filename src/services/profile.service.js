@@ -68,6 +68,7 @@ export async function saveUserProfile(profileData) {
     if (profileData.city !== undefined) upsertData.city = profileData.city;
     if (profileData.magic_email !== undefined) upsertData.magic_email = profileData.magic_email;
     if (profileData.bio !== undefined) upsertData.bio = profileData.bio;
+    if (profileData.spotify_track_url !== undefined) upsertData.spotify_track_url = profileData.spotify_track_url;
 
     // Banner customization
     if (profileData.banner_color !== undefined) upsertData.banner_color = profileData.banner_color;
@@ -109,6 +110,7 @@ export async function saveUserProfile(profileData) {
     if (profileData.phone !== undefined) localUpdate.phone = profileData.phone;
     if (profileData.city !== undefined) localUpdate.city = profileData.city;
     if (profileData.bio !== undefined) localUpdate.bio = profileData.bio;
+    if (profileData.spotify_track_url !== undefined) localUpdate.spotify_track_url = profileData.spotify_track_url;
     if (profileData.banner_color !== undefined) localUpdate.banner_color = profileData.banner_color;
     if (profileData.banner_pattern !== undefined) localUpdate.banner_pattern = profileData.banner_pattern;
     if (profileData.banner_image_url !== undefined) localUpdate.banner_image_url = profileData.banner_image_url;
@@ -239,12 +241,22 @@ export async function updateProfileDetails(details) {
     }
 
     // Sanitize and prepare the data
+    const sanitizedSpotifyUrl = details.spotify_track_url?.trim() || null;
+    if (sanitizedSpotifyUrl) {
+        const isValid = /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(sanitizedSpotifyUrl)
+            || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(sanitizedSpotifyUrl);
+        if (!isValid) {
+            throw new Error('Invalid Spotify URL.');
+        }
+    }
+
     const sanitizedDetails = {
         birthday: details.birthday || null,
         title: details.title?.trim() || null,
         phone: details.phone ? normalizePhoneNumber(details.phone) : null, // Normalize phone for storage
         city: details.city?.trim() || null,
-        magic_email: details.magic_email?.trim() || null
+        magic_email: details.magic_email?.trim() || null,
+        spotify_track_url: sanitizedSpotifyUrl
     };
 
     const supabase = getSupabase();
@@ -257,6 +269,7 @@ export async function updateProfileDetails(details) {
             phone: sanitizedDetails.phone,
             city: sanitizedDetails.city,
             magic_email: sanitizedDetails.magic_email,
+            spotify_track_url: sanitizedDetails.spotify_track_url,
             updated_at: new Date().toISOString()
         })
         .eq('clerk_user_id', user.user_id);
@@ -365,6 +378,7 @@ export async function loadPublicProfile(userId) {
         city: data.city || null,
         phone: data.phone || null,
         birthday: data.birthday || null,
+        spotify_track_url: data.spotify_track_url || null,
         created_at: data.created_at
     };
 }

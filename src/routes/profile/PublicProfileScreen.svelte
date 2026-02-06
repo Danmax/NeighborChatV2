@@ -19,6 +19,20 @@
     let error = null;
     let message = '';
     let actionError = '';
+
+    function getSpotifyEmbedUrl(url) {
+        if (!url) return null;
+        const trimmed = String(url).trim();
+        const webMatch = trimmed.match(/spotify\.com\/(track|album|playlist)\/([a-zA-Z0-9]+)/);
+        if (webMatch) {
+            return `https://open.spotify.com/embed/${webMatch[1]}/${webMatch[2]}`;
+        }
+        const uriMatch = trimmed.match(/spotify:(track|album|playlist):([a-zA-Z0-9]+)/);
+        if (uriMatch) {
+            return `https://open.spotify.com/embed/${uriMatch[1]}/${uriMatch[2]}`;
+        }
+        return null;
+    }
     let isSaved = false;
     let favoriteMovies = [];
     let loadingFavorites = false;
@@ -239,6 +253,23 @@
 
             {#if profile.bio}
                 <p class="profile-bio">{profile.bio}</p>
+            {/if}
+
+            {#if profile.spotify_track_url}
+                {@const spotifyEmbedUrl = getSpotifyEmbedUrl(profile.spotify_track_url)}
+                {#if spotifyEmbedUrl}
+                    <div class="spotify-embed">
+                        <iframe
+                            title="Spotify track"
+                            src={spotifyEmbedUrl}
+                            width="100%"
+                            height="152"
+                            frameborder="0"
+                            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                            loading="lazy"
+                        ></iframe>
+                    </div>
+                {/if}
             {/if}
 
             <!-- Profile Details -->
@@ -474,6 +505,14 @@
         padding: 12px;
         background: var(--cream);
         border-radius: var(--radius-sm);
+    }
+
+    .spotify-embed {
+        margin: 16px 0 8px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--cream-dark);
+        background: white;
     }
 
     .profile-details {

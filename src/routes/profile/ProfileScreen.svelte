@@ -44,6 +44,7 @@
     let displayPhone = ''; // For formatted display
     let tempCity = '';
     let tempMagicEmail = '';
+    let tempSpotifyTrackUrl = '';
     let requestingAccess = false;
     let favoriteMovies = [];
     let movieQuery = '';
@@ -153,6 +154,7 @@
         displayPhone = tempPhone ? formatPhoneNumber(tempPhone) : '';
         tempCity = $currentUser?.city || '';
         tempMagicEmail = $currentUser?.magic_email || '';
+        tempSpotifyTrackUrl = $currentUser?.spotify_track_url || '';
         editingDetails = true;
     }
 
@@ -163,15 +165,28 @@
         }
     }
 
+    function isValidSpotifyTrackUrl(url) {
+        if (!url) return true;
+        const trimmed = String(url).trim();
+        return /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(trimmed)
+            || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(trimmed);
+    }
+
     async function saveDetails() {
         saving = true;
+        if (tempSpotifyTrackUrl && !isValidSpotifyTrackUrl(tempSpotifyTrackUrl)) {
+            message = 'Please enter a valid Spotify track, album, or playlist URL.';
+            saving = false;
+            return;
+        }
         try {
             await updateProfileDetails({
                 birthday: tempBirthday,
                 title: tempTitle,
                 phone: displayPhone, // Pass formatted phone (will be normalized in service)
                 city: tempCity,
-                magic_email: tempMagicEmail
+                magic_email: tempMagicEmail,
+                spotify_track_url: tempSpotifyTrackUrl
             });
             editingDetails = false;
             message = 'Profile details updated!';
@@ -578,6 +593,18 @@
                             <span class="field-hint">Optional alternate email for sign-in</span>
                         </div>
 
+                        <div class="form-group">
+                            <label for="spotify_track_url">Spotify Track URL</label>
+                            <input
+                                type="url"
+                                id="spotify_track_url"
+                                bind:value={tempSpotifyTrackUrl}
+                                placeholder="https://open.spotify.com/track/..."
+                                maxlength="400"
+                            />
+                            <span class="field-hint">Paste a Spotify track link to show on your public profile</span>
+                        </div>
+
                         <div class="form-actions">
                             <button class="btn btn-secondary" on:click={cancelEditDetails}>
                                 Cancel
@@ -619,6 +646,10 @@
                         <div class="detail-row">
                             <span class="detail-label">✉️ Email</span>
                             <span class="detail-value">{$currentUser?.magic_email || 'Not set'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">🎵 Spotify</span>
+                            <span class="detail-value">{$currentUser?.spotify_track_url || 'Not set'}</span>
                         </div>
                     </div>
                 {/if}
