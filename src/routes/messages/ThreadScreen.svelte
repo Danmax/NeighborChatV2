@@ -32,9 +32,20 @@
     let resolvedUserId = null;
 
     let localUserUuid = null;
-    $: currentId = localUserUuid || $currentUser?.user_uuid || $currentUser?.user_id || $currentUser?.id;
+    $: currentId = localUserUuid || $currentUser?.user_uuid || null;
     $: mappedMessages = ($threadMessages || []).map(msg => {
-        const isOwn = msg.sender_id === currentId;
+        const isOwn = currentId && msg.sender_id === currentId;
+
+        // Defensive: Log type mismatch errors in development
+        if (import.meta.env.DEV && currentId && typeof msg.sender_id !== typeof currentId) {
+            console.error('Type mismatch in message ownership check:', {
+                sender_id: msg.sender_id,
+                sender_type: typeof msg.sender_id,
+                currentId,
+                currentId_type: typeof currentId
+            });
+        }
+
         return {
             id: msg.id,
             user_id: msg.sender_id,
@@ -52,9 +63,12 @@
 
     async function resolveUserId(value) {
         if (!value) return null;
+
+        // If already a UUID, return it
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
         if (isUuid) return value;
 
+        // Resolve Clerk ID to UUID
         const supabase = getSupabase();
         const { data, error } = await supabase
             .from('user_profiles')
@@ -63,20 +77,40 @@
             .maybeSingle();
 
         if (error) {
-            console.error('Failed to resolve user id:', error);
+            console.error('Failed to resolve user ID to UUID:', {
+                input: value,
+                error: error.message
+            });
             return null;
         }
-        return data?.id || null;
+
+        if (!data?.id) {
+            console.warn('No user profile found for ID:', value);
+            return null;
+        }
+
+        return data.id;
     }
 
     onMount(async () => {
         if (!$isAuthenticated || !otherUserId) return;
+
+        // Ensure we have the current user's UUID
         localUserUuid = await getAuthUserUuid();
+        if (!localUserUuid) {
+            console.error('Failed to resolve current user UUID');
+            showToast('Authentication error. Please sign in again.', 'error');
+            return;
+        }
+
+        // Resolve the other user's UUID
         resolvedUserId = await resolveUserId(otherUserId);
         if (!resolvedUserId) {
+            console.error('Failed to resolve recipient user ID:', otherUserId);
             showToast('Unable to load this conversation.', 'error');
             return;
         }
+
         try {
             loadingProfile = true;
             recipientProfile = await fetchProfileForUser(resolvedUserId);

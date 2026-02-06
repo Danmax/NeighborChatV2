@@ -13,8 +13,8 @@
 
     const dispatch = createEventDispatcher();
 
-    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id || $currentUser?.id;
-    $: isOwn = message.user_id === currentId;
+    $: currentId = $currentUser?.user_uuid || null;
+    $: isOwn = currentId && message.user_id === currentId;
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;
     $: formattedMessage = highlightMentions(escapeHtml(message.message));
@@ -49,7 +49,8 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+        const currentId = $currentUser?.user_uuid;
+        if (!currentId) return false;
         return message.reactions?.[emoji]?.includes(currentId);
     }
 
