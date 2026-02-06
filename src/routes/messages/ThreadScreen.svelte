@@ -28,8 +28,9 @@
 
     $: otherUserId = params.id;
 
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
     $: mappedMessages = ($threadMessages || []).map(msg => {
-        const isOwn = msg.sender_id === $currentUser?.user_id;
+        const isOwn = msg.sender_id === currentId;
         return {
             id: msg.id,
             user_id: msg.sender_id,
