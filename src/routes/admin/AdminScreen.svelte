@@ -321,7 +321,6 @@
                             <span>Title</span>
                             <span>Status</span>
                             <span>Actions</span>
-                            <span>Resolution</span>
                         </div>
                         {#each feedback as item}
                             <div class="row feedback-row">
@@ -333,6 +332,7 @@
                                     <button class="btn" on:click={() => updateFeedback(item.id, 'resolved', feedbackResolutionNotes[item.id])}>Resolve</button>
                                 </span>
                                 <span class="resolution-note">
+                                    <div class="resolution-label">Resolution note</div>
                                     <textarea
                                         rows="2"
                                         placeholder="Resolution note (optional)"
@@ -437,10 +437,24 @@
         align-items: center;
     }
 
-    .feedback-header,
+    .feedback-header {
+        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr;
+    }
+
     .feedback-row {
-        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr 1.5fr;
+        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr;
         align-items: start;
+    }
+
+    .resolution-note {
+        grid-column: 1 / -1;
+        margin-top: 6px;
+    }
+
+    .resolution-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
     }
 
     .resolution-note textarea {
