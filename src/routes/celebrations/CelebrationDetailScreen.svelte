@@ -26,6 +26,7 @@
     let editDate = '';
     let editGif = null;
     let editImageUrl = '';
+    let editMusicUrl = '';
     let savingEdit = false;
     let showEditGifPicker = false;
     let uploadingEditImage = false;
@@ -93,6 +94,27 @@
         return date.toLocaleString();
     }
 
+    function isValidSpotifyUrl(url) {
+        const trimmed = (url || '').trim();
+        if (!trimmed) return true;
+        return /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(trimmed)
+            || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(trimmed);
+    }
+
+    function getSpotifyEmbedUrl(url) {
+        const trimmed = (url || '').trim();
+        if (!trimmed) return null;
+        const webMatch = trimmed.match(/spotify\.com\/(track|album|playlist)\/([a-zA-Z0-9]+)/);
+        if (webMatch) {
+            return `https://open.spotify.com/embed/${webMatch[1]}/${webMatch[2]}`;
+        }
+        const uriMatch = trimmed.match(/spotify:(track|album|playlist):([a-zA-Z0-9]+)/);
+        if (uriMatch) {
+            return `https://open.spotify.com/embed/${uriMatch[1]}/${uriMatch[2]}`;
+        }
+        return null;
+    }
+
     async function handleReaction(event) {
         const { celebration: target, emoji } = event.detail;
         try {
@@ -111,6 +133,7 @@
         editDate = toDateInputUtc(target.celebration_date) || '';
         editGif = target.gif_url ? { url: target.gif_url } : null;
         editImageUrl = target.image_url || '';
+        editMusicUrl = target.music_url || '';
         isEditing = true;
     }
 
@@ -118,6 +141,10 @@
         if (savingEdit || !celebration) return;
         if ((editCategory === 'birthday' || editCategory === 'anniversary') && !editDate) {
             showToast('Please select a date for this celebration.', 'error');
+            return;
+        }
+        if (!isValidSpotifyUrl(editMusicUrl)) {
+            showToast('Please use a valid Spotify track/album/playlist link.', 'error');
             return;
         }
         savingEdit = true;
@@ -128,6 +155,7 @@
                 message: editMessage.trim() || null,
                 gif_url: editGif?.url || null,
                 image_url: editImageUrl || null,
+                music_url: editMusicUrl.trim() || null,
                 celebration_date: toDateInputUtc(editDate) || null
             });
             celebration = await fetchCelebrationById(celebration.id);
@@ -220,6 +248,15 @@
                             {/if}
                         {/if}
                     </label>
+                    <label>
+                        Music (Spotify link)
+                        <input
+                            type="url"
+                            bind:value={editMusicUrl}
+                            placeholder="https://open.spotify.com/track/..."
+                        />
+                        <span class="helper-text">Supports track, album, or playlist links.</span>
+                    </label>
                     {#if editCategory === 'birthday' || editCategory === 'anniversary'}
                         <label>
                             Date
@@ -256,6 +293,23 @@
                 on:reaction={handleReaction}
                 on:edit={handleEditStart}
             />
+
+            {#if celebration.music_url}
+                {@const musicEmbed = getSpotifyEmbedUrl(celebration.music_url)}
+                {#if musicEmbed}
+                    <div class="music-embed">
+                        <iframe
+                            title="Celebration music"
+                            src={musicEmbed}
+                            width="100%"
+                            height="152"
+                            frameborder="0"
+                            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                            loading="lazy"
+                        ></iframe>
+                    </div>
+                {/if}
+            {/if}
 
             <div class="reply-card">
                 <h3>Replies ({replyCount})</h3>
@@ -418,6 +472,19 @@
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
+    }
+
+    .helper-text {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .music-embed {
+        margin: 12px 0 20px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        background: #fff;
     }
 
     .edit-actions {

@@ -30,12 +30,20 @@
     let editingCelebration = null;
     let imageUrl = '';
     let uploadingImage = false;
+    let musicUrl = '';
 
     // Form fields
     let category = 'milestone';
     let title = '';
     let message = '';
     let celebrationDate = '';
+
+    function isValidSpotifyUrl(url) {
+        const trimmed = (url || '').trim();
+        if (!trimmed) return true;
+        return /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(trimmed)
+            || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(trimmed);
+    }
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -49,6 +57,10 @@
             showToast('Please select a date for this celebration.', 'error');
             return;
         }
+        if (!isValidSpotifyUrl(musicUrl)) {
+            showToast('Please use a valid Spotify track/album/playlist link.', 'error');
+            return;
+        }
 
         creating = true;
         try {
@@ -58,6 +70,7 @@
                 message: message.trim(),
                 gif_url: selectedGif?.url || null,
                 image_url: imageUrl || null,
+                music_url: musicUrl.trim() || null,
                 celebration_date: toDateInputUtc(celebrationDate) || null
             };
 
@@ -76,6 +89,7 @@
             celebrationDate = '';
             selectedGif = null;
             imageUrl = '';
+            musicUrl = '';
             editingCelebration = null;
             showCreateForm = false;
         } catch (err) {
@@ -103,6 +117,7 @@
         celebrationDate = toDateInputUtc(celebration.celebration_date) || '';
         selectedGif = celebration.gif_url ? { url: celebration.gif_url } : null;
         imageUrl = celebration.image_url || '';
+        musicUrl = celebration.music_url || '';
         showCreateForm = true;
     }
 
@@ -270,6 +285,17 @@
                         {/if}
                     {/if}
                 </fieldset>
+
+                <div class="form-group">
+                    <label for="music_url">Music (Spotify link)</label>
+                    <input
+                        id="music_url"
+                        type="url"
+                        bind:value={musicUrl}
+                        placeholder="https://open.spotify.com/track/..."
+                    />
+                    <span class="helper-text">Supports track, album, or playlist links.</span>
+                </div>
 
                 <div class="form-actions">
                     <button
@@ -458,6 +484,13 @@
 
     .form-group {
         margin-bottom: 16px;
+    }
+
+    .helper-text {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 6px;
+        display: block;
     }
 
     .form-group label {

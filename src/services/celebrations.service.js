@@ -27,6 +27,7 @@ function transformCelebrationFromDb(row) {
         message: row.message,
         gif_url: row.gif_url,
         image_url: row.image_url,
+        music_url: row.music_url,
         celebration_date: row.celebration_date,
         emoji: row.emoji || '🎂',
         authorId: row.author_id,
@@ -48,6 +49,7 @@ function transformCelebrationToDb(celebrationData, user, authUserUuid) {
         message: celebrationData.message,
         gif_url: celebrationData.gif_url || null,
         image_url: celebrationData.image_url || null,
+        music_url: celebrationData.music_url || null,
         celebration_date: celebrationData.celebration_date || null,
         honoree: celebrationData.title || celebrationData.honoree || null,
         recipient_name: celebrationData.recipientName || celebrationData.title || null,
@@ -178,6 +180,7 @@ export async function updateCelebrationInDb(celebrationId, updates) {
     if (updates.title !== undefined) dbUpdates.honoree = updates.title;
     if (updates.gif_url !== undefined) dbUpdates.gif_url = updates.gif_url;
     if (updates.image_url !== undefined) dbUpdates.image_url = updates.image_url;
+    if (updates.music_url !== undefined) dbUpdates.music_url = updates.music_url;
     if (updates.celebration_date !== undefined) dbUpdates.celebration_date = updates.celebration_date;
     if (updates.archived !== undefined) dbUpdates.archived = updates.archived;
 
