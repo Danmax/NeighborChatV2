@@ -13,7 +13,7 @@
 
     const dispatch = createEventDispatcher();
 
-    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id || $currentUser?.id;
     $: isOwn = message.user_id === currentId;
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;

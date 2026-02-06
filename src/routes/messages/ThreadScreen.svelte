@@ -2,7 +2,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
-    import { getSupabase } from '../../lib/supabase.js';
+    import { getSupabase, getAuthUserUuid } from '../../lib/supabase.js';
     import { threadMessages, messagesLoading } from '../../stores/messages.js';
     import {
         fetchThread,
@@ -31,7 +31,8 @@
     $: otherUserId = params.id;
     let resolvedUserId = null;
 
-    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    let localUserUuid = null;
+    $: currentId = localUserUuid || $currentUser?.user_uuid || $currentUser?.user_id || $currentUser?.id;
     $: mappedMessages = ($threadMessages || []).map(msg => {
         const isOwn = msg.sender_id === currentId;
         return {
@@ -70,6 +71,7 @@
 
     onMount(async () => {
         if (!$isAuthenticated || !otherUserId) return;
+        localUserUuid = await getAuthUserUuid();
         resolvedUserId = await resolveUserId(otherUserId);
         if (!resolvedUserId) {
             showToast('Unable to load this conversation.', 'error');
