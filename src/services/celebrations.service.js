@@ -204,7 +204,7 @@ export async function updateCelebrationInDb(celebrationId, updates) {
 export async function uploadCelebrationImage(file) {
     const supabase = getSupabase();
     const authUserUuid = await getAuthUserUuid();
-    if (!authUserId) {
+    if (!authUserUuid) {
         throw new Error('Please sign in to upload images.');
     }
     if (!file || !file.type?.startsWith('image/')) {
@@ -215,7 +215,7 @@ export async function uploadCelebrationImage(file) {
     }
 
     const safeName = file.name.replace(/\s+/g, '_');
-    const path = `${authUserId}/${Date.now()}_${safeName}`;
+    const path = `${authUserUuid}/${Date.now()}_${safeName}`;
 
     const { error } = await supabase.storage
         .from('celebration-images')
