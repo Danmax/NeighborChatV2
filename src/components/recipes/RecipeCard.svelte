@@ -89,8 +89,8 @@
                 <span class="check">✓</span>
             {/if}
         </div>
-    {:else if isOwner && !compact}
-        <div class="recipe-actions">
+    {:else if isOwner}
+        <div class="recipe-actions" class:compact-actions={compact}>
             <button class="action-btn" on:click={handleEdit} title="Edit">
                 ✏️
             </button>
@@ -252,6 +252,12 @@
     }
 
     .recipe-card:hover .recipe-actions {
+        opacity: 1;
+    }
+
+    .recipe-actions.compact-actions {
+        position: static;
+        margin-left: auto;
         opacity: 1;
     }
 
