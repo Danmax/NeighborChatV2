@@ -205,7 +205,12 @@ export async function subscribeToMessageReactions(callback) {
         }
     );
 
-    channel.subscribe();
+    try {
+        await channel.subscribe();
+    } catch (error) {
+        console.error('Failed to subscribe to message reactions:', error);
+        return null;
+    }
     return channel;
 }
 
@@ -316,7 +321,12 @@ export async function subscribeToInbox(callback) {
         }
     );
 
-    channel.subscribe();
+    try {
+        await channel.subscribe();
+    } catch (error) {
+        console.error('Failed to subscribe to inbox:', error);
+        return null;
+    }
     return channel;
 }
 
@@ -369,6 +379,11 @@ export async function subscribeToThread(otherUserId, callback) {
         }
     );
 
-    channel.subscribe();
+    try {
+        await channel.subscribe();
+    } catch (error) {
+        console.error('Failed to subscribe to thread:', error);
+        return null;
+    }
     return channel;
 }

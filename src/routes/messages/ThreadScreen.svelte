@@ -151,11 +151,19 @@
     });
 
     onDestroy(() => {
-        if (subscription) {
-            subscription.unsubscribe();
+        if (subscription && typeof subscription.unsubscribe === 'function') {
+            try {
+                subscription.unsubscribe();
+            } catch (error) {
+                console.error('Error unsubscribing from thread:', error);
+            }
         }
-        if (reactionsSubscription) {
-            reactionsSubscription.unsubscribe();
+        if (reactionsSubscription && typeof reactionsSubscription.unsubscribe === 'function') {
+            try {
+                reactionsSubscription.unsubscribe();
+            } catch (error) {
+                console.error('Error unsubscribing from reactions:', error);
+            }
         }
     });
 
