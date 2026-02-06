@@ -13,7 +13,18 @@
 
     const dispatch = createEventDispatcher();
 
-    $: currentId = $currentUser?.user_uuid || null;
+    // Helper to check if a value is a valid UUID
+    function isValidUuid(val) {
+        if (!val) return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    }
+
+    // Get current user ID - validate that it's a UUID, not a Clerk text ID
+    $: currentId =
+        ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
+        ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
+        ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
+        null;
     $: isOwn = currentId && message.user_id === currentId;
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;
@@ -49,9 +60,14 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        const currentId = $currentUser?.user_uuid;
-        if (!currentId) return false;
-        return message.reactions?.[emoji]?.includes(currentId);
+        // Use the same UUID validation as above
+        const validId =
+            ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
+            ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
+            ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
+            null;
+        if (!validId) return false;
+        return message.reactions?.[emoji]?.includes(validId);
     }
 
     function handleReaction(emoji) {

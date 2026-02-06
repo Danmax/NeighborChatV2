@@ -32,7 +32,20 @@
     let resolvedUserId = null;
 
     let localUserUuid = null;
-    $: currentId = localUserUuid || $currentUser?.user_uuid || null;
+
+    // Helper to check if a value is a valid UUID
+    function isValidUuid(val) {
+        if (!val) return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    }
+
+    // Get current user ID - prioritize localUserUuid, then user_uuid, then validate other IDs
+    $: currentId =
+        (localUserUuid && isValidUuid(localUserUuid)) ? localUserUuid :
+        ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
+        ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
+        ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
+        null;
     $: mappedMessages = ($threadMessages || []).map(msg => {
         const isOwn = currentId && msg.sender_id === currentId;
 
