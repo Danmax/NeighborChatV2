@@ -14,7 +14,8 @@
     const dispatch = createEventDispatcher();
 
     $: category = getCelebrationCategory(celebration.category);
-    $: isOwn = celebration.user_id === $currentUser?.user_id || celebration.authorId === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isOwn = celebration.user_id === currentId || celebration.authorId === currentId;
     $: isAdmin = $currentUser?.role === 'admin';
     $: canEdit = isOwn || isAdmin;
     $: reactionCounts = getReactionCounts(celebration.reactions);

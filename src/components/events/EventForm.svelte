@@ -102,7 +102,7 @@
                     allow_recipe: true,
                     recipe_id: null,
                     claims: [],
-                    created_by: $currentUser?.user_id || null,
+                    created_by: $currentUser?.user_uuid || $currentUser?.user_id || null,
                     created_at: new Date().toISOString()
                 }))
             : [];

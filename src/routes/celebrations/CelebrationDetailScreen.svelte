@@ -31,7 +31,8 @@
     let uploadingEditImage = false;
 
     $: replyCount = celebration?.comments?.length || 0;
-    $: isOwner = celebration?.authorId === $currentUser?.user_id || celebration?.user_id === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isOwner = celebration?.authorId === currentId || celebration?.user_id === currentId;
     $: isAdmin = $currentUser?.role === 'admin';
     $: canEdit = isOwner || isAdmin;
     $: if (params?.id) {

@@ -119,10 +119,11 @@
             eventData = fromStore;
         }
     }
-    $: isOwner = eventData?.created_by === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isOwner = eventData?.created_by === currentId;
     $: isAdmin = $currentUser?.role === 'admin';
     $: canManageEvent = isOwner || isAdmin;
-    $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes($currentUser?.user_id));
+    $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes(currentId));
     $: items = eventData?.items || [];
     $: eventStatus = getEventStatus(eventData?.status);
     $: capacityInfo = getCapacityInfo(eventData);
@@ -1086,7 +1087,7 @@
     <SubmitTalkModal
         show={showSubmitTalkModal}
         event={eventData}
-        currentUserId={$currentUser?.user_id}
+        currentUserId={$currentUser?.user_uuid || $currentUser?.user_id}
         loading={submitTalkLoading}
         on:close={() => showSubmitTalkModal = false}
         on:submit={handleSubmitTalk}

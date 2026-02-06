@@ -15,7 +15,8 @@
     const dispatch = createEventDispatcher();
 
     $: eventType = getEventType(event.type);
-    $: isCreator = event.created_by === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isCreator = event.created_by === currentId;
     $: isAttending = event.isAttending ?? (activeMembershipId ? event.attendees?.includes(activeMembershipId) : event.attendees?.includes($currentUser?.user_id));
     $: attendeeCount = (event.attendeeCount ?? event.attendees?.length) || 0;
     $: formattedDate = formatDate(event.date);

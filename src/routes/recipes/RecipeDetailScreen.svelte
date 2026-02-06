@@ -14,7 +14,8 @@
     let editing = false;
     let saving = false;
 
-    $: isOwner = recipe?.createdById === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isOwner = recipe?.createdById === currentId;
     $: totalTime = getTotalTime(recipe);
 
     onMount(async () => {

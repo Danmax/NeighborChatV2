@@ -12,7 +12,8 @@
 
     const dispatch = createEventDispatcher();
 
-    $: isOrganizer = canManage || event?.created_by === $currentUser?.user_id;
+    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    $: isOrganizer = canManage || event?.created_by === currentId;
 
     // Group participants by status
     $: goingParticipants = participants.filter(p => p.rsvp_status === 'going' && p.approval_status === 'approved');
