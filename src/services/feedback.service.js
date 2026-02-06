@@ -55,11 +55,25 @@ export async function fetchAllFeedback() {
     return data || [];
 }
 
-export async function updateFeedbackStatus(id, status) {
+export async function updateFeedbackStatus(id, status, resolutionNote = null) {
     const supabase = getSupabase();
+    let metadata = null;
+    if (resolutionNote && resolutionNote.trim()) {
+        const { data: current, error: fetchError } = await supabase
+            .from('feedback')
+            .select('metadata')
+            .eq('id', id)
+            .single();
+        if (fetchError) throw fetchError;
+        metadata = {
+            ...(current?.metadata || {}),
+            resolution_note: resolutionNote.trim(),
+            resolved_at: new Date().toISOString()
+        };
+    }
     const { data, error } = await supabase
         .from('feedback')
-        .update({ status })
+        .update(metadata ? { status, metadata } : { status })
         .eq('id', id)
         .select()
         .single();

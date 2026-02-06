@@ -120,7 +120,8 @@
         }
     }
     $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
-    $: isOwner = eventData?.created_by === currentId;
+    $: isOwner = (eventData?.created_by_id && eventData.created_by_id === currentId)
+        || (eventData?.created_by && eventData.created_by === currentId);
     $: isAdmin = $currentUser?.role === 'admin';
     $: canManageEvent = isOwner || isAdmin;
     $: isAttending = eventData?.isAttending ?? (activeMembershipId ? eventData?.attendees?.includes(activeMembershipId) : eventData?.attendees?.includes(currentId));

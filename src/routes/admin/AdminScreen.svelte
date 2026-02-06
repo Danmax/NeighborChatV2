@@ -9,7 +9,6 @@
         fetchAppSettings,
         upsertAppSetting,
         fetchStatusOptions,
-        upsertStatusOption,
         deleteStatusOption,
         fetchInterestOptions,
         upsertInterestOption,
@@ -35,8 +34,8 @@
     let metrics = null;
     let dbStatus = null;
 
-    let newStatus = { id: '', label: '', color: '#4CAF50', sort_order: 0 };
     let newInterest = { id: '', label: '', emoji: '', sort_order: 0 };
+    let feedbackResolutionNotes = {};
 
     onMount(async () => {
         if (!$isAuthenticated) {
@@ -111,23 +110,6 @@
         }
     }
 
-    async function addStatusOption() {
-        if (!newStatus.id.trim() || !newStatus.label.trim()) return;
-        try {
-            await upsertStatusOption({
-                id: newStatus.id.trim(),
-                label: newStatus.label.trim(),
-                color: newStatus.color,
-                sort_order: parseInt(newStatus.sort_order) || 0,
-                active: true
-            });
-            newStatus = { id: '', label: '', color: '#4CAF50', sort_order: 0 };
-            statusOptions = await fetchStatusOptions();
-        } catch (err) {
-            showToast(`Failed to add status: ${err.message}`, 'error');
-        }
-    }
-
     async function removeStatus(id) {
         try {
             await deleteStatusOption(id);
@@ -173,9 +155,9 @@
         }
     }
 
-    async function updateFeedback(id, status) {
+    async function updateFeedback(id, status, resolutionNote = null) {
         try {
-            await updateFeedbackStatus(id, status);
+            await updateFeedbackStatus(id, status, resolutionNote);
             feedback = await fetchAllFeedback();
         } catch (err) {
             showToast(`Failed to update feedback: ${err.message}`, 'error');
@@ -275,7 +257,13 @@
                     </div>
                     {#each requests as req}
                         <div class="row">
-                            <span>{req.username || req.display_name || req.user_id}</span>
+                            <span>
+                                {#if req.display_name && req.username}
+                                    {req.display_name} (@{req.username})
+                                {:else}
+                                    {req.username || req.display_name || req.user_id}
+                                {/if}
+                            </span>
                             <span class="badge {req.status}">{req.status}</span>
                             <span>{req.reason || '—'}</span>
                             <span class="actions">
@@ -291,13 +279,6 @@
         {#if isAdminUser}
             <section class="admin-section">
                 <h2>Status Options</h2>
-                <div class="inline-form">
-                    <input placeholder="id" bind:value={newStatus.id} />
-                    <input placeholder="label" bind:value={newStatus.label} />
-                    <input placeholder="color" bind:value={newStatus.color} />
-                    <input type="number" placeholder="order" bind:value={newStatus.sort_order} />
-                    <button class="btn" on:click={addStatusOption}>Add</button>
-                </div>
                 <div class="pill-list">
                     {#each statusOptions as option}
                         <div class="pill" style="border-color: {option.color}">
@@ -335,20 +316,28 @@
                     <p class="empty">No feedback yet.</p>
                 {:else}
                     <div class="table">
-                        <div class="row header">
+                        <div class="row header feedback-header">
                             <span>Category</span>
                             <span>Title</span>
                             <span>Status</span>
                             <span>Actions</span>
+                            <span>Resolution</span>
                         </div>
                         {#each feedback as item}
-                            <div class="row">
+                            <div class="row feedback-row">
                                 <span>{item.category}</span>
                                 <span>{item.title || '—'}</span>
                                 <span class="badge {item.status}">{item.status}</span>
                                 <span class="actions">
                                     <button class="btn" on:click={() => updateFeedback(item.id, 'reviewing')}>Review</button>
-                                    <button class="btn" on:click={() => updateFeedback(item.id, 'resolved')}>Resolve</button>
+                                    <button class="btn" on:click={() => updateFeedback(item.id, 'resolved', feedbackResolutionNotes[item.id])}>Resolve</button>
+                                </span>
+                                <span class="resolution-note">
+                                    <textarea
+                                        rows="2"
+                                        placeholder="Resolution note (optional)"
+                                        bind:value={feedbackResolutionNotes[item.id]}
+                                    ></textarea>
                                 </span>
                             </div>
                         {/each}
@@ -446,6 +435,22 @@
         padding: 12px 14px;
         border-bottom: 1px solid var(--cream-dark);
         align-items: center;
+    }
+
+    .feedback-header,
+    .feedback-row {
+        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr 1.5fr;
+        align-items: start;
+    }
+
+    .resolution-note textarea {
+        width: 100%;
+        min-height: 60px;
+        resize: vertical;
+        padding: 8px 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 8px;
+        font-size: 12px;
     }
 
     .row.header {
