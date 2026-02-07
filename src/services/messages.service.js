@@ -113,20 +113,30 @@ export async function fetchThread(otherUserId) {
 
     try {
         const authUserUuid = await getAuthUserUuid();
+        console.log('[fetchThread] authUserUuid:', authUserUuid, 'otherUserId:', otherUserId);
         if (!authUserUuid) {
             throw new Error('You must be signed in to view messages.');
         }
 
         const supabase = getSupabase();
+        const filterString = `and(sender_id.eq.${authUserUuid},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${authUserUuid})`;
+        console.log('[fetchThread] Filter string:', filterString);
         const { data, error } = await supabase
             .from('messages')
             .select('*')
-            .or(
-                `and(sender_id.eq.${authUserUuid},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${authUserUuid})`
-            )
+            .or(filterString)
             .order('created_at', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+            console.error('[fetchThread] Query error:', error);
+            throw error;
+        }
+
+        console.log('[fetchThread] Fetched messages count:', (data || []).length);
+        if ((data || []).length > 0) {
+            console.log('[fetchThread] First message:', data[0]);
+            console.log('[fetchThread] Last message:', data[data.length - 1]);
+        }
 
         const messagesWithReactions = await attachMessageReactions(data || []);
         setThreadMessages(messagesWithReactions);
@@ -332,7 +342,11 @@ export async function subscribeToInbox(callback) {
 
 export async function subscribeToThread(otherUserId, callback) {
     const authUserUuid = await getAuthUserUuid();
-    if (!authUserUuid || !otherUserId) return null;
+    console.log('[subscribeToThread] authUserUuid:', authUserUuid, 'otherUserId:', otherUserId);
+    if (!authUserUuid || !otherUserId) {
+        console.warn('[subscribeToThread] Missing credentials - authUserUuid:', authUserUuid, 'otherUserId:', otherUserId);
+        return null;
+    }
 
     const supabase = getSupabase();
     const channel = supabase.channel(`messages-thread-${otherUserId}`);
@@ -342,7 +356,16 @@ export async function subscribeToThread(otherUserId, callback) {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${authUserUuid}` },
         (payload) => {
             const message = payload.new;
-            if (message.sender_id !== otherUserId) return;
+            console.log('[subscribeToThread] Received INSERT (as recipient):', {
+                sender_id: message.sender_id,
+                otherUserId,
+                matches: message.sender_id === otherUserId
+            });
+            if (message.sender_id !== otherUserId) {
+                console.log('[subscribeToThread] Ignoring message from wrong sender');
+                return;
+            }
+            console.log('[subscribeToThread] Adding received message:', message.id);
             addThreadMessage({ ...message, reactions: {} });
             updateThreadPreview(otherUserId, {
                 last_message: message.body,
@@ -358,7 +381,16 @@ export async function subscribeToThread(otherUserId, callback) {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${authUserUuid}` },
         (payload) => {
             const message = payload.new;
-            if (message.recipient_id !== otherUserId) return;
+            console.log('[subscribeToThread] Received INSERT (as sender):', {
+                recipient_id: message.recipient_id,
+                otherUserId,
+                matches: message.recipient_id === otherUserId
+            });
+            if (message.recipient_id !== otherUserId) {
+                console.log('[subscribeToThread] Ignoring message to wrong recipient');
+                return;
+            }
+            console.log('[subscribeToThread] Adding sent message:', message.id);
             addThreadMessage({ ...message, reactions: {} });
             updateThreadPreview(otherUserId, {
                 last_message: message.body,
@@ -380,7 +412,9 @@ export async function subscribeToThread(otherUserId, callback) {
     );
 
     try {
+        console.log('[subscribeToThread] Subscribing to channel');
         await channel.subscribe();
+        console.log('[subscribeToThread] Successfully subscribed');
     } catch (error) {
         console.error('Failed to subscribe to thread:', error);
         return null;

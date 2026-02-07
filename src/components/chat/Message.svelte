@@ -26,7 +26,21 @@
         ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
         null;
     // Use passed _isOwn value if available (from parent component), otherwise calculate from currentId
-    $: isOwn = message._isOwn !== undefined ? message._isOwn : (currentId && message.user_id === currentId);
+    $: {
+        const shouldUsePassedIsOwn = message._isOwn !== undefined;
+        isOwn = shouldUsePassedIsOwn ? message._isOwn : (currentId && message.user_id === currentId);
+        if (import.meta.env.DEV) {
+            console.log('[Message] Message ownership check:', {
+                message_id: message.id,
+                message_user_id: message.user_id,
+                currentId,
+                _isOwn: message._isOwn,
+                shouldUsePassedIsOwn,
+                calculated_isOwn: currentId && message.user_id === currentId,
+                final_isOwn: isOwn
+            });
+        }
+    }
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;
     $: formattedMessage = highlightMentions(escapeHtml(message.message));

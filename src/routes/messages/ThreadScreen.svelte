@@ -46,43 +46,64 @@
         ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
         ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
         null;
-    $: mappedMessages = ($threadMessages || []).map(msg => {
-        const isOwn = currentId && msg.sender_id === currentId;
+    $: {
+        console.log('[ThreadScreen] Message mapping - currentId:', currentId, 'messages count:', $threadMessages?.length);
+        mappedMessages = ($threadMessages || []).map(msg => {
+            const isOwn = currentId && msg.sender_id === currentId;
 
-        // Defensive: Log type mismatch errors in development
-        if (import.meta.env.DEV && currentId && typeof msg.sender_id !== typeof currentId) {
-            console.error('Type mismatch in message ownership check:', {
-                sender_id: msg.sender_id,
-                sender_type: typeof msg.sender_id,
-                currentId,
-                currentId_type: typeof currentId
-            });
-        }
+            // Defensive: Log type mismatch errors in development
+            if (import.meta.env.DEV && currentId && typeof msg.sender_id !== typeof currentId) {
+                console.error('Type mismatch in message ownership check:', {
+                    sender_id: msg.sender_id,
+                    sender_type: typeof msg.sender_id,
+                    currentId,
+                    currentId_type: typeof currentId
+                });
+            }
 
-        return {
-            id: msg.id,
-            user_id: msg.sender_id,
-            name: isOwn ? $currentUser?.name : recipientProfile?.name || 'Neighbor',
-            avatar: isOwn ? $currentUser?.avatar : recipientProfile?.avatar,
-            message: msg.body,
-            isGif: msg.message_type === 'gif',
-            gif_url: msg.metadata?.gif_url,
-            caption: msg.body,
-            timestamp: msg.created_at,
-            read: msg.read,
-            reactions: msg.reactions || {},
-            _isOwn: isOwn  // Pass the correct ownership calculation to prevent Message component from recalculating
-        };
-    });
+            if (import.meta.env.DEV) {
+                console.log('[ThreadScreen] Mapped message:', {
+                    id: msg.id,
+                    isOwn,
+                    sender_id: msg.sender_id,
+                    currentId
+                });
+            }
+
+            return {
+                id: msg.id,
+                user_id: msg.sender_id,
+                name: isOwn ? $currentUser?.name : recipientProfile?.name || 'Neighbor',
+                avatar: isOwn ? $currentUser?.avatar : recipientProfile?.avatar,
+                message: msg.body,
+                isGif: msg.message_type === 'gif',
+                gif_url: msg.metadata?.gif_url,
+                caption: msg.body,
+                timestamp: msg.created_at,
+                read: msg.read,
+                reactions: msg.reactions || {},
+                _isOwn: isOwn  // Pass the correct ownership calculation to prevent Message component from recalculating
+            };
+        });
+    }
 
     async function resolveUserId(value) {
-        if (!value) return null;
+        console.log('[resolveUserId] Input value:', value);
+        if (!value) {
+            console.warn('[resolveUserId] Empty value');
+            return null;
+        }
 
         // If already a UUID, return it
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-        if (isUuid) return value;
+        console.log('[resolveUserId] Is UUID:', isUuid);
+        if (isUuid) {
+            console.log('[resolveUserId] Returning value as is (already UUID)');
+            return value;
+        }
 
         // Resolve Clerk ID to UUID
+        console.log('[resolveUserId] Looking up clerk_user_id:', value);
         const supabase = getSupabase();
         const { data, error } = await supabase
             .from('user_profiles')
@@ -103,14 +124,20 @@
             return null;
         }
 
+        console.log('[resolveUserId] Resolved to UUID:', data.id);
         return data.id;
     }
 
     onMount(async () => {
-        if (!$isAuthenticated || !otherUserId) return;
+        console.log('[ThreadScreen] Mount - otherUserId:', otherUserId, 'isAuthenticated:', $isAuthenticated);
+        if (!$isAuthenticated || !otherUserId) {
+            console.warn('[ThreadScreen] Skipping mount: isAuthenticated=', $isAuthenticated, 'otherUserId=', otherUserId);
+            return;
+        }
 
         // Ensure we have the current user's UUID
         localUserUuid = await getAuthUserUuid();
+        console.log('[ThreadScreen] localUserUuid resolved:', localUserUuid);
         if (!localUserUuid) {
             console.error('Failed to resolve current user UUID');
             showToast('Authentication error. Please sign in again.', 'error');
@@ -118,7 +145,9 @@
         }
 
         // Resolve the other user's UUID
+        console.log('[ThreadScreen] Resolving otherUserId:', otherUserId);
         resolvedUserId = await resolveUserId(otherUserId);
+        console.log('[ThreadScreen] resolvedUserId:', resolvedUserId);
         if (!resolvedUserId) {
             console.error('Failed to resolve recipient user ID:', otherUserId);
             showToast('Unable to load this conversation.', 'error');
@@ -128,18 +157,22 @@
         try {
             loadingProfile = true;
             recipientProfile = await fetchProfileForUser(resolvedUserId);
+            console.log('[ThreadScreen] recipientProfile loaded:', recipientProfile);
         } catch (error) {
             console.error('Failed to load profile:', error);
         } finally {
             loadingProfile = false;
         }
 
+        console.log('[ThreadScreen] Fetching thread for resolvedUserId:', resolvedUserId);
         await fetchThread(resolvedUserId);
+        console.log('[ThreadScreen] Thread fetched, messages count:', $threadMessages?.length);
         await markThreadRead(resolvedUserId);
 
         subscription = await subscribeToThread(resolvedUserId, () => {
             markThreadRead(resolvedUserId);
         });
+        console.log('[ThreadScreen] Subscribed to thread');
 
         reactionsSubscription = await subscribeToMessageReactions(async (payload) => {
             const messageId = payload?.new?.message_id || payload?.old?.message_id;
@@ -170,9 +203,22 @@
 
     async function handleSendMessage(event) {
         const { message, isGif } = event.detail;
-        if (!message.trim()) return;
-        if (!resolvedUserId) return;
-        await sendMessageToUser(resolvedUserId, message, isGif);
+        console.log('[ThreadScreen] handleSendMessage - message:', message, 'isGif:', isGif, 'resolvedUserId:', resolvedUserId);
+        if (!message.trim()) {
+            console.warn('[ThreadScreen] Empty message, skipping');
+            return;
+        }
+        if (!resolvedUserId) {
+            console.error('[ThreadScreen] No resolvedUserId, cannot send message');
+            return;
+        }
+        try {
+            const result = await sendMessageToUser(resolvedUserId, message, isGif);
+            console.log('[ThreadScreen] Message sent successfully:', result);
+        } catch (error) {
+            console.error('[ThreadScreen] Failed to send message:', error);
+            showToast('Failed to send message. Please try again.', 'error');
+        }
     }
 
     async function handleGifSelect(event) {
