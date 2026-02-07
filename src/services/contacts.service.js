@@ -25,20 +25,40 @@ async function resolveUserUuid(userId) {
     }
 
     const supabase = getSupabase();
+
+    // Try clerk_user_id first
     console.log('[resolveUserUuid] Looking up clerk_user_id:', userId);
-    const { data, error } = await supabase
+    const { data: clerkData, error: clerkError } = await supabase
         .from('user_profiles')
         .select('id')
         .eq('clerk_user_id', userId)
         .maybeSingle();
 
-    if (error) {
-        console.error('[resolveUserUuid] Query error:', error);
-        throw error;
+    if (clerkError) {
+        console.error('[resolveUserUuid] Clerk lookup error:', clerkError);
+        throw clerkError;
     }
 
-    const result = data?.id || null;
-    console.log('[resolveUserUuid] Result:', result, 'from data:', data);
+    if (clerkData?.id) {
+        console.log('[resolveUserUuid] Found by clerk_user_id:', clerkData.id);
+        return clerkData.id;
+    }
+
+    // Fallback: try user_id column
+    console.log('[resolveUserUuid] Not found by clerk_user_id, trying user_id:', userId);
+    const { data: userData, error: userError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (userError) {
+        console.error('[resolveUserUuid] User_id lookup error:', userError);
+        throw userError;
+    }
+
+    const result = userData?.id || null;
+    console.log('[resolveUserUuid] Final result:', result, 'from data:', userData);
     return result;
 }
 
