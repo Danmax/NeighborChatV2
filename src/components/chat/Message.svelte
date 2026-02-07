@@ -22,11 +22,11 @@
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     }
 
-    // Get current user ID - validate that it's a UUID, not a Clerk text ID
+    // Get current user ID - prefer UUID, but allow Clerk text ID as fallback
     $: currentId =
         ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
-        ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
-        ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
+        $currentUser?.user_id ||  // Allow Clerk text ID (e.g., 'user_39HHQMzhtCqwhFnwFlYLcQweUxY')
+        $currentUser?.id ||
         null;
     // Use passed _isOwn value if available (from parent component), otherwise calculate from currentId
     $: {
@@ -78,11 +78,11 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        // Use the same UUID validation as above
+        // Use the same logic as currentId - prefer UUID, but allow Clerk text ID as fallback
         const validId =
             ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
-            ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
-            ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
+            $currentUser?.user_id ||
+            $currentUser?.id ||
             null;
         if (!validId) return false;
         return message.reactions?.[emoji]?.includes(validId);
