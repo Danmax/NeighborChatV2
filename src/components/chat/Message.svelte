@@ -13,6 +13,9 @@
 
     const dispatch = createEventDispatcher();
 
+    // State variables
+    let isOwn = false;
+
     // Helper to check if a value is a valid UUID
     function isValidUuid(val) {
         if (!val) return false;
