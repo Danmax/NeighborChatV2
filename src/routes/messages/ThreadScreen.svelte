@@ -32,6 +32,7 @@
     let resolvedUserId = null;
 
     let localUserUuid = null;
+    let mappedMessages = [];  // Declare mappedMessages for use in reactive block
 
     // Helper to check if a value is a valid UUID
     function isValidUuid(val) {
