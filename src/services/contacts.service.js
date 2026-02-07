@@ -119,7 +119,15 @@ export async function saveContact(contactData) {
         throw new Error('You must be signed in to save contacts.');
     }
 
-    const resolvedContactUserId = await resolveUserUuid(contactData.user_id);
+    // Try to resolve to UUID, but keep original ID (Clerk ID) as fallback
+    // This ensures we can always message the contact even if UUID lookup fails
+    const resolvedContactUserId = await resolveUserUuid(contactData.user_id) || contactData.user_id;
+
+    if (!resolvedContactUserId) {
+        throw new Error('Cannot save contact without a valid user ID.');
+    }
+
+    console.log('[saveContact] Saving contact with user_id:', resolvedContactUserId, '(original:', contactData.user_id, ')');
     const dbContact = transformContactToDb({ ...contactData, user_id: resolvedContactUserId }, authUserUuid);
 
     try {

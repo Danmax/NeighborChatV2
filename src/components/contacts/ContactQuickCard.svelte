@@ -32,8 +32,17 @@
 
     async function handleSave() {
         if (!user || saving || alreadySaved) return;
+
+        // Validate user_id before saving
+        if (!user.user_id) {
+            console.error('[ContactQuickCard] Cannot save contact - no user_id:', user);
+            showToast('Cannot save contact - user information is incomplete.', 'error');
+            return;
+        }
+
         saving = true;
         try {
+            console.log('[ContactQuickCard] Saving contact with user_id:', user.user_id);
             await saveContact({
                 user_id: user.user_id,
                 name: user.name,
