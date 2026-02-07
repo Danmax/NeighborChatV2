@@ -45,6 +45,7 @@ export function setupPresenceChannel() {
                     if (presence.user_id) {
                         users[presence.user_id] = {
                             user_id: presence.user_id,
+                            user_uuid: presence.user_uuid || null,  // Include UUID for room ID generation
                             name: presence.name,
                             avatar: presence.avatar,
                             interests: presence.interests || [],
@@ -62,6 +63,7 @@ export function setupPresenceChannel() {
                 if (presence.user_id) {
                     updateOnlineUser(presence.user_id, {
                         user_id: presence.user_id,
+                        user_uuid: presence.user_uuid || null,  // Include UUID for room ID generation
                         name: presence.name,
                         avatar: presence.avatar,
                         interests: presence.interests || [],
@@ -99,6 +101,7 @@ export async function trackPresence(status = 'available') {
 
     await presenceChannel.track({
         user_id: user.user_id,
+        user_uuid: user.user_uuid || null,  // Include UUID for consistent room ID generation
         name: user.name,
         avatar: user.avatar,
         interests: user.interests || [],
@@ -448,22 +451,26 @@ export async function sendChatMessage(message, isGif = false) {
         return null;
     }
 
-    const msg = {
+    // Use Clerk ID for user_id (consistent with presence system)
+    // Also include user_uuid for potential future use
+    const broadcastPayload = {
         id: `${user.user_id}-${Date.now()}`,
         user_id: user.user_id,
+        user_uuid: user.user_uuid || null,
         name: user.name,
         avatar: user.avatar,
         message: message,
         isGif: isGif,
         timestamp: new Date().toISOString()
+        // NOTE: Do NOT include _isOwn in broadcast - it would make receivers think it's their own message
     };
 
     try {
-        console.log('[sendChatMessage] Sending message:', msg);
+        console.log('[sendChatMessage] Sending message:', broadcastPayload);
         await chatChannel.send({
             type: 'broadcast',
             event: 'message',
-            payload: msg
+            payload: broadcastPayload
         });
         console.log('[sendChatMessage] Message sent successfully');
     } catch (error) {
@@ -471,7 +478,8 @@ export async function sendChatMessage(message, isGif = false) {
         return null;
     }
 
-    return msg;
+    // Return with _isOwn: true for local display (sender sees their message on the right side)
+    return { ...broadcastPayload, _isOwn: true };
 }
 
 /**

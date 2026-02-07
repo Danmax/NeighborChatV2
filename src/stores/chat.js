@@ -37,11 +37,17 @@ export function startChat(partner) {
     const user = get(currentUser);
     if (!user || !partner) return null;
 
-    // Create consistent room ID (sorted user IDs)
-    // Use user_id for consistency across the app
-    const currentId = user.user_uuid || user.user_id;
-    const ids = [currentId, partner.user_id].sort();
+    // CRITICAL: Use Clerk text IDs (user_id) consistently for room generation
+    // This ensures both users generate the SAME room ID regardless of whether
+    // their UUIDs have loaded yet. Presence system uses Clerk IDs, so partner.user_id
+    // is always a Clerk ID. We must use user.user_id (also Clerk ID) for current user.
+    // Mixing UUID + Clerk ID causes users to join different channels and not see each other's messages.
+    const currentId = user.user_id;  // Always use Clerk ID for consistency
+    const partnerId = partner.user_id;  // Always Clerk ID from presence
+    const ids = [currentId, partnerId].sort();
     const roomId = `chat_${ids[0]}_${ids[1]}`;
+
+    console.log('[startChat] Creating room:', { currentId, partnerId, roomId });
 
     chatPartner.set(partner);
     chatRoomId.set(roomId);
