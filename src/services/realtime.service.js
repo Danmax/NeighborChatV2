@@ -1,6 +1,6 @@
 // Realtime service - Supabase presence and channels
 import { getSupabase } from '../lib/supabase.js';
-import { currentUser } from '../stores/auth.js';
+import { currentUser, updateCurrentUser } from '../stores/auth.js';
 import {
     setOnlineUsers,
     updateOnlineUser,
@@ -97,11 +97,33 @@ export async function trackPresence(status = 'available') {
 
     if (!presenceChannel || !user) return;
 
+    // Ensure we have the user's UUID for presence (required for contact saving)
+    let userUuid = user.user_uuid;
+    if (!userUuid && user.user_id) {
+        // Try to resolve UUID from the database if not already in currentUser
+        try {
+            const supabase = getSupabase();
+            const { data } = await supabase
+                .from('user_profiles')
+                .select('id')
+                .eq('clerk_user_id', user.user_id)
+                .maybeSingle();
+            if (data?.id) {
+                userUuid = data.id;
+                console.log('[trackPresence] Resolved user_uuid from database:', userUuid);
+                // Update the store so future presence tracks don't need to look it up
+                updateCurrentUser({ user_uuid: userUuid });
+            }
+        } catch (err) {
+            console.warn('[trackPresence] Failed to resolve user UUID:', err);
+        }
+    }
+
     setUserStatus(status);
 
     await presenceChannel.track({
         user_id: user.user_id,
-        user_uuid: user.user_uuid || null,  // Include UUID for consistent room ID generation
+        user_uuid: userUuid || null,  // Include UUID for consistent room ID generation and contact saving
         name: user.name,
         avatar: user.avatar,
         interests: user.interests || [],

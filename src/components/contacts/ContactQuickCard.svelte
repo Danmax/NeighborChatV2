@@ -14,9 +14,11 @@
     let favoriteMovies = [];
     let loadingFavorites = false;
 
-    $: alreadySaved = user?.user_id ? isContact(user.user_id) : false;
-    $: if (show && user?.user_id) {
-        loadFavorites(user.user_id);
+    // Use user_uuid for contact check since contacts are stored with UUIDs
+    $: contactCheckId = user?.user_uuid || user?.user_id;
+    $: alreadySaved = contactCheckId ? isContact(contactCheckId) : false;
+    $: if (show && contactCheckId) {
+        loadFavorites(contactCheckId);
     }
 
     async function loadFavorites(userId) {
@@ -42,9 +44,11 @@
 
         saving = true;
         try {
-            console.log('[ContactQuickCard] Saving contact with user_id:', user.user_id);
+            // Prefer user_uuid (UUID) over user_id (Clerk ID) if available
+            const contactUserId = user.user_uuid || user.user_id;
+            console.log('[ContactQuickCard] Saving contact with id:', contactUserId, '(user_uuid:', user.user_uuid, ', user_id:', user.user_id, ')');
             await saveContact({
-                user_id: user.user_id,
+                user_id: contactUserId,
                 name: user.name,
                 avatar: user.avatar,
                 interests: user.interests || []
