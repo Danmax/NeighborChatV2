@@ -525,17 +525,25 @@ export async function sendReadReceipt() {
 export async function leaveChat() {
     const user = get(currentUser);
 
+    console.log('[leaveChat] Called - chatChannel:', !!chatChannel, 'user:', user?.user_id);
     if (chatChannel && user) {
-        await chatChannel.send({
-            type: 'broadcast',
-            event: 'leave',
-            payload: {
-                user_id: user.user_id,
-                name: user.name
-            }
-        });
+        try {
+            console.log('[leaveChat] Sending leave event for user:', user.user_id);
+            await chatChannel.send({
+                type: 'broadcast',
+                event: 'leave',
+                payload: {
+                    user_id: user.user_id,
+                    name: user.name
+                }
+            });
+            console.log('[leaveChat] Leave event sent successfully');
+        } catch (error) {
+            console.error('[leaveChat] Failed to send leave event:', error);
+        }
         chatChannel.unsubscribe();
         chatChannel = null;
+        console.log('[leaveChat] Channel unsubscribed and cleared');
     }
 }
 

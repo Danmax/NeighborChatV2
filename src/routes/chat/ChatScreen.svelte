@@ -115,7 +115,13 @@
     }
 
     function handlePartnerLeave(payload) {
+        console.log('[ChatScreen] handlePartnerLeave called:', {
+            payload_user_id: payload.user_id,
+            partnerId,
+            match: payload.user_id === partnerId
+        });
         if (payload.user_id === partnerId) {
+            console.log('[ChatScreen] Partner left - showing notification');
             partnerLeft = true;
         }
     }
@@ -149,13 +155,15 @@
         showGifPicker = false;
     }
 
-    function handleLeave() {
-        leaveChat();
+    async function handleLeave() {
+        console.log('[ChatScreen] handleLeave called');
+        await leaveChat();  // Wait for leave broadcast to complete
         endChat();
+        console.log('[ChatScreen] handleLeave complete');
     }
 
-    function goBack() {
-        handleLeave();
+    async function goBack() {
+        await handleLeave();
         push('/find-match');
     }
 
