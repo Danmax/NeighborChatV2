@@ -16,18 +16,30 @@ function isUuid(value) {
 }
 
 async function resolveUserUuid(userId) {
+    console.log('[resolveUserUuid] Input:', userId, 'isUuid:', isUuid(userId));
+
     if (!userId) return null;
-    if (isUuid(userId)) return userId;
+    if (isUuid(userId)) {
+        console.log('[resolveUserUuid] Already a UUID, returning:', userId);
+        return userId;
+    }
 
     const supabase = getSupabase();
+    console.log('[resolveUserUuid] Looking up clerk_user_id:', userId);
     const { data, error } = await supabase
         .from('user_profiles')
         .select('id')
         .eq('clerk_user_id', userId)
         .maybeSingle();
 
-    if (error) throw error;
-    return data?.id || null;
+    if (error) {
+        console.error('[resolveUserUuid] Query error:', error);
+        throw error;
+    }
+
+    const result = data?.id || null;
+    console.log('[resolveUserUuid] Result:', result, 'from data:', data);
+    return result;
 }
 
 // Transform database row to app format
