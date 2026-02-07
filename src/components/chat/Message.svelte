@@ -25,7 +25,8 @@
         ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
         ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
         null;
-    $: isOwn = currentId && message.user_id === currentId;
+    // Use passed _isOwn value if available (from parent component), otherwise calculate from currentId
+    $: isOwn = message._isOwn !== undefined ? message._isOwn : (currentId && message.user_id === currentId);
     $: formattedTime = formatTime(message.timestamp);
     $: showRead = isOwn && message.read;
     $: formattedMessage = highlightMentions(escapeHtml(message.message));

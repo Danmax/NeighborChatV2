@@ -70,7 +70,8 @@
             caption: msg.body,
             timestamp: msg.created_at,
             read: msg.read,
-            reactions: msg.reactions || {}
+            reactions: msg.reactions || {},
+            _isOwn: isOwn  // Pass the correct ownership calculation to prevent Message component from recalculating
         };
     });
 
