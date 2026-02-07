@@ -397,29 +397,41 @@ export function setupChatChannel(roomId, callbacks = {}) {
     const supabase = getSupabase();
     const user = get(currentUser);
 
-    if (!user || !roomId) return null;
+    console.log('[setupChatChannel] roomId:', roomId, 'user:', user?.user_id);
+    if (!user || !roomId) {
+        console.warn('[setupChatChannel] Missing user or roomId');
+        return null;
+    }
 
     // Clean up existing chat channel
     if (chatChannel) {
+        console.log('[setupChatChannel] Cleaning up existing channel');
         chatChannel.unsubscribe();
     }
 
     chatChannel = supabase.channel(roomId);
+    console.log('[setupChatChannel] Created new channel:', roomId);
 
     chatChannel
         .on('broadcast', { event: 'message' }, ({ payload }) => {
+            console.log('[setupChatChannel] Received message event:', payload);
             callbacks.onMessage?.(payload);
         })
         .on('broadcast', { event: 'typing' }, ({ payload }) => {
+            console.log('[setupChatChannel] Received typing event:', payload);
             callbacks.onTyping?.(payload);
         })
         .on('broadcast', { event: 'read' }, ({ payload }) => {
+            console.log('[setupChatChannel] Received read event:', payload);
             callbacks.onRead?.(payload);
         })
         .on('broadcast', { event: 'leave' }, ({ payload }) => {
+            console.log('[setupChatChannel] Received leave event:', payload);
             callbacks.onLeave?.(payload);
         })
-        .subscribe();
+        .subscribe((status) => {
+            console.log('[setupChatChannel] Subscribe status:', status);
+        });
 
     return chatChannel;
 }
@@ -430,7 +442,11 @@ export function setupChatChannel(roomId, callbacks = {}) {
 export async function sendChatMessage(message, isGif = false) {
     const user = get(currentUser);
 
-    if (!chatChannel || !user) return null;
+    console.log('[sendChatMessage] message:', message, 'isGif:', isGif, 'chatChannel:', !!chatChannel, 'user:', user?.user_id);
+    if (!chatChannel || !user) {
+        console.error('[sendChatMessage] Failed: chatChannel=', !!chatChannel, 'user=', !!user);
+        return null;
+    }
 
     const msg = {
         id: `${user.user_id}-${Date.now()}`,
@@ -442,11 +458,18 @@ export async function sendChatMessage(message, isGif = false) {
         timestamp: new Date().toISOString()
     };
 
-    await chatChannel.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: msg
-    });
+    try {
+        console.log('[sendChatMessage] Sending message:', msg);
+        await chatChannel.send({
+            type: 'broadcast',
+            event: 'message',
+            payload: msg
+        });
+        console.log('[sendChatMessage] Message sent successfully');
+    } catch (error) {
+        console.error('[sendChatMessage] Failed to send:', error);
+        return null;
+    }
 
     return msg;
 }

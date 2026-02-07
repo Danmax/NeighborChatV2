@@ -57,6 +57,7 @@
     });
 
     function initializeChat() {
+        console.log('[ChatScreen] initializeChat - partnerId:', partnerId);
         let foundPartner = findPartner(partnerId);
 
         // If partner not found in presence, create temporary partner info
@@ -72,11 +73,13 @@
         }
 
         if (!foundPartner) {
-            console.warn('Chat partner not found');
+            console.warn('[ChatScreen] Chat partner not found');
             return;
         }
 
+        console.log('[ChatScreen] Starting chat with partner:', foundPartner.user_id);
         const roomId = startChat(foundPartner);
+        console.log('[ChatScreen] roomId:', roomId);
         if (roomId) {
             setupChatChannel(roomId, {
                 onMessage: handleMessage,
@@ -84,6 +87,7 @@
                 onLeave: handlePartnerLeave,
                 onJoin: handlePartnerJoin
             });
+            console.log('[ChatScreen] Chat channel set up');
         }
     }
 
@@ -118,10 +122,15 @@
 
     async function handleSendMessage(event) {
         const { message, isGif } = event.detail;
+        console.log('[ChatScreen] handleSendMessage - message:', message, 'isGif:', isGif);
 
         const msg = await sendChatMessage(message, isGif);
+        console.log('[ChatScreen] sendChatMessage returned:', msg);
         if (msg) {
+            console.log('[ChatScreen] Adding message to local store');
             addMessage(msg);
+        } else {
+            console.error('[ChatScreen] sendChatMessage returned null');
         }
     }
 
