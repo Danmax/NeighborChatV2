@@ -130,9 +130,11 @@
     }
 
     onMount(async () => {
-        console.log('[ThreadScreen] Mount - otherUserId:', otherUserId, 'isAuthenticated:', $isAuthenticated);
-        if (!$isAuthenticated || !otherUserId) {
+        console.log('[ThreadScreen] Mount - params:', params, 'otherUserId:', otherUserId, 'isAuthenticated:', $isAuthenticated);
+        if (!$isAuthenticated || !otherUserId || otherUserId === 'null' || otherUserId === 'undefined') {
             console.warn('[ThreadScreen] Skipping mount: isAuthenticated=', $isAuthenticated, 'otherUserId=', otherUserId);
+            showToast('Invalid conversation. Please try again.', 'error');
+            push('/messages');
             return;
         }
 

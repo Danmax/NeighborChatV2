@@ -68,6 +68,13 @@
 
     async function handleChat(event) {
         const contact = event.detail;
+        console.log('[ContactsScreen] handleChat - contact:', contact, 'user_id:', contact.user_id);
+        if (!contact.user_id) {
+            console.error('[ContactsScreen] Contact has no user_id!');
+            actionError = 'Cannot message this contact - no user ID found.';
+            setTimeout(() => actionError = '', 3000);
+            return;
+        }
         push(`/messages/${contact.user_id}`);
     }
 
