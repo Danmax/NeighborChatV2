@@ -8,6 +8,7 @@
     export let showInterests = true;
     export let compact = false;
     export let maxHeight = null;
+    export let menuMode = 'default'; // default | recent
 
     const dispatch = createEventDispatcher();
 
@@ -48,6 +49,7 @@
                 {contact}
                 {showInterests}
                 {compact}
+                {menuMode}
                 on:click={handleClick}
                 on:chat={handleChat}
                 on:edit={handleEdit}

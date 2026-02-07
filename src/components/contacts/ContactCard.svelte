@@ -7,6 +7,7 @@
     export let contact;
     export let showInterests = true;
     export let compact = false;
+    export let menuMode = 'default'; // default | recent
 
     const dispatch = createEventDispatcher();
 
@@ -28,6 +29,13 @@
 
     function handleProfileClick(e) {
         e.stopPropagation();
+        if (!contact?.user_id) return;
+        push(`/profile/view/${contact.user_id}`);
+    }
+
+    function handleViewProfile(e) {
+        e.stopPropagation();
+        menuOpen = false;
         if (!contact?.user_id) return;
         push(`/profile/view/${contact.user_id}`);
     }
@@ -111,19 +119,25 @@
                     <span class="menu-icon">💬</span>
                     Message
                 </button>
-                <button class="menu-item" on:click={handleEdit}>
-                    <span class="menu-icon">✏️</span>
-                    Edit Notes
+                <button class="menu-item" on:click={handleViewProfile}>
+                    <span class="menu-icon">👤</span>
+                    View Profile
                 </button>
                 <button class="menu-item" on:click={handleToggleFavorite}>
                     <span class="menu-icon">{contact.favorite ? '☆' : '⭐'}</span>
                     {contact.favorite ? 'Remove Favorite' : 'Add Favorite'}
                 </button>
-                <div class="menu-divider"></div>
-                <button class="menu-item danger" on:click={handleRemove}>
-                    <span class="menu-icon">🗑️</span>
-                    Remove Contact
-                </button>
+                {#if menuMode !== 'recent'}
+                    <button class="menu-item" on:click={handleEdit}>
+                        <span class="menu-icon">✏️</span>
+                        Edit Notes
+                    </button>
+                    <div class="menu-divider"></div>
+                    <button class="menu-item danger" on:click={handleRemove}>
+                        <span class="menu-icon">🗑️</span>
+                        Remove Contact
+                    </button>
+                {/if}
             </div>
         {/if}
     </div>

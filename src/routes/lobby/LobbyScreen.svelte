@@ -166,6 +166,7 @@
                     emptyIcon="👥"
                     showInterests={false}
                     compact={true}
+                    menuMode="recent"
                     on:chat={openMessageThread}
                     on:click={openMessageThread}
                 />
