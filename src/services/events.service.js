@@ -405,6 +405,56 @@ export async function removeEventItem(eventId, itemId) {
 }
 
 /**
+ * Update an event item's name, category, and slots
+ */
+export async function updateEventItem(eventId, itemId, { name, category, slots }) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to update items.');
+    }
+
+    // Get current event to update items array
+    const { data: eventData, error: fetchError } = await supabase
+        .from('community_events')
+        .select('event_data')
+        .eq('id', eventId)
+        .single();
+
+    if (fetchError) throw fetchError;
+
+    // Update the item in the items array
+    const items = eventData?.event_data?.items || [];
+    const itemIndex = items.findIndex(item => item.id === itemId);
+    if (itemIndex === -1) {
+        throw new Error('Item not found');
+    }
+
+    items[itemIndex] = {
+        ...items[itemIndex],
+        name: name?.trim() || items[itemIndex].name,
+        category: category || items[itemIndex].category,
+        slots: slots || items[itemIndex].slots
+    };
+
+    // Update the event_data
+    const { error: updateError } = await supabase
+        .from('community_events')
+        .update({
+            event_data: {
+                ...eventData.event_data,
+                items
+            }
+        })
+        .eq('id', eventId);
+
+    if (updateError) throw updateError;
+
+    updateEvent(eventId, { items });
+    return items;
+}
+
+/**
  * Claim or unclaim an event item (toggle)
  */
 export async function claimEventItem(eventId, itemId) {

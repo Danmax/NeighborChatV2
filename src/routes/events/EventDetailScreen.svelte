@@ -13,6 +13,7 @@
         getActiveMembershipId,
         addEventItemV2,
         removeEventItem,
+        updateEventItem,
         claimEventItemV2,
         unclaimEventItem,
         attachRecipeToItem,
@@ -499,6 +500,17 @@
             showToast('Item removed.', 'success');
         } catch (err) {
             showToast(`Failed to remove: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleEditPotluckItem(event) {
+        const { itemId, name, category, slots } = event.detail;
+        try {
+            await updateEventItem(eventId, itemId, { name, category, slots });
+            eventData = await fetchEventById(eventId);
+            showToast('Item updated.', 'success');
+        } catch (err) {
+            showToast(`Failed to update item: ${err.message}`, 'error');
         }
     }
 
@@ -1012,6 +1024,7 @@
                     on:claim={handleClaimPotluckItem}
                     on:unclaim={handleUnclaimPotluckItem}
                     on:removeItem={handleRemovePotluckItem}
+                    on:editItem={handleEditPotluckItem}
                     on:createRecipe={handleCreateRecipeForItem}
                 />
             {/if}

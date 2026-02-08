@@ -27,6 +27,7 @@
     let claimingItemId = null;
     let showRecipeModal = false;
     let recipeItem = null;
+    let isExpanded = true; // Track if "What to Bring" section is expanded
 
     $: settings = getEventSettings(event);
     $: canAddItems = isOwner || settings.potluck_allow_new_items;
@@ -88,20 +89,61 @@
         const total = item.slots || 1;
         return Math.min(100, (claimed / total) * 100);
     }
+
+    // Check if item is a food category (can have recipes)
+    function isFoodItem(category) {
+        const foodCategories = ['main', 'side', 'dessert', 'drinks'];
+        return foodCategories.includes(category);
+    }
+
+    // Edit item state
+    let editingItemId = null;
+    let editItemName = '';
+    let editItemCategory = '';
+    let editItemSlots = '';
+
+    function startEditItem(item) {
+        editingItemId = item.id;
+        editItemName = item.name;
+        editItemCategory = item.category;
+        editItemSlots = item.slots || 1;
+    }
+
+    function cancelEditItem() {
+        editingItemId = null;
+        editItemName = '';
+        editItemCategory = '';
+        editItemSlots = '';
+    }
+
+    function saveEditItem(itemId) {
+        if (!editItemName.trim()) return;
+        dispatch('editItem', {
+            itemId,
+            name: editItemName.trim(),
+            category: editItemCategory,
+            slots: parseInt(editItemSlots) || 1
+        });
+        cancelEditItem();
+    }
 </script>
 
 <div class="potluck-section">
-    <div class="section-header">
+    <div class="section-header" on:click={() => isExpanded = !isExpanded}>
+        <button class="expand-btn" title={isExpanded ? 'Collapse' : 'Expand'}>
+            {isExpanded ? '▼' : '▶'}
+        </button>
         <h3>What to Bring</h3>
-        {#if canAddItems}
-            <button class="add-btn" on:click={() => showAddForm = !showAddForm}>
+        {#if canAddItems && isExpanded}
+            <button class="add-btn" on:click={(e) => { e.stopPropagation(); showAddForm = !showAddForm; }}>
                 {showAddForm ? 'Cancel' : '+ Add Item'}
             </button>
         {/if}
     </div>
 
-    <!-- Add Item Form -->
-    {#if showAddForm}
+    {#if isExpanded}
+        <!-- Add Item Form -->
+        {#if showAddForm}
         <div class="add-item-form">
             <input
                 type="text"
@@ -166,19 +208,58 @@
                 {@const claimed = calculateClaimedQuantity(item)}
                 {@const myClaim = getUserClaim(item, $currentUser?.user_uuid || $currentUser?.user_id)}
                 {@const progressPercent = getProgressPercent(item)}
-                {@const canAttachRecipe = settings.potluck_allow_recipes && item.allow_recipe !== false}
+                {@const canAttachRecipe = settings.potluck_allow_recipes && item.allow_recipe !== false && isFoodItem(item.category)}
                 {@const canSuggestRecipe = canAttachRecipe && (canAddItems || myClaim)}
 
                 <div class="item-card" class:claimed-full={available === 0}>
-                    <div class="item-header">
-                        <span class="item-category">{category.emoji}</span>
-                        <span class="item-name">{item.name}</span>
-                        {#if isOwner}
-                            <button class="remove-btn" on:click={() => handleRemoveItem(item.id)}>
-                                ✕
-                            </button>
-                        {/if}
-                    </div>
+                    {#if editingItemId === item.id}
+                        <!-- Edit Form -->
+                        <div class="edit-item-form">
+                            <input
+                                type="text"
+                                bind:value={editItemName}
+                                placeholder="Item name"
+                                maxlength="100"
+                            />
+                            <div class="edit-form-row">
+                                <select bind:value={editItemCategory}>
+                                    {#each ITEM_CATEGORIES as cat}
+                                        <option value={cat.id}>{cat.emoji} {cat.label}</option>
+                                    {/each}
+                                </select>
+                                <div class="slots-input">
+                                    <label>Slots:</label>
+                                    <input
+                                        type="number"
+                                        bind:value={editItemSlots}
+                                        min="1"
+                                        max="10"
+                                    />
+                                </div>
+                            </div>
+                            <div class="edit-form-actions">
+                                <button class="cancel-btn" on:click={cancelEditItem}>
+                                    Cancel
+                                </button>
+                                <button class="save-btn" on:click={() => saveEditItem(item.id)} disabled={!editItemName.trim()}>
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    {:else}
+                        <div class="item-header">
+                            <span class="item-category">{category.emoji}</span>
+                            <span class="item-name">{item.name}</span>
+                            {#if isOwner}
+                                <button class="edit-btn" title="Edit item" on:click={() => startEditItem(item)}>
+                                    ✎
+                                </button>
+                                <button class="remove-btn" on:click={() => handleRemoveItem(item.id)}>
+                                    ✕
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
 
                     <!-- Progress Bar -->
                     <div class="progress-container">
@@ -269,6 +350,7 @@
             </div>
         </div>
     {/if}
+    {/if}
 </div>
 
 <style>
@@ -283,12 +365,27 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 16px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .expand-btn {
+        background: none;
+        border: none;
+        font-size: 16px;
+        padding: 0;
+        margin-right: 8px;
+        cursor: pointer;
+        width: 24px;
+        text-align: center;
+        transition: transform 0.2s ease;
     }
 
     .section-header h3 {
         font-size: 16px;
         font-weight: 600;
         margin: 0;
+        flex: 1;
     }
 
     .add-btn {
@@ -446,6 +543,99 @@
     .remove-btn:hover {
         background: #F44336;
         color: white;
+    }
+
+    .edit-btn {
+        width: 24px;
+        height: 24px;
+        border: none;
+        background: var(--primary-light, #81C784);
+        border-radius: 50%;
+        font-size: 12px;
+        cursor: pointer;
+        color: white;
+        transition: background 0.2s ease;
+    }
+
+    .edit-btn:hover {
+        background: var(--primary-dark, #2E7D32);
+    }
+
+    .edit-item-form {
+        background: white;
+        padding: 16px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .edit-item-form input,
+    .edit-item-form select {
+        padding: 10px;
+        border: 1px solid var(--cream-dark);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+    }
+
+    .edit-form-row {
+        display: flex;
+        gap: 12px;
+    }
+
+    .edit-form-row select {
+        flex: 1;
+    }
+
+    .edit-form-row .slots-input {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .edit-form-row .slots-input input {
+        width: 60px;
+        margin: 0;
+    }
+
+    .edit-form-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+
+    .edit-form-actions button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .cancel-btn {
+        background: var(--cream);
+        color: var(--text);
+    }
+
+    .cancel-btn:hover {
+        background: var(--cream-dark);
+    }
+
+    .save-btn {
+        background: var(--primary);
+        color: white;
+    }
+
+    .save-btn:hover:not(:disabled) {
+        background: var(--primary-dark);
+    }
+
+    .save-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .progress-container {
