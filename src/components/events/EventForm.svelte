@@ -31,7 +31,11 @@
     let joinPolicy = event?.join_policy || 'open';
     let meetingLink = event?.meeting_link || '';
 
-    $: if (event) {
+    // Only reset form when event ID changes, not on every event update
+    // This prevents user input from being overwritten while editing
+    let previousEventId = event?.id;
+    $: if (event?.id && event.id !== previousEventId) {
+        previousEventId = event.id;
         title = event.title || '';
         type = event.type || 'meetup';
         date = toDateInputUtc(event.date) || '';
