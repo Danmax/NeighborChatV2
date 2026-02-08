@@ -40,13 +40,8 @@
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     }
 
-    // Get current user ID - prioritize localUserUuid, then user_uuid, then validate other IDs
-    $: currentId =
-        (localUserUuid && isValidUuid(localUserUuid)) ? localUserUuid :
-        ($currentUser?.user_uuid && isValidUuid($currentUser.user_uuid)) ? $currentUser.user_uuid :
-        ($currentUser?.user_id && isValidUuid($currentUser.user_id)) ? $currentUser.user_id :
-        ($currentUser?.id && isValidUuid($currentUser.id)) ? $currentUser.id :
-        null;
+    // Get current user ID - only use valid UUIDs from database
+    $: currentId = localUserUuid || $currentUser?.user_uuid || null;
     $: {
         console.log('[ThreadScreen] Message mapping - currentId:', currentId, 'messages count:', $threadMessages?.length);
         mappedMessages = ($threadMessages || []).map(msg => {
