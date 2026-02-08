@@ -315,30 +315,68 @@
                 {#if feedback.length === 0}
                     <p class="empty">No feedback yet.</p>
                 {:else}
-                    <div class="table">
-                        <div class="row header feedback-header">
-                            <span>Category</span>
-                            <span>Title</span>
-                            <span>Status</span>
-                            <span>Actions</span>
-                        </div>
+                    <div class="feedback-list">
                         {#each feedback as item}
-                            <div class="row feedback-row">
-                                <span>{item.category}</span>
-                                <span>{item.title || '—'}</span>
-                                <span class="badge {item.status}">{item.status}</span>
-                                <span class="actions">
-                                    <button class="btn" on:click={() => updateFeedback(item.id, 'reviewing')}>Review</button>
-                                    <button class="btn" on:click={() => updateFeedback(item.id, 'resolved', feedbackResolutionNotes[item.id])}>Resolve</button>
-                                </span>
-                                <span class="resolution-note">
-                                    <div class="resolution-label">Resolution note</div>
-                                    <textarea
-                                        rows="2"
-                                        placeholder="Resolution note (optional)"
-                                        bind:value={feedbackResolutionNotes[item.id]}
-                                    ></textarea>
-                                </span>
+                            <div class="feedback-card" class:resolved={item.status === 'resolved'}>
+                                <div class="feedback-card-header">
+                                    <span class="feedback-category">{item.category}</span>
+                                    <span class="badge status-{item.status}">{item.status}</span>
+                                </div>
+
+                                <h3 class="feedback-title">{item.title || 'No title'}</h3>
+
+                                <div class="feedback-meta">
+                                    <span>👤 {item.username || 'Anonymous'}</span>
+                                    <span>📅 {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+
+                                <div class="feedback-message">
+                                    <strong>Message:</strong>
+                                    <p>{item.message || '(No message provided)'}</p>
+                                </div>
+
+                                {#if item.resolution_note}
+                                    <div class="feedback-resolution">
+                                        <strong>Resolution Note:</strong>
+                                        <p>{item.resolution_note}</p>
+                                    </div>
+                                {/if}
+
+                                <div class="feedback-actions">
+                                    <div class="action-buttons">
+                                        <button
+                                            class="btn btn-secondary"
+                                            on:click={() => updateFeedback(item.id, 'reviewing')}
+                                            disabled={item.status === 'reviewing'}
+                                        >
+                                            🔍 Reviewing
+                                        </button>
+                                        <button
+                                            class="btn btn-primary"
+                                            on:click={() => updateFeedback(item.id, 'resolved', feedbackResolutionNotes[item.id])}
+                                            disabled={item.status === 'resolved'}
+                                        >
+                                            ✅ Resolve
+                                        </button>
+                                        <button
+                                            class="btn btn-outline"
+                                            on:click={() => updateFeedback(item.id, 'pending')}
+                                            disabled={item.status === 'pending'}
+                                        >
+                                            ⏸️ Reopen
+                                        </button>
+                                    </div>
+
+                                    <div class="resolution-input">
+                                        <label for="resolution-{item.id}">Add resolution note:</label>
+                                        <textarea
+                                            id="resolution-{item.id}"
+                                            rows="2"
+                                            placeholder="Describe how this was resolved..."
+                                            bind:value={feedbackResolutionNotes[item.id]}
+                                        ></textarea>
+                                    </div>
+                                </div>
                             </div>
                         {/each}
                     </div>
@@ -437,34 +475,169 @@
         align-items: center;
     }
 
-    .feedback-header {
-        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr;
+    /* Feedback Card Styles */
+    .feedback-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
     }
 
-    .feedback-row {
-        grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr;
-        align-items: start;
+    .feedback-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        border: 1px solid var(--cream-dark);
     }
 
-    .resolution-note {
-        grid-column: 1 / -1;
-        margin-top: 6px;
+    .feedback-card.resolved {
+        opacity: 0.7;
+        background: #f9f9f9;
     }
 
-    .resolution-label {
+    .feedback-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .feedback-category {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .feedback-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0 0 8px 0;
+    }
+
+    .feedback-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 16px;
+    }
+
+    .feedback-message {
+        background: var(--cream);
+        padding: 14px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+    }
+
+    .feedback-message strong {
+        display: block;
         font-size: 12px;
         color: var(--text-muted);
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }
 
-    .resolution-note textarea {
+    .feedback-message p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text);
+        white-space: pre-wrap;
+    }
+
+    .feedback-resolution {
+        background: #e8f5e9;
+        padding: 14px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border-left: 3px solid #4CAF50;
+    }
+
+    .feedback-resolution strong {
+        display: block;
+        font-size: 12px;
+        color: #2E7D32;
+        margin-bottom: 6px;
+    }
+
+    .feedback-resolution p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--text);
+    }
+
+    .feedback-actions {
+        border-top: 1px solid var(--cream-dark);
+        padding-top: 16px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .action-buttons .btn {
+        font-size: 13px;
+        padding: 8px 14px;
+    }
+
+    .btn-secondary {
+        background: var(--cream);
+        color: var(--text);
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-outline {
+        background: white;
+        border: 1px solid var(--cream-dark);
+        color: var(--text-muted);
+    }
+
+    .action-buttons .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .resolution-input label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+
+    .resolution-input textarea {
         width: 100%;
         min-height: 60px;
         resize: vertical;
-        padding: 8px 10px;
+        padding: 10px 12px;
         border: 1px solid var(--cream-dark);
         border-radius: 8px;
-        font-size: 12px;
+        font-size: 13px;
+    }
+
+    .status-pending {
+        background: #FFF3E0;
+        color: #E65100;
+    }
+
+    .status-reviewing {
+        background: #E3F2FD;
+        color: #1565C0;
+    }
+
+    .status-resolved {
+        background: #E8F5E9;
+        color: #2E7D32;
     }
 
     .row.header {

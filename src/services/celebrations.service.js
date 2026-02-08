@@ -370,8 +370,12 @@ export async function updateReactions(celebrationId, reactions) {
     }
 }
 
+// Emoji list must match the database function (migration_073)
+const REACTION_EMOJI_LIST = ['❤️', '🎉', '👏', '🙌', '💯', '🔥', '✨', '💪'];
+
 /**
  * React to a celebration (single reaction per user)
+ * Uses emoji index instead of raw emoji to avoid JSON encoding issues
  */
 export async function reactToCelebration(celebrationId, emoji) {
     const supabase = getSupabase();
@@ -387,61 +391,31 @@ export async function reactToCelebration(celebrationId, emoji) {
     }
 
     try {
-        // Normalize emoji - ensure it's a valid single emoji string
+        // Find emoji index in the list
         const normalizedEmoji = emoji.trim();
-        if (normalizedEmoji.length === 0) {
-            throw new Error('Emoji cannot be empty');
+        const emojiIndex = REACTION_EMOJI_LIST.indexOf(normalizedEmoji);
+
+        if (emojiIndex === -1) {
+            console.error('Emoji not in allowed list:', normalizedEmoji);
+            throw new Error('Invalid emoji. Please use one of the available reactions.');
         }
 
-        // Fetch current reactions
-        const { data: celebration, error: fetchError } = await supabase
-            .from('celebrations')
-            .select('reactions')
-            .eq('id', celebrationId)
-            .single();
-
-        if (fetchError) {
-            throw new Error('Failed to fetch celebration');
-        }
-
-        const currentReactions = celebration?.reactions || {};
-        const emojiReactions = currentReactions[normalizedEmoji] || [];
-
-        // Check if user already reacted with this emoji
-        const userIndex = emojiReactions.indexOf(authUserUuid);
-        const newReactions = { ...currentReactions };
-
-        if (userIndex >= 0) {
-            // Remove reaction if user already reacted
-            emojiReactions.splice(userIndex, 1);
-            if (emojiReactions.length === 0) {
-                delete newReactions[normalizedEmoji];
-            } else {
-                newReactions[normalizedEmoji] = emojiReactions;
-            }
-        } else {
-            // Add reaction
-            newReactions[normalizedEmoji] = [...emojiReactions, authUserUuid];
-        }
-
-        // Update celebration with new reactions
-        const { data, error } = await supabase
-            .from('celebrations')
-            .update({ reactions: newReactions })
-            .eq('id', celebrationId)
-            .select()
-            .single();
+        // Call RPC function with emoji index instead of raw emoji
+        const { data, error } = await supabase.rpc('add_celebration_reaction_v2', {
+            p_celebration_id: celebrationId,
+            p_emoji_index: emojiIndex
+        });
 
         if (error) {
-            console.error('Failed to update reactions:', error);
+            console.error('Failed to add reaction via RPC:', error);
             throw new Error('Failed to add reaction. Please try again.');
         }
 
         if (data) {
-            updateCelebration(celebrationId, { reactions: data.reactions });
+            updateCelebration(celebrationId, { reactions: data });
         }
 
-        return data?.reactions || newReactions;
+        return data;
     } catch (error) {
         console.error('Failed to react to celebration:', error);
         throw error;
