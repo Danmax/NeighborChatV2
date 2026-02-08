@@ -18,7 +18,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_user_id uuid;
+    v_clerk_id text;
+    v_user_uuid uuid;
     v_reactions jsonb;
     v_updated jsonb := '{}'::jsonb;
     v_value jsonb;
@@ -28,9 +29,19 @@ DECLARE
     v_emoji text;
     v_emoji_list text[] := ARRAY['❤️', '🎉', '👏', '🙌', '💯', '🔥', '✨', '💪'];
 BEGIN
-    v_user_id := auth.uid();
-    IF v_user_id IS NULL THEN
+    -- Get the Clerk user ID from auth (stored as text, not UUID)
+    v_clerk_id := auth.uid()::text;
+    IF v_clerk_id IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- Look up the user's UUID from user_profiles
+    SELECT id INTO v_user_uuid
+    FROM public.user_profiles
+    WHERE clerk_user_id = v_clerk_id;
+
+    IF v_user_uuid IS NULL THEN
+        RAISE EXCEPTION 'User profile not found';
     END IF;
 
     -- Validate emoji index (0-7)
@@ -51,7 +62,7 @@ BEGIN
     END IF;
 
     v_reactions := COALESCE(v_reactions, '{}'::jsonb);
-    v_user_text := v_user_id::text;
+    v_user_text := v_user_uuid::text;
 
     -- Process existing reactions
     FOR v_value IN SELECT * FROM jsonb_each(v_reactions)
