@@ -119,17 +119,8 @@ export default async function handler(req, res) {
         return;
     }
 
-    const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role')
-        .eq('user_id', authResult.userId)
-        .maybeSingle();
-
-    const role = profile?.role || 'user';
-    if (!['admin', 'event_manager'].includes(role)) {
-        res.status(403).json({ error: 'Not authorized' });
-        return;
-    }
+    // Recipe drafting is available to all authenticated users
+    // No additional role check needed - authentication via Clerk is sufficient
 
     const { data: aiSettingsRow } = await supabase
         .from('app_settings')
