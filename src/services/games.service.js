@@ -3,6 +3,9 @@ import {
     setGameTemplates,
     gameTemplatesLoading,
     gameTemplatesError,
+    addGameTemplate,
+    updateGameTemplate as updateGameTemplateStore,
+    removeGameTemplate,
     setGameSessions,
     gameSessionsLoading,
     gameSessionsError,
@@ -71,6 +74,135 @@ export async function fetchGameTemplates() {
     } finally {
         gameTemplatesLoading.set(false);
     }
+}
+
+// ============================================================================
+// TEMPLATE CRUD FUNCTIONS (Admin/Moderator only)
+// ============================================================================
+
+export async function createGameTemplate({
+    name,
+    description,
+    icon,
+    gameType,
+    category,
+    minPlayers,
+    maxPlayers,
+    estimatedDuration,
+    rules,
+    config
+}) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to create game templates.');
+    }
+
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Join a community to create game templates.');
+    }
+
+    const { data: membership } = await supabase
+        .from('instance_memberships')
+        .select('instance_id, role')
+        .eq('id', membershipId)
+        .single();
+
+    if (!membership?.instance_id) {
+        throw new Error('Unable to resolve instance.');
+    }
+
+    if (!['admin', 'moderator'].includes(membership.role)) {
+        throw new Error('Only admins and moderators can create game templates.');
+    }
+
+    const templateId = `game_tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        id: templateId,
+        instance_id: membership.instance_id,
+        name: name.trim(),
+        description: description?.trim() || null,
+        icon: icon || '🎮',
+        game_type: gameType || 'custom',
+        category: category || 'general',
+        min_players: minPlayers || 2,
+        max_players: maxPlayers || null,
+        estimated_duration_minutes: estimatedDuration || 60,
+        rules: rules || { list: [] },
+        config: config || {},
+        is_template: true,
+        is_public: false,
+        created_by_membership_id: membershipId
+    };
+
+    const { data, error } = await supabase
+        .from('game_templates')
+        .insert([payload])
+        .select()
+        .single();
+
+    if (error) {
+        if (error.message?.includes('unique') || error.code === '23505') {
+            throw new Error('A template with this name already exists.');
+        }
+        throw error;
+    }
+
+    const template = transformTemplate(data);
+    addGameTemplate(template);
+    return template;
+}
+
+export async function updateGameTemplate(templateId, updates) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to update game templates.');
+    }
+
+    const dbUpdates = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name.trim();
+    if (updates.description !== undefined) dbUpdates.description = updates.description?.trim() || null;
+    if (updates.icon !== undefined) dbUpdates.icon = updates.icon;
+    if (updates.gameType !== undefined) dbUpdates.game_type = updates.gameType;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.minPlayers !== undefined) dbUpdates.min_players = updates.minPlayers;
+    if (updates.maxPlayers !== undefined) dbUpdates.max_players = updates.maxPlayers;
+    if (updates.estimatedDuration !== undefined) dbUpdates.estimated_duration_minutes = updates.estimatedDuration;
+    if (updates.rules !== undefined) dbUpdates.rules = updates.rules;
+    if (updates.config !== undefined) dbUpdates.config = updates.config;
+
+    const { data, error } = await supabase
+        .from('game_templates')
+        .update(dbUpdates)
+        .eq('id', templateId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    const template = transformTemplate(data);
+    updateGameTemplateStore(templateId, template);
+    return template;
+}
+
+export async function deleteGameTemplate(templateId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to delete game templates.');
+    }
+
+    const { error } = await supabase
+        .from('game_templates')
+        .delete()
+        .eq('id', templateId);
+
+    if (error) throw error;
+
+    removeGameTemplate(templateId);
+    return true;
 }
 
 export async function createGameSession({ template, name, scheduledStart, durationMinutes, heatCount, championshipEnabled }) {

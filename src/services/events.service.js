@@ -33,6 +33,26 @@ export async function getActiveMembershipId() {
     return data.id;
 }
 
+export async function getUserRole() {
+    const supabase = getSupabase();
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return null;
+
+    const { data, error } = await supabase
+        .from('instance_memberships')
+        .select('role')
+        .eq('user_id', authUserUuid)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+
+    if (error || !data?.role) {
+        return 'member';
+    }
+
+    return data.role;
+}
+
 // Transform database row to app format
 function transformEventFromDb(row) {
     const eventData = row.event_data || {};

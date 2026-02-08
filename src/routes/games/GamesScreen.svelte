@@ -24,10 +24,13 @@
         createGameTeam,
         updateGameTeamDetails,
         joinGameTeam,
-        leaveGameTeam
+        leaveGameTeam,
+        createGameTemplate,
+        updateGameTemplate,
+        deleteGameTemplate
     } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
-    import { getActiveMembershipId } from '../../services/events.service.js';
+    import { getActiveMembershipId, getUserRole } from '../../services/events.service.js';
 
     // Components
     import GameRulesModal from '../../components/games/GameRulesModal.svelte';
@@ -36,6 +39,7 @@
     import LeaderboardTab from '../../components/games/LeaderboardTab.svelte';
     import AwardsSection from '../../components/games/AwardsSection.svelte';
     import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
+    import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
 
     // State
     let activeTab = 'templates';
@@ -43,8 +47,14 @@
     let showSessionModal = false;
     let showRulesModal = false;
     let showCreateTeamModal = false;
+    let showCreateTemplateModal = false;
     let editTeam = null;
+    let editTemplateData = null;
     let currentMembershipId = null;
+    let userRole = null;
+    let savingTemplate = false;
+
+    $: isAdmin = userRole === 'admin' || userRole === 'moderator';
 
     // Session form
     let sessionName = '';
@@ -78,6 +88,7 @@
     onMount(async () => {
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
+            userRole = await getUserRole();
             fetchGameTemplates();
             fetchGameSessions();
             fetchGameTeams();
@@ -173,6 +184,50 @@
         showCreateTeamModal = true;
     }
 
+    // Template CRUD handlers
+    function openCreateTemplateModal() {
+        editTemplateData = null;
+        showCreateTemplateModal = true;
+    }
+
+    function openEditTemplateModal(template) {
+        editTemplateData = template;
+        showCreateTemplateModal = true;
+    }
+
+    async function handleCreateTemplate(event) {
+        const data = event.detail;
+        savingTemplate = true;
+        try {
+            if (data.templateId) {
+                await updateGameTemplate(data.templateId, data);
+                showToast('Template updated!', 'success');
+            } else {
+                await createGameTemplate(data);
+                showToast('Template created!', 'success');
+            }
+            showCreateTemplateModal = false;
+            editTemplateData = null;
+        } catch (err) {
+            showToast(err.message || 'Failed to save template', 'error');
+        } finally {
+            savingTemplate = false;
+        }
+    }
+
+    async function handleDeleteTemplate(template) {
+        if (!confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
+        try {
+            await deleteGameTemplate(template.id);
+            if (selectedTemplate?.id === template.id) {
+                selectedTemplate = null;
+            }
+            showToast('Template deleted', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to delete template', 'error');
+        }
+    }
+
     function formatSessionDate(value) {
         if (!value) return 'TBD';
         const date = new Date(value);
@@ -218,6 +273,14 @@
         <!-- Templates Tab -->
         {#if activeTab === 'templates'}
             <div class="tab-content">
+                {#if isAdmin}
+                    <div class="admin-actions">
+                        <button class="btn btn-primary btn-small" on:click={openCreateTemplateModal}>
+                            + Create Template
+                        </button>
+                    </div>
+                {/if}
+
                 {#if $gameTemplatesLoading}
                     <div class="loading-state">
                         <div class="loading-spinner"></div>
@@ -226,6 +289,14 @@
                 {:else if $gameTemplatesError}
                     <div class="empty-state">
                         <p>{$gameTemplatesError}</p>
+                    </div>
+                {:else if $gameTemplates.length === 0}
+                    <div class="empty-state">
+                        <span class="empty-icon">🎮</span>
+                        <p>No game templates yet.</p>
+                        {#if isAdmin}
+                            <button class="btn btn-primary" on:click={openCreateTemplateModal}>Create First Template</button>
+                        {/if}
                     </div>
                 {:else}
                     <div class="templates-grid">
@@ -245,13 +316,31 @@
                                         <span>{template.minPlayers}+ players</span>
                                     </div>
                                 </div>
-                                <button
-                                    class="rules-btn"
-                                    on:click|stopPropagation={() => openRulesModal(template)}
-                                    title="View rules"
-                                >
-                                    📋
-                                </button>
+                                <div class="template-actions">
+                                    <button
+                                        class="action-btn"
+                                        on:click|stopPropagation={() => openRulesModal(template)}
+                                        title="View rules"
+                                    >
+                                        📋
+                                    </button>
+                                    {#if isAdmin && template.instanceId}
+                                        <button
+                                            class="action-btn"
+                                            on:click|stopPropagation={() => openEditTemplateModal(template)}
+                                            title="Edit template"
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            class="action-btn action-btn-danger"
+                                            on:click|stopPropagation={() => handleDeleteTemplate(template)}
+                                            title="Delete template"
+                                        >
+                                            🗑️
+                                        </button>
+                                    {/if}
+                                </div>
                             </button>
                         {/each}
                     </div>
@@ -418,6 +507,14 @@
             {editTeam}
             on:close={() => { showCreateTeamModal = false; editTeam = null; }}
             on:submit={handleCreateTeam}
+        />
+
+        <CreateGameTemplateModal
+            show={showCreateTemplateModal}
+            editTemplate={editTemplateData}
+            loading={savingTemplate}
+            on:close={() => { showCreateTemplateModal = false; editTemplateData = null; }}
+            on:submit={handleCreateTemplate}
         />
 
         {#if showSessionModal}
@@ -647,6 +744,44 @@
         color: var(--text-muted);
     }
 
+    .admin-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+    }
+
+    .template-actions {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        gap: 4px;
+    }
+
+    .action-btn {
+        width: 30px;
+        height: 30px;
+        border: none;
+        background: #f5f5f5;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .action-btn:hover {
+        background: #e8e8e8;
+        transform: scale(1.05);
+    }
+
+    .action-btn-danger:hover {
+        background: #ffebee;
+    }
+
+    /* Keep old class for backwards compatibility */
     .rules-btn {
         position: absolute;
         top: 12px;
