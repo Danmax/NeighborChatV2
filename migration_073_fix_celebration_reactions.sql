@@ -8,7 +8,6 @@ BEGIN;
 DROP FUNCTION IF EXISTS public.add_celebration_reaction(TEXT, TEXT);
 
 -- Create new function that accepts emoji index instead of raw emoji
--- This avoids JSON encoding issues with multi-codepoint emoji like ❤️
 CREATE OR REPLACE FUNCTION public.add_celebration_reaction_v2(
     p_celebration_id TEXT,
     p_emoji_index INT
@@ -29,8 +28,8 @@ DECLARE
     v_emoji text;
     v_emoji_list text[] := ARRAY['❤️', '🎉', '👏', '🙌', '💯', '🔥', '✨', '💪'];
 BEGIN
-    -- Get the Clerk user ID from auth (stored as text, not UUID)
-    v_clerk_id := auth.uid()::text;
+    -- Get the Clerk user ID from JWT (auth.uid() returns Clerk ID as text)
+    v_clerk_id := auth.jwt() ->> 'sub';
     IF v_clerk_id IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
@@ -75,7 +74,6 @@ BEGIN
                 v_arr := (SELECT jsonb_agg(value) FROM jsonb_array_elements_text(v_arr) WHERE value <> v_user_text);
             END IF;
         ELSE
-            -- Remove user from other emoji reactions (single reaction per user)
             IF v_arr ? v_user_text THEN
                 v_arr := (SELECT jsonb_agg(value) FROM jsonb_array_elements_text(v_arr) WHERE value <> v_user_text);
             END IF;
@@ -90,7 +88,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- Add new reaction if user hadn't already reacted with this emoji
     IF NOT v_has_reacted THEN
         v_arr := COALESCE(v_updated -> v_emoji, '[]'::jsonb) || to_jsonb(v_user_text);
         v_updated := jsonb_set(v_updated, ARRAY[v_emoji], v_arr, true);
