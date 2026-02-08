@@ -610,6 +610,20 @@
 
     function formatEventDate(dateStr) {
         if (!dateStr) return '';
+
+        // If it's a date-only string (YYYY-MM-DD), parse it directly without timezone conversion
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            return date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        }
+
+        // Otherwise parse as datetime
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-US', {
             weekday: 'long',

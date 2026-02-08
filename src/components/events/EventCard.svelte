@@ -21,7 +21,21 @@
     $: attendeeCount = (event.attendeeCount ?? event.attendees?.length) || 0;
     $: formattedDate = formatDate(event.date);
     $: formattedTime = formatTime(event.time);
-    $: isPast = new Date(event.date) < new Date();
+    // Check if event date is in the past - handle date-only strings properly
+    $: {
+        let eventDateObj;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(event.date)) {
+            // Date-only string: parse as local date at midnight
+            const [year, month, day] = event.date.split('-').map(Number);
+            eventDateObj = new Date(year, month - 1, day);
+        } else {
+            eventDateObj = new Date(event.date);
+        }
+        // Compare with today's date at midnight
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        isPast = eventDateObj < today;
+    }
     $: coverImage = event.cover_image_url || event.image_url || event.image;
 
     // New status and capacity
@@ -33,8 +47,19 @@
     $: rsvpStatusInfo = myRsvpStatus ? getRsvpStatus(myRsvpStatus) : null;
 
     function formatDate(dateStr) {
-        const date = new Date(dateStr);
+        if (!dateStr) return '';
+
+        // Handle date-only strings (YYYY-MM-DD) without timezone conversion
+        let date;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            date = new Date(year, month - 1, day);
+        } else {
+            date = new Date(dateStr);
+        }
+
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
