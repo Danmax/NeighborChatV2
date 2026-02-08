@@ -1,20 +1,52 @@
 <script>
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { isAuthenticated } from '../../stores/auth.js';
+    import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import {
         gameTemplates,
         gameTemplatesLoading,
         gameTemplatesError,
         gameSessions,
         gameSessionsLoading,
-        gameSessionsError
+        gameSessionsError,
+        gameTeams,
+        gameTeamsLoading,
+        myTeam,
+        upcomingSessions,
+        activeSessions,
+        getGameTypeInfo
     } from '../../stores/games.js';
-    import { fetchGameTemplates, fetchGameSessions, createGameSession } from '../../services/games.service.js';
+    import {
+        fetchGameTemplates,
+        fetchGameSessions,
+        fetchGameTeams,
+        createGameSession,
+        createGameTeam,
+        updateGameTeamDetails,
+        joinGameTeam,
+        leaveGameTeam
+    } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
+    import { getActiveMembershipId } from '../../services/events.service.js';
 
+    // Components
+    import GameRulesModal from '../../components/games/GameRulesModal.svelte';
+    import TeamCard from '../../components/games/TeamCard.svelte';
+    import CreateTeamModal from '../../components/games/CreateTeamModal.svelte';
+    import LeaderboardTab from '../../components/games/LeaderboardTab.svelte';
+    import AwardsSection from '../../components/games/AwardsSection.svelte';
+    import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
+
+    // State
+    let activeTab = 'templates';
     let selectedTemplate = null;
     let showSessionModal = false;
+    let showRulesModal = false;
+    let showCreateTeamModal = false;
+    let editTeam = null;
+    let currentMembershipId = null;
+
+    // Session form
     let sessionName = '';
     let sessionDate = '';
     let sessionTime = '';
@@ -23,64 +55,42 @@
     let championshipEnabled = true;
     let savingSession = false;
     let scoringMode = 'team';
-    let scoresVersion = 0;
 
-    const sessionTeams = new Map();
-    const sessionPlayers = new Map();
+    // Team actions
+    let teamActionLoading = {};
 
-    function getTeams(sessionId) {
-        if (!sessionTeams.has(sessionId)) {
-            sessionTeams.set(sessionId, [
-                { id: `team_${sessionId}_1`, name: 'Team A', points: 0 },
-                { id: `team_${sessionId}_2`, name: 'Team B', points: 0 }
-            ]);
-        }
-        return sessionTeams.get(sessionId);
-    }
+    const tabs = [
+        { id: 'templates', label: 'Templates', icon: '🎮' },
+        { id: 'sessions', label: 'Sessions', icon: '📅' },
+        { id: 'teams', label: 'Teams', icon: '👥' },
+        { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
+        { id: 'awards', label: 'Awards', icon: '🎖️' }
+    ];
 
-    function getPlayers(sessionId) {
-        if (!sessionPlayers.has(sessionId)) {
-            sessionPlayers.set(sessionId, [
-                { id: `player_${sessionId}_1`, name: 'Player 1', points: 0 },
-                { id: `player_${sessionId}_2`, name: 'Player 2', points: 0 }
-            ]);
-        }
-        return sessionPlayers.get(sessionId);
-    }
+    $: isCaptain = (team) => {
+        return team.captainMembershipId === currentMembershipId;
+    };
 
-    function addTeam(sessionId) {
-        const teams = getTeams(sessionId);
-        const nextIndex = teams.length + 1;
-        teams.push({ id: `team_${sessionId}_${nextIndex}`, name: `Team ${nextIndex}`, points: 0 });
-        sessionTeams.set(sessionId, [...teams]);
-        scoresVersion += 1;
-    }
+    $: isMyTeam = (team) => {
+        return team.members?.some(m => m.membershipId === currentMembershipId && m.status === 'active');
+    };
 
-    function addPlayer(sessionId) {
-        const players = getPlayers(sessionId);
-        const nextIndex = players.length + 1;
-        players.push({ id: `player_${sessionId}_${nextIndex}`, name: `Player ${nextIndex}`, points: 0 });
-        sessionPlayers.set(sessionId, [...players]);
-        scoresVersion += 1;
-    }
-
-    function updatePoints(list, itemId, delta, map, sessionId) {
-        const updated = list.map(item =>
-            item.id === itemId ? { ...item, points: Math.max(0, item.points + delta) } : item
-        );
-        map.set(sessionId, updated);
-        scoresVersion += 1;
-    }
-
-    onMount(() => {
+    onMount(async () => {
         if ($isAuthenticated) {
+            currentMembershipId = await getActiveMembershipId();
             fetchGameTemplates();
             fetchGameSessions();
+            fetchGameTeams();
         }
     });
 
     function selectTemplate(template) {
         selectedTemplate = template;
+    }
+
+    function openRulesModal(template) {
+        selectedTemplate = template;
+        showRulesModal = true;
     }
 
     function openSessionModal() {
@@ -115,21 +125,52 @@
         }
     }
 
-    function getRulesList(template) {
-        const rules = template?.rules || {};
-        return Array.isArray(rules.list) ? rules.list : [];
+    async function handleCreateTeam(event) {
+        const { name, description, icon, color, teamId } = event.detail;
+        try {
+            if (teamId) {
+                await updateGameTeamDetails(teamId, { name, description, icon, color });
+                showToast('Team updated!', 'success');
+            } else {
+                await createGameTeam({ name, description, icon, color });
+                showToast('Team created!', 'success');
+            }
+            showCreateTeamModal = false;
+            editTeam = null;
+        } catch (err) {
+            showToast(err.message || 'Failed to save team', 'error');
+        }
     }
 
-    function getScoring(template) {
-        return template?.config?.scoring || {};
+    async function handleJoinTeam(event) {
+        const { teamId } = event.detail;
+        teamActionLoading[teamId] = true;
+        try {
+            await joinGameTeam(teamId);
+            showToast('Joined team!', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to join team', 'error');
+        } finally {
+            teamActionLoading[teamId] = false;
+        }
     }
 
-    function getSessions(template) {
-        return template?.config?.sessions || {};
+    async function handleLeaveTeam(event) {
+        const { teamId } = event.detail;
+        teamActionLoading[teamId] = true;
+        try {
+            await leaveGameTeam(teamId);
+            showToast('Left team', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to leave team', 'error');
+        } finally {
+            teamActionLoading[teamId] = false;
+        }
     }
 
-    function getStages(template) {
-        return template?.config?.stages || [];
+    function handleEditTeam(event) {
+        editTeam = event.detail.team;
+        showCreateTeamModal = true;
     }
 
     function formatSessionDate(value) {
@@ -147,239 +188,237 @@
         const date = new Date(value);
         return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
-
-    function getSessionMode(session) {
-        return session?.settings?.scoring_mode || scoringMode;
-    }
-
-    function setSessionMode(sessionId, mode) {
-        const sessions = ($gameSessions || []).map(session =>
-            session.id === sessionId
-                ? { ...session, settings: { ...session.settings, scoring_mode: mode } }
-                : session
-        );
-        gameSessions.set(sessions);
-    }
 </script>
 
 {#if $isAuthenticated}
     <div class="games-screen">
         <div class="screen-header">
             <button class="back-btn" on:click={() => push('/')}>← Back</button>
-            <h2 class="card-title">Game Play Templates</h2>
+            <h2 class="card-title">Office Games</h2>
         </div>
 
         <div class="screen-subtitle">
-            Use these templates to run community game nights: teams, points, scoreboards, and championships.
+            Compete in office games, join teams, climb the leaderboard, and earn awards!
         </div>
 
-        <div class="sessions-card">
-            <div class="sessions-header">
-                <h3>Scheduled Sessions</h3>
-                <span class="sessions-count">{($gameSessions || []).length} scheduled</span>
-            </div>
-            {#if $gameSessionsLoading}
-                <div class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Loading sessions...</p>
-                </div>
-            {:else if $gameSessionsError}
-                <div class="empty-state">
-                    <p>{$gameSessionsError}</p>
-                </div>
-            {:else if !$gameSessions?.length}
-                <div class="empty-state">
-                    <p>No sessions scheduled yet. Pick a template to schedule one.</p>
-                </div>
-            {:else}
-                <div class="sessions-list">
-                    {#each $gameSessions as session (session.id)}
-                        <div class="session-item">
-                            <div>
-                                <h4>{session.name}</h4>
-                                <p>
-                                    {formatSessionDate(session.scheduledStart)}
-                                    {#if formatSessionTime(session.scheduledStart)}
-                                        · {formatSessionTime(session.scheduledStart)}
-                                    {/if}
-                                </p>
-                            </div>
-                            <div class="session-meta">
-                                <span class="badge">{session.settings?.game_type || 'Session'}</span>
-                                <span class="badge">{session.settings?.duration_minutes || 60} min</span>
-                                <span class="status-pill {session.status}">{session.status}</span>
-                            </div>
-                        </div>
-                        <div class="session-card">
-                            <div class="session-card-header">
-                                <h5>Live Scoreboard</h5>
-                                <div class="session-modes">
-                                    <button
-                                        class="mode-btn {getSessionMode(session) === 'team' ? 'active' : ''}"
-                                        on:click={() => setSessionMode(session.id, 'team')}
-                                    >
-                                        Team
-                                    </button>
-                                    <button
-                                        class="mode-btn {getSessionMode(session) === 'individual' ? 'active' : ''}"
-                                        on:click={() => setSessionMode(session.id, 'individual')}
-                                    >
-                                        Individual
-                                    </button>
-                                </div>
-                            </div>
-
-                            {#if getSessionMode(session) === 'team'}
-                                <div class="score-grid">
-                                    {#each getTeams(session.id) as team (team.id)}
-                                        <div class="score-card">
-                                            <div>
-                                                <input class="score-name" bind:value={team.name} />
-                                                <p class="score-points">{team.points} pts</p>
-                                            </div>
-                                            <div class="score-actions">
-                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, 1, sessionTeams, session.id)}>+1</button>
-                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, 5, sessionTeams, session.id)}>+5</button>
-                                                <button on:click={() => updatePoints(getTeams(session.id), team.id, -1, sessionTeams, session.id)}>-1</button>
-                                            </div>
-                                        </div>
-                                    {/each}
-                                </div>
-                                <button class="btn btn-secondary btn-small" on:click={() => addTeam(session.id)}>Add team</button>
-                            {:else}
-                                <div class="score-grid">
-                                    {#each getPlayers(session.id) as player (player.id)}
-                                        <div class="score-card">
-                                            <div>
-                                                <input class="score-name" bind:value={player.name} />
-                                                <p class="score-points">{player.points} pts</p>
-                                            </div>
-                                            <div class="score-actions">
-                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, 1, sessionPlayers, session.id)}>+1</button>
-                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, 5, sessionPlayers, session.id)}>+5</button>
-                                                <button on:click={() => updatePoints(getPlayers(session.id), player.id, -1, sessionPlayers, session.id)}>-1</button>
-                                            </div>
-                                        </div>
-                                    {/each}
-                                </div>
-                                <button class="btn btn-secondary btn-small" on:click={() => addPlayer(session.id)}>Add player</button>
-                            {/if}
-                        </div>
-                    {/each}
-                </div>
-            {/if}
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            {#each tabs as tab}
+                <button
+                    class="tab"
+                    class:active={activeTab === tab.id}
+                    on:click={() => activeTab = tab.id}
+                >
+                    <span class="tab-icon">{tab.icon}</span>
+                    <span class="tab-label">{tab.label}</span>
+                </button>
+            {/each}
         </div>
 
-        {#if $gameTemplatesLoading}
-            <div class="loading-state">
-                <div class="loading-spinner"></div>
-                <p>Loading game templates...</p>
-            </div>
-        {:else if $gameTemplatesError}
-            <div class="empty-state">
-                <p>{$gameTemplatesError}</p>
-            </div>
-        {:else}
-            <div class="templates-grid">
-                {#each $gameTemplates as template (template.id)}
-                    <button
-                        class="template-card"
-                        class:selected={selectedTemplate?.id === template.id}
-                        on:click={() => selectTemplate(template)}
-                    >
-                        <div class="template-icon">{template.icon || '🎮'}</div>
-                        <div class="template-content">
-                            <h3>{template.name}</h3>
-                            <p>{template.description}</p>
-                            <div class="template-meta">
-                                <span>{template.gameType}</span>
-                                <span>{template.estimatedDuration} min</span>
-                                <span>{template.minPlayers}+ players</span>
+        <!-- Templates Tab -->
+        {#if activeTab === 'templates'}
+            <div class="tab-content">
+                {#if $gameTemplatesLoading}
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading game templates...</p>
+                    </div>
+                {:else if $gameTemplatesError}
+                    <div class="empty-state">
+                        <p>{$gameTemplatesError}</p>
+                    </div>
+                {:else}
+                    <div class="templates-grid">
+                        {#each $gameTemplates as template (template.id)}
+                            <button
+                                class="template-card"
+                                class:selected={selectedTemplate?.id === template.id}
+                                on:click={() => selectTemplate(template)}
+                            >
+                                <div class="template-icon">{template.icon || '🎮'}</div>
+                                <div class="template-content">
+                                    <h3>{template.name}</h3>
+                                    <p>{template.description}</p>
+                                    <div class="template-meta">
+                                        <span>{template.gameType}</span>
+                                        <span>{template.estimatedDuration} min</span>
+                                        <span>{template.minPlayers}+ players</span>
+                                    </div>
+                                </div>
+                                <button
+                                    class="rules-btn"
+                                    on:click|stopPropagation={() => openRulesModal(template)}
+                                    title="View rules"
+                                >
+                                    📋
+                                </button>
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+
+                <!-- Selected Template Detail -->
+                {#if selectedTemplate}
+                    <div class="detail-card">
+                        <div class="detail-header">
+                            <div class="detail-title">
+                                <span class="detail-icon">{selectedTemplate.icon}</span>
+                                <div>
+                                    <h3>{selectedTemplate.name}</h3>
+                                    <p>{selectedTemplate.description}</p>
+                                </div>
+                            </div>
+                            <div class="detail-actions">
+                                <button class="btn btn-secondary" on:click={() => openRulesModal(selectedTemplate)}>
+                                    📋 Rules
+                                </button>
+                                <button class="btn btn-primary" on:click={openSessionModal}>
+                                    📅 Schedule
+                                </button>
                             </div>
                         </div>
-                    </button>
-                {/each}
+                        <div class="detail-meta">
+                            <span class="badge">{selectedTemplate.gameType}</span>
+                            <span class="badge">{selectedTemplate.estimatedDuration} min</span>
+                            <span class="badge">{selectedTemplate.minPlayers}-{selectedTemplate.maxPlayers || '∞'} players</span>
+                            <span class="badge">{selectedTemplate.config?.teams?.mode || 'Any'} mode</span>
+                        </div>
+                    </div>
+                {/if}
             </div>
         {/if}
 
-        {#if selectedTemplate}
-            <div class="detail-card">
-                <div class="detail-header">
-                    <div>
-                        <h3>{selectedTemplate.name}</h3>
-                        <p>{selectedTemplate.description}</p>
+        <!-- Sessions Tab -->
+        {#if activeTab === 'sessions'}
+            <div class="tab-content">
+                <div class="sessions-section">
+                    <div class="section-header">
+                        <h3>Upcoming Sessions</h3>
+                        <span class="count-badge">{$upcomingSessions.length}</span>
                     </div>
-                    <div class="detail-badges">
-                        <span class="badge">{selectedTemplate.gameType}</span>
-                        <span class="badge">{selectedTemplate.estimatedDuration} min</span>
-                    </div>
-                </div>
-                <div class="detail-actions">
-                    <button class="btn btn-primary btn-small" on:click={openSessionModal}>
-                        Schedule Session
-                    </button>
-                </div>
 
-                <div class="detail-grid">
-                    <div class="detail-section">
-                        <h4>Teams & Players</h4>
-                        <p>Min players: {selectedTemplate.minPlayers}</p>
-                        <p>Max players: {selectedTemplate.maxPlayers || 'Flexible'}</p>
-                        <p>Team style: {selectedTemplate.config?.teams?.mode || 'Any'}</p>
-                    </div>
-                    <div class="detail-section">
-                        <h4>Point System</h4>
-                        {#if Object.keys(getScoring(selectedTemplate)).length}
-                            <ul>
-                                {#each Object.entries(getScoring(selectedTemplate)) as [key, value]}
-                                    <li>{key}: {value}</li>
-                                {/each}
-                            </ul>
-                        {:else}
-                            <p>No scoring rules defined.</p>
-                        {/if}
-                    </div>
-                    <div class="detail-section">
-                        <h4>Stages</h4>
-                        {#if getStages(selectedTemplate).length}
-                            <ul>
-                                {#each getStages(selectedTemplate) as stage}
-                                    <li>{stage}</li>
-                                {/each}
-                            </ul>
-                        {:else}
-                            <p>Single session.</p>
-                        {/if}
-                    </div>
-                    <div class="detail-section">
-                        <h4>Session Setup</h4>
-                        <p>Session length: {getSessions(selectedTemplate).duration_minutes || selectedTemplate.estimatedDuration} min</p>
-                        <p>Rounds: {getSessions(selectedTemplate).rounds || 'Flexible'}</p>
-                        <p>Heat format: {getSessions(selectedTemplate).heat_format || 'Any'}</p>
-                    </div>
-                </div>
-
-                <div class="detail-section">
-                    <h4>Rules</h4>
-                    {#if getRulesList(selectedTemplate).length}
-                        <ul>
-                            {#each getRulesList(selectedTemplate) as rule}
-                                <li>{rule}</li>
-                            {/each}
-                        </ul>
+                    {#if $gameSessionsLoading}
+                        <div class="loading-state">
+                            <div class="loading-spinner"></div>
+                            <p>Loading sessions...</p>
+                        </div>
+                    {:else if $upcomingSessions.length === 0}
+                        <div class="empty-state">
+                            <span class="empty-icon">📅</span>
+                            <p>No upcoming sessions. Schedule one from the Templates tab!</p>
+                        </div>
                     {:else}
-                        <p>No rules listed.</p>
+                        <div class="sessions-list">
+                            {#each $upcomingSessions as session (session.id)}
+                                {@const gameInfo = getGameTypeInfo(session.settings?.game_type)}
+                                <div class="session-card">
+                                    <div class="session-header">
+                                        <span class="session-icon">{gameInfo.icon}</span>
+                                        <div class="session-info">
+                                            <h4>{session.name}</h4>
+                                            <p>
+                                                {formatSessionDate(session.scheduledStart)}
+                                                {#if formatSessionTime(session.scheduledStart)}
+                                                    · {formatSessionTime(session.scheduledStart)}
+                                                {/if}
+                                            </p>
+                                        </div>
+                                        <span class="status-pill {session.status}">{session.status}</span>
+                                    </div>
+                                    <div class="session-meta">
+                                        <span class="badge">{session.settings?.duration_minutes || 60} min</span>
+                                        <span class="badge">{session.settings?.heat_count || 4} rounds</span>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
                     {/if}
                 </div>
 
-                <div class="detail-section">
-                    <h4>Sponsors, Prizes & Winners</h4>
-                    <p>Sponsors: {selectedTemplate.config?.sponsors || 'Invite community sponsors'}</p>
-                    <p>Prize model: {selectedTemplate.config?.prizes || 'Points + rewards'}</p>
-                    <p>Winner rules: {selectedTemplate.config?.winner_rules || 'Highest points wins'}</p>
-                </div>
+                <!-- Active Sessions with Scoreboard -->
+                {#if $activeSessions.length > 0}
+                    <div class="sessions-section">
+                        <div class="section-header">
+                            <h3>Live Games</h3>
+                            <span class="live-indicator">● Live</span>
+                        </div>
+                        {#each $activeSessions as session (session.id)}
+                            <GameScoreEntry
+                                sessionId={session.id}
+                                isHost={session.hostMembershipId === currentMembershipId}
+                                teamMode={session.settings?.scoring_mode || 'individual'}
+                            />
+                        {/each}
+                    </div>
+                {/if}
             </div>
         {/if}
+
+        <!-- Teams Tab -->
+        {#if activeTab === 'teams'}
+            <div class="tab-content">
+                <div class="section-header">
+                    <h3>Game Teams</h3>
+                    <button class="btn btn-primary btn-small" on:click={() => { editTeam = null; showCreateTeamModal = true; }}>
+                        + Create Team
+                    </button>
+                </div>
+
+                {#if $gameTeamsLoading}
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading teams...</p>
+                    </div>
+                {:else if $gameTeams.length === 0}
+                    <div class="empty-state">
+                        <span class="empty-icon">👥</span>
+                        <p>No teams yet. Create one to get started!</p>
+                    </div>
+                {:else}
+                    <div class="teams-grid">
+                        {#each $gameTeams as team (team.id)}
+                            <TeamCard
+                                {team}
+                                isMyTeam={isMyTeam(team)}
+                                isCaptain={isCaptain(team)}
+                                loading={teamActionLoading[team.id]}
+                                on:join={handleJoinTeam}
+                                on:leave={handleLeaveTeam}
+                                on:edit={handleEditTeam}
+                            />
+                        {/each}
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
+        <!-- Leaderboard Tab -->
+        {#if activeTab === 'leaderboard'}
+            <div class="tab-content">
+                <LeaderboardTab />
+            </div>
+        {/if}
+
+        <!-- Awards Tab -->
+        {#if activeTab === 'awards'}
+            <div class="tab-content">
+                <AwardsSection />
+            </div>
+        {/if}
+
+        <!-- Modals -->
+        <GameRulesModal
+            show={showRulesModal}
+            template={selectedTemplate}
+            on:close={() => showRulesModal = false}
+        />
+
+        <CreateTeamModal
+            show={showCreateTeamModal}
+            {editTeam}
+            on:close={() => { showCreateTeamModal = false; editTeam = null; }}
+            on:submit={handleCreateTeam}
+        />
 
         {#if showSessionModal}
             <div class="session-modal" role="dialog" aria-modal="true" on:click|self={() => showSessionModal = false}>
@@ -446,13 +485,13 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
 
     .screen-subtitle {
         color: var(--text-muted);
         font-size: 14px;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
     }
 
     .back-btn {
@@ -465,38 +504,220 @@
         padding: 8px 0;
     }
 
+    /* Tabs */
+    .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 100px;
+        background: var(--cream, #f5f5f5);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .tab:hover {
+        background: #e8e8e8;
+    }
+
+    .tab.active {
+        background: var(--primary, #4CAF50);
+        color: white;
+    }
+
+    .tab-icon {
+        font-size: 16px;
+    }
+
+    .tab-content {
+        animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section Headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+
+    .section-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .count-badge {
+        background: #f0f0f0;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+    }
+
+    .live-indicator {
+        color: #F44336;
+        font-size: 12px;
+        font-weight: 600;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* Templates Grid */
     .templates-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 16px;
         margin-bottom: 24px;
     }
 
-    .sessions-card {
+    .template-card {
         background: white;
-        border-radius: var(--radius-md);
-        padding: 18px;
-        margin-bottom: 20px;
-        box-shadow: var(--shadow-sm);
-    }
-
-    .sessions-header {
+        border-radius: 12px;
+        padding: 16px;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
+        gap: 12px;
+        border: 2px solid #eee;
+        text-align: left;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
     }
 
-    .sessions-header h3 {
-        margin: 0;
+    .template-card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
     }
 
-    .sessions-count {
-        font-size: 12px;
+    .template-card.selected {
+        border-color: var(--primary, #4CAF50);
+    }
+
+    .template-icon {
+        font-size: 32px;
+        flex-shrink: 0;
+    }
+
+    .template-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .template-content h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+    }
+
+    .template-content p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #666;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .template-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
         color: var(--text-muted);
+    }
+
+    .rules-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border: none;
         background: #f5f5f5;
-        padding: 4px 10px;
-        border-radius: 999px;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .rules-btn:hover {
+        background: #e8e8e8;
+    }
+
+    /* Detail Card */
+    .detail-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .detail-title {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .detail-icon {
+        font-size: 40px;
+    }
+
+    .detail-title h3 {
+        margin: 0 0 4px;
+    }
+
+    .detail-title p {
+        margin: 0;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .detail-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* Sessions */
+    .sessions-section {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
     }
 
     .sessions-list {
@@ -505,33 +726,58 @@
         gap: 12px;
     }
 
-    .session-item {
+    .session-card {
+        padding: 16px;
+        background: #f8f8f8;
+        border-radius: 12px;
+        border: 1px solid #eee;
+    }
+
+    .session-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 12px 14px;
-        border-radius: 16px;
-        border: 1px solid #eee;
-        background: #fffaf1;
+        gap: 12px;
+        margin-bottom: 10px;
     }
 
-    .session-item h4 {
-        margin: 0 0 6px;
+    .session-icon {
+        font-size: 24px;
     }
 
-    .session-item p {
+    .session-info {
+        flex: 1;
+    }
+
+    .session-info h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+    }
+
+    .session-info p {
         margin: 0;
-        color: var(--text-muted);
         font-size: 13px;
+        color: #666;
     }
 
     .session-meta {
         display: flex;
-        flex-wrap: wrap;
         gap: 8px;
-        align-items: center;
-        justify-content: flex-end;
+    }
+
+    /* Teams Grid */
+    .teams-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    /* Common */
+    .badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f0f0f0;
+        font-size: 12px;
+        font-weight: 600;
     }
 
     .status-pill {
@@ -540,8 +786,6 @@
         font-size: 12px;
         font-weight: 600;
         text-transform: capitalize;
-        background: #e0e0e0;
-        color: #424242;
     }
 
     .status-pill.scheduled {
@@ -559,194 +803,73 @@
         color: #5e35b1;
     }
 
-    .session-card {
-        margin-top: 10px;
-        padding: 16px;
-        border-radius: 18px;
-        background: #f7f4ff;
-        border: 1px solid #e6defa;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+    .loading-state,
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #666;
     }
 
-    .session-card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+    .loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #f0f0f0;
+        border-top-color: var(--primary, #4CAF50);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 12px;
     }
 
-    .session-card-header h5 {
-        margin: 0;
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
 
-    .session-modes {
-        display: flex;
-        gap: 8px;
+    .empty-icon {
+        font-size: 48px;
+        display: block;
+        margin-bottom: 12px;
     }
 
-    .mode-btn {
-        border: 1px solid #d6c9f7;
-        background: white;
-        color: #51318c;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    .mode-btn.active {
-        background: #5c34a5;
-        color: white;
-        border-color: #5c34a5;
-    }
-
-    .score-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-    }
-
-    .score-card {
-        background: white;
-        border-radius: 14px;
-        padding: 12px;
-        border: 1px solid #ece6ff;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-    }
-
-    .score-name {
-        border: none;
-        font-weight: 600;
-        font-size: 14px;
-        background: transparent;
-        width: 120px;
-    }
-
-    .score-name:focus {
-        outline: none;
-    }
-
-    .score-points {
-        margin: 4px 0 0;
-        font-size: 12px;
-        color: var(--text-muted);
-    }
-
-    .score-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .score-actions button {
-        border: none;
-        background: #f0eaff;
-        color: #5c34a5;
-        padding: 4px 8px;
+    /* Buttons */
+    .btn {
+        padding: 10px 20px;
         border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 600;
-    }
-
-    .score-actions button:hover {
-        background: #e0d5ff;
-    }
-
-    .template-card {
-        background: white;
-        border-radius: var(--radius-md);
-        padding: 16px;
-        display: flex;
-        gap: 12px;
-        border: 1px solid #eee;
-        text-align: left;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: none;
+        transition: all 0.2s ease;
     }
 
-    .template-card:hover {
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
+    .btn-small {
+        padding: 8px 14px;
+        font-size: 13px;
     }
 
-    .template-card.selected {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, white);
+    .btn-primary {
+        background: var(--primary, #4CAF50);
+        color: white;
     }
 
-    .template-icon {
-        font-size: 28px;
+    .btn-primary:hover:not(:disabled) {
+        filter: brightness(1.1);
     }
 
-    .template-content h3 {
-        margin: 0 0 6px;
+    .btn-secondary {
+        background: #f0f0f0;
+        color: #333;
     }
 
-    .template-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--text-muted);
+    .btn-secondary:hover:not(:disabled) {
+        background: #e0e0e0;
     }
 
-    .detail-card {
-        background: white;
-        border-radius: var(--radius-md);
-        padding: 20px;
-        box-shadow: var(--shadow-sm);
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
-    .detail-header {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: flex-start;
-    }
-
-    .detail-actions {
-        margin-top: 12px;
-        display: flex;
-        justify-content: flex-end;
-    }
-
-    .detail-badges {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .badge {
-        padding: 4px 10px;
-        border-radius: 999px;
-        background: var(--cream);
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-        margin-top: 16px;
-    }
-
-    .detail-section {
-        margin-top: 16px;
-    }
-
-    .detail-section ul {
-        padding-left: 18px;
-        margin: 8px 0 0;
-    }
-
+    /* Session Modal */
     .session-modal {
         position: fixed;
         inset: 0;
@@ -761,16 +884,29 @@
     .session-modal-content {
         width: min(520px, 100%);
         background: white;
-        border-radius: 20px;
+        border-radius: 16px;
         padding: 20px;
-        box-shadow: var(--shadow-lg);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
     }
 
     .session-modal-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
+    }
+
+    .session-modal-header h3 {
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: #999;
+        padding: 4px 8px;
     }
 
     .session-form {
@@ -787,47 +923,57 @@
         color: var(--text-muted);
     }
 
-    .session-form input[type=\"text\"],
-    .session-form input[type=\"date\"],
-    .session-form input[type=\"time\"],
-    .session-form input[type=\"number\"] {
-        padding: 10px 12px;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        font-size: 14px;
-    }
-
+    .session-form input[type="text"],
+    .session-form input[type="date"],
+    .session-form input[type="time"],
+    .session-form input[type="number"],
     .session-form select {
         padding: 10px 12px;
         border: 1px solid #e0e0e0;
-        border-radius: 10px;
+        border-radius: 8px;
         font-size: 14px;
-        background: white;
     }
 
     .session-row {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: 12px;
     }
 
     .session-toggle {
-        flex-direction: row;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        color: var(--text);
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+        font-size: 14px !important;
+        color: var(--text) !important;
     }
 
     .session-actions {
         display: flex;
         justify-content: flex-end;
         gap: 10px;
+        margin-top: 8px;
     }
 
     @media (max-width: 640px) {
         .detail-header {
             flex-direction: column;
+        }
+
+        .session-row {
+            grid-template-columns: 1fr;
+        }
+
+        .tabs {
+            justify-content: flex-start;
+        }
+
+        .tab-label {
+            display: none;
+        }
+
+        .tab {
+            padding: 10px 12px;
         }
     }
 </style>
