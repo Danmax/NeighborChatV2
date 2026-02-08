@@ -403,7 +403,7 @@ export async function reactToCelebration(celebrationId, emoji) {
         // Call RPC function with emoji index instead of raw emoji
         const { data, error } = await supabase.rpc('add_celebration_reaction_v2', {
             p_celebration_id: celebrationId,
-            p_emoji_index: emojiIndex
+            p_emoji: String(emojiIndex)
         });
 
         if (error) {
