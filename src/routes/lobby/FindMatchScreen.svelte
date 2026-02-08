@@ -21,14 +21,15 @@
     let inviteTimeoutId = null;
     let inviteCountdown = 0;
     let inviteCountdownId = null;
-    $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+    // Use user_id (Clerk ID) for comparison since availableUsers from presence has user_id
+    $: currentId = $currentUser?.user_id;
 
     // Get unique interests from available users
     $: userInterests = [...new Set(
         $availableUsers.flatMap(u => u.interests || [])
     )];
 
-    // Filter users by interest
+    // Filter users by interest - exclude current user
     $: baseUsers = currentId
         ? $availableUsers.filter(u => u.user_id !== currentId)
         : $availableUsers;
