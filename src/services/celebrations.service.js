@@ -393,31 +393,55 @@ export async function reactToCelebration(celebrationId, emoji) {
             throw new Error('Emoji cannot be empty');
         }
 
-        // Call RPC function with the emoji
-        const { data, error } = await supabase.rpc('add_celebration_reaction', {
-            p_celebration_id: celebrationId,
-            p_emoji: normalizedEmoji
-        });
+        // Fetch current reactions
+        const { data: celebration, error: fetchError } = await supabase
+            .from('celebrations')
+            .select('reactions')
+            .eq('id', celebrationId)
+            .single();
+
+        if (fetchError) {
+            throw new Error('Failed to fetch celebration');
+        }
+
+        const currentReactions = celebration?.reactions || {};
+        const emojiReactions = currentReactions[normalizedEmoji] || [];
+
+        // Check if user already reacted with this emoji
+        const userIndex = emojiReactions.indexOf(authUserUuid);
+        const newReactions = { ...currentReactions };
+
+        if (userIndex >= 0) {
+            // Remove reaction if user already reacted
+            emojiReactions.splice(userIndex, 1);
+            if (emojiReactions.length === 0) {
+                delete newReactions[normalizedEmoji];
+            } else {
+                newReactions[normalizedEmoji] = emojiReactions;
+            }
+        } else {
+            // Add reaction
+            newReactions[normalizedEmoji] = [...emojiReactions, authUserUuid];
+        }
+
+        // Update celebration with new reactions
+        const { data, error } = await supabase
+            .from('celebrations')
+            .update({ reactions: newReactions })
+            .eq('id', celebrationId)
+            .select()
+            .single();
 
         if (error) {
-            // Provide clearer error message for JSON parsing issues
-            if (error.message?.includes('invalid input syntax') || error.message?.includes('JSON')) {
-                console.error('Emoji encoding issue:', {
-                    emoji: normalizedEmoji,
-                    length: normalizedEmoji.length,
-                    charCodes: Array.from(normalizedEmoji).map(c => c.charCodeAt(0)),
-                    error: error.message
-                });
-                throw new Error('Failed to add reaction. Please try another emoji.');
-            }
-            throw error;
+            console.error('Failed to update reactions:', error);
+            throw new Error('Failed to add reaction. Please try again.');
         }
 
         if (data) {
-            updateCelebration(celebrationId, { reactions: data });
+            updateCelebration(celebrationId, { reactions: data.reactions });
         }
 
-        return data;
+        return data?.reactions || newReactions;
     } catch (error) {
         console.error('Failed to react to celebration:', error);
         throw error;
