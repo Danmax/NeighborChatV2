@@ -39,12 +39,32 @@
 
     // Profile details fields
     let tempBirthday = '';
+    let tempTimezone = '';
     let tempTitle = '';
     let tempPhone = '';
     let displayPhone = ''; // For formatted display
     let tempCity = '';
     let tempMagicEmail = '';
     let tempSpotifyTrackUrl = '';
+
+    // Common timezone options
+    const TIMEZONE_OPTIONS = [
+        { value: '', label: 'Select timezone...' },
+        { value: 'America/New_York', label: 'Eastern Time (ET)' },
+        { value: 'America/Chicago', label: 'Central Time (CT)' },
+        { value: 'America/Denver', label: 'Mountain Time (MT)' },
+        { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+        { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+        { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+        { value: 'Europe/London', label: 'London (GMT/BST)' },
+        { value: 'Europe/Paris', label: 'Paris (CET/CEST)' },
+        { value: 'Europe/Berlin', label: 'Berlin (CET/CEST)' },
+        { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
+        { value: 'Asia/Shanghai', label: 'Shanghai (CST)' },
+        { value: 'Asia/Kolkata', label: 'India (IST)' },
+        { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
+        { value: 'UTC', label: 'UTC' }
+    ];
     let requestingAccess = false;
     let favoriteMovies = [];
     let movieQuery = '';
@@ -152,6 +172,7 @@
 
     function startEditDetails() {
         tempBirthday = toDateInputUtc($currentUser?.birthday) || '';
+        tempTimezone = $currentUser?.timezone || '';
         tempTitle = $currentUser?.title || '';
         // Format phone for display when editing
         tempPhone = $currentUser?.phone || '';
@@ -186,6 +207,7 @@
         try {
             await updateProfileDetails({
                 birthday: tempBirthday,
+                timezone: tempTimezone,
                 title: tempTitle,
                 phone: displayPhone, // Pass formatted phone (will be normalized in service)
                 city: tempCity,
@@ -360,6 +382,27 @@
         spotifyResults = [];
         spotifyQuery = '';
         spotifyError = '';
+    }
+
+    async function saveSpotifyPreference() {
+        saving = true;
+        message = '';
+        try {
+            if (tempSpotifyTrackUrl && !isValidSpotifyTrackUrl(tempSpotifyTrackUrl)) {
+                message = 'Please enter a valid Spotify track, album, or playlist URL.';
+                saving = false;
+                return;
+            }
+            await updateProfileDetails({
+                spotify_track_url: tempSpotifyTrackUrl
+            });
+            message = 'Music preference saved!';
+            setTimeout(() => message = '', 3000);
+        } catch (err) {
+            message = err.message || 'Failed to save music preference';
+        } finally {
+            saving = false;
+        }
     }
 
     async function handleAddFavorite(movie) {
@@ -581,6 +624,20 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="timezone">Timezone</label>
+                            <select
+                                id="timezone"
+                                bind:value={tempTimezone}
+                                class="form-select"
+                            >
+                                {#each TIMEZONE_OPTIONS as tz}
+                                    <option value={tz.value}>{tz.label}</option>
+                                {/each}
+                            </select>
+                            <span class="field-hint">Your local timezone for event times</span>
+                        </div>
+
+                        <div class="form-group">
                             <label for="title">Title / Profession</label>
                             <input
                                 type="text"
@@ -627,61 +684,6 @@
                             <span class="field-hint">Optional alternate email for sign-in</span>
                         </div>
 
-                        <div class="form-group">
-                            <label for="spotify_track_url">Spotify Track URL</label>
-                            <input
-                                type="url"
-                                id="spotify_track_url"
-                                bind:value={tempSpotifyTrackUrl}
-                                placeholder="https://open.spotify.com/track/..."
-                                maxlength="400"
-                            />
-                            <span class="field-hint">Paste a Spotify track link to show on your public profile</span>
-                            <div class="spotify-search">
-                                <div class="spotify-search-row">
-                                    <input
-                                        type="text"
-                                        placeholder="Search for a song..."
-                                        bind:value={spotifyQuery}
-                                        on:keydown={(e) => e.key === 'Enter' && searchSpotifyTracks()}
-                                    />
-                                    <button
-                                        class="btn btn-secondary"
-                                        on:click={searchSpotifyTracks}
-                                        disabled={searchingSpotify || !spotifyQuery.trim()}
-                                    >
-                                        {searchingSpotify ? 'Searching...' : 'Search'}
-                                    </button>
-                                </div>
-                                {#if spotifyError}
-                                    <div class="spotify-error">{spotifyError}</div>
-                                {/if}
-                                {#if spotifyResults.length > 0}
-                                    <div class="spotify-results">
-                                        {#each spotifyResults as track (track.id)}
-                                            <div class="spotify-track-card">
-                                                {#if track.image_url}
-                                                    <img src={track.image_url} alt={track.title} />
-                                                {/if}
-                                                <div class="spotify-track-info">
-                                                    <div class="spotify-track-title">{track.title}</div>
-                                                    <div class="spotify-track-meta">
-                                                        {track.artists}{#if track.album} • {track.album}{/if}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    class="btn btn-secondary btn-small"
-                                                    on:click={() => handleSelectSpotifyTrack(track)}
-                                                >
-                                                    Use
-                                                </button>
-                                            </div>
-                                        {/each}
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-
                         <div class="form-actions">
                             <button class="btn btn-secondary" on:click={cancelEditDetails}>
                                 Cancel
@@ -707,6 +709,12 @@
                             {/if}
                         </div>
                         <div class="detail-row">
+                            <span class="detail-label">🕐 Timezone</span>
+                            <span class="detail-value">
+                                {TIMEZONE_OPTIONS.find(tz => tz.value === $currentUser?.timezone)?.label || $currentUser?.timezone || 'Not set'}
+                            </span>
+                        </div>
+                        <div class="detail-row">
                             <span class="detail-label">💼 Title</span>
                             <span class="detail-value">{$currentUser?.title || 'Not set'}</span>
                         </div>
@@ -723,10 +731,6 @@
                         <div class="detail-row">
                             <span class="detail-label">✉️ Email</span>
                             <span class="detail-value">{$currentUser?.magic_email || 'Not set'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">🎵 Spotify</span>
-                            <span class="detail-value">{$currentUser?.spotify_track_url || 'Not set'}</span>
                         </div>
                     </div>
                 {/if}
@@ -1001,6 +1005,89 @@
                         </button>
                     {/each}
                 </div>
+            </div>
+
+            <!-- Music Preferences Card -->
+            <div class="card">
+                <h3 class="card-title">
+                    <span class="icon">🎵</span>
+                    Music Preferences
+                </h3>
+                <p class="card-subtitle">
+                    Add a song to display on your public profile
+                </p>
+
+                <div class="form-group">
+                    <label for="settings_spotify_track_url">Spotify Track URL</label>
+                    <input
+                        type="url"
+                        id="settings_spotify_track_url"
+                        bind:value={tempSpotifyTrackUrl}
+                        placeholder="https://open.spotify.com/track/..."
+                        maxlength="400"
+                    />
+                    <span class="field-hint">Paste a Spotify track link to show on your public profile</span>
+                </div>
+
+                <div class="spotify-search">
+                    <div class="spotify-search-row">
+                        <input
+                            type="text"
+                            placeholder="Search for a song..."
+                            bind:value={spotifyQuery}
+                            on:keydown={(e) => e.key === 'Enter' && searchSpotifyTracks()}
+                        />
+                        <button
+                            class="btn btn-secondary"
+                            on:click={searchSpotifyTracks}
+                            disabled={searchingSpotify || !spotifyQuery.trim()}
+                        >
+                            {searchingSpotify ? 'Searching...' : 'Search'}
+                        </button>
+                    </div>
+                    {#if spotifyError}
+                        <div class="spotify-error">{spotifyError}</div>
+                    {/if}
+                    {#if spotifyResults.length > 0}
+                        <div class="spotify-results">
+                            {#each spotifyResults as track (track.id)}
+                                <div class="spotify-track-card">
+                                    {#if track.image_url}
+                                        <img src={track.image_url} alt={track.title} />
+                                    {/if}
+                                    <div class="spotify-track-info">
+                                        <div class="spotify-track-title">{track.title}</div>
+                                        <div class="spotify-track-meta">
+                                            {track.artists}{#if track.album} • {track.album}{/if}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="btn btn-secondary btn-small"
+                                        on:click={() => handleSelectSpotifyTrack(track)}
+                                    >
+                                        Use
+                                    </button>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+
+                {#if $currentUser?.spotify_track_url}
+                    <div class="current-spotify">
+                        <span class="detail-label">Current:</span>
+                        <span class="detail-value spotify-url">{$currentUser.spotify_track_url}</span>
+                    </div>
+                {/if}
+
+                <button
+                    class="btn btn-primary btn-full"
+                    on:click={saveSpotifyPreference}
+                    disabled={saving}
+                    style="margin-top: 12px;"
+                >
+                    {saving ? 'Saving...' : 'Save Music Preference'}
+                </button>
             </div>
 
             <div class="card">
@@ -1294,6 +1381,24 @@
     }
 
     .details-form input:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .details-form select,
+    .form-select {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--border, #E0E0E0);
+        border-radius: var(--radius-sm, 8px);
+        font-size: 14px;
+        transition: border-color 0.2s ease;
+        background: white;
+        cursor: pointer;
+    }
+
+    .details-form select:focus,
+    .form-select:focus {
         outline: none;
         border-color: var(--primary);
     }
@@ -1614,6 +1719,30 @@
     .spotify-track-meta {
         font-size: 12px;
         color: var(--text-muted);
+    }
+
+    .current-spotify {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px;
+        background: var(--cream);
+        border-radius: var(--radius-sm);
+        margin-top: 12px;
+    }
+
+    .current-spotify .detail-label {
+        font-weight: 600;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    .current-spotify .spotify-url {
+        font-size: 12px;
+        color: var(--text-muted);
+        word-break: break-all;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .preview-interests-labels {

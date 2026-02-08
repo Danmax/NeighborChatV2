@@ -252,6 +252,7 @@ export async function updateProfileDetails(details) {
 
     const sanitizedDetails = {
         birthday: details.birthday || null,
+        timezone: details.timezone?.trim() || null,
         title: details.title?.trim() || null,
         phone: details.phone ? normalizePhoneNumber(details.phone) : null, // Normalize phone for storage
         city: details.city?.trim() || null,
@@ -261,17 +262,21 @@ export async function updateProfileDetails(details) {
 
     const supabase = getSupabase();
 
+    // Build update object with only defined fields
+    const updateData = {
+        updated_at: new Date().toISOString()
+    };
+    if (details.birthday !== undefined) updateData.birthday = sanitizedDetails.birthday;
+    if (details.timezone !== undefined) updateData.timezone = sanitizedDetails.timezone;
+    if (details.title !== undefined) updateData.title = sanitizedDetails.title;
+    if (details.phone !== undefined) updateData.phone = sanitizedDetails.phone;
+    if (details.city !== undefined) updateData.city = sanitizedDetails.city;
+    if (details.magic_email !== undefined) updateData.magic_email = sanitizedDetails.magic_email;
+    if (details.spotify_track_url !== undefined) updateData.spotify_track_url = sanitizedDetails.spotify_track_url;
+
     const { error } = await supabase
         .from('user_profiles')
-        .update({
-            birthday: sanitizedDetails.birthday,
-            title: sanitizedDetails.title,
-            phone: sanitizedDetails.phone,
-            city: sanitizedDetails.city,
-            magic_email: sanitizedDetails.magic_email,
-            spotify_track_url: sanitizedDetails.spotify_track_url,
-            updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('clerk_user_id', user.user_id);
 
     if (error) throw error;

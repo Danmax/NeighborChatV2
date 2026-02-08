@@ -203,14 +203,32 @@
             const next = new Date(Date.UTC(currentYear + 1, date.getUTCMonth(), date.getUTCDate()));
             diffDays = Math.round((next - today) / (1000 * 60 * 60 * 24));
         }
-        if (diffDays <= 5) {
-            if (diffDays === 0) return 'Birthday today 🎉';
-            return `Birthday in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+        // Show prominent message for birthday within a week
+        if (diffDays === 0) return 'Birthday today 🎉';
+        if (diffDays <= 7) {
+            return `Birthday in ${diffDays} day${diffDays === 1 ? '' : 's'} 🎂`;
         }
         if (today.getUTCMonth() === date.getUTCMonth()) {
             return `Birthday this month in ${diffDays} days`;
         }
         return null;
+    }
+
+    // Check if birthday is within the next week (for contacts display)
+    function isBirthdayNextWeek(dateStr) {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return false;
+        const now = new Date();
+        const currentYear = now.getUTCFullYear();
+        const target = new Date(Date.UTC(currentYear, date.getUTCMonth(), date.getUTCDate()));
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        let diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+            const next = new Date(Date.UTC(currentYear + 1, date.getUTCMonth(), date.getUTCDate()));
+            diffDays = Math.round((next - today) / (1000 * 60 * 60 * 24));
+        }
+        return diffDays >= 0 && diffDays <= 7;
     }
 </script>
 
@@ -272,6 +290,17 @@
                 {/if}
             {/if}
 
+            <!-- Birthday Countdown Banner - shows prominently when birthday is within a week -->
+            {#if profile.birthday && isBirthdayNextWeek(profile.birthday)}
+                <div class="birthday-countdown-banner">
+                    <div class="birthday-banner-icon">🎂</div>
+                    <div class="birthday-banner-text">
+                        <span class="birthday-banner-title">{getPublicBirthdayMessage(profile.birthday)}</span>
+                        <span class="birthday-banner-subtitle">Send them a birthday wish!</span>
+                    </div>
+                </div>
+            {/if}
+
             <!-- Profile Details -->
             <div class="profile-details">
                 {#if profile.city}
@@ -288,7 +317,7 @@
                     </div>
                 {/if}
 
-                {#if profile.birthday}
+                {#if profile.birthday && !isBirthdayNextWeek(profile.birthday)}
                     <div class="profile-detail">
                         <span class="detail-icon">🎂</span>
                         <span class="detail-text">
@@ -535,6 +564,44 @@
         margin-left: 6px;
         font-size: 12px;
         color: var(--text-muted);
+    }
+
+    .birthday-countdown-banner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #FFE5EC 0%, #FFF0F3 100%);
+        border: 2px solid #FFB6C1;
+        border-radius: var(--radius-sm);
+        margin: 16px 0;
+    }
+
+    .birthday-banner-icon {
+        font-size: 32px;
+        animation: bounce 1s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+
+    .birthday-banner-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .birthday-banner-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #C41E3A;
+    }
+
+    .birthday-banner-subtitle {
+        font-size: 13px;
+        color: #D87093;
     }
 
     .detail-icon {
