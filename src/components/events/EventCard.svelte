@@ -254,13 +254,10 @@
         color: white;
         font-size: 12px;
         font-weight: 600;
-        width: 100%;
-        box-sizing: border-box;
     }
 
     .event-card.modern .event-type-badge {
         position: absolute;
-        width: auto;
         top: 12px;
         left: 12px;
         border-radius: 999px;
@@ -316,6 +313,11 @@
 
     .event-card.modern .event-content {
         padding: 18px;
+    }
+
+    /* Add top padding when there's no cover image to prevent badge overlap */
+    .event-card.modern:not(:has(.event-cover)) .event-content {
+        padding-top: 50px;
     }
 
     .event-card.featured .event-content {
