@@ -323,9 +323,13 @@ export async function updateEventInDb(eventId, updates) {
             .update(dbUpdates)
             .eq('id', eventId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+
+        if (!data) {
+            throw new Error('Event not found or you do not have permission to update it');
+        }
 
         const event = transformEventFromDb(data);
         updateEvent(eventId, event);
