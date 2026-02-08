@@ -14,6 +14,8 @@
 
     const dispatch = createEventDispatcher();
 
+    let isPast = false;  // Declare variable before reactive block
+
     $: eventType = getEventType(event.type);
     $: currentId = $currentUser?.user_uuid || $currentUser?.user_id;
     $: isCreator = event.created_by === currentId;
