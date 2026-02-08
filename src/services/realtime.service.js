@@ -193,7 +193,7 @@ export function cleanupLobbyChannel() {
  * @param {string} channelId - Channel ID
  * @param {boolean} isGif - Whether the message is a GIF URL
  */
-export async function sendLobbyMessage(message, channelId = 'general', isGif = false) {
+export async function sendLobbyMessage(message, channelId = 'general', isGif = false, gifUrl = null, caption = null) {
     const user = get(currentUser);
 
     if (!lobbyChannel || !user) return null;
@@ -203,8 +203,10 @@ export async function sendLobbyMessage(message, channelId = 'general', isGif = f
         user_id: user.user_id,
         name: user.name,
         avatar: user.avatar,
-        message: message,
+        message: isGif ? (caption || '') : message,
         isGif: isGif,
+        gif_url: gifUrl || null,
+        caption: caption || null,
         channel: channelId,
         timestamp: Date.now()
     };
@@ -464,10 +466,10 @@ export function setupChatChannel(roomId, callbacks = {}) {
 /**
  * Send message to P2P chat
  */
-export async function sendChatMessage(message, isGif = false) {
+export async function sendChatMessage(message, isGif = false, gifUrl = null, caption = null) {
     const user = get(currentUser);
 
-    console.log('[sendChatMessage] message:', message, 'isGif:', isGif, 'chatChannel:', !!chatChannel, 'user:', user?.user_id);
+    console.log('[sendChatMessage] message:', message, 'isGif:', isGif, 'gifUrl:', gifUrl, 'caption:', caption, 'chatChannel:', !!chatChannel, 'user:', user?.user_id);
     if (!chatChannel || !user) {
         console.error('[sendChatMessage] Failed: chatChannel=', !!chatChannel, 'user=', !!user);
         return null;
@@ -481,8 +483,10 @@ export async function sendChatMessage(message, isGif = false) {
         user_uuid: user.user_uuid || null,
         name: user.name,
         avatar: user.avatar,
-        message: message,
+        message: isGif ? (caption || '') : message,
         isGif: isGif,
+        gif_url: gifUrl || null,
+        caption: caption || null,
         timestamp: new Date().toISOString()
         // NOTE: Do NOT include _isOwn in broadcast - it would make receivers think it's their own message
     };

@@ -21,7 +21,7 @@
     // Auth routing handled centrally in App.svelte
 
     $: publicUpcomingEvents = ($upcomingEvents || [])
-        .filter(e => e.visibility === 'public' || e.visibility === undefined)
+        .filter(e => (e.visibility === 'public' || e.visibility === undefined) && e.status !== 'draft')
         .slice(0, 3);
 
     $: recentCelebrations = ($celebrations || []).slice(0, 3);

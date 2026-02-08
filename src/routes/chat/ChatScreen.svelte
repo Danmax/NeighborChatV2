@@ -146,12 +146,12 @@
 
     async function handleGifSelect(event) {
         const gif = event.detail;
-        // If there's a message with the GIF, send it first
-        if (gif.message) {
-            await handleSendMessage({ detail: { message: gif.message, isGif: false } });
+        // Send GIF with caption in a single message
+        const caption = gif.message ? gif.message.trim() : '';
+        const msg = await sendChatMessage(gif.url, true, gif.url, caption || null);
+        if (msg) {
+            addMessage(msg);
         }
-        // Then send the GIF
-        await handleSendMessage({ detail: { message: gif.url, isGif: true } });
         showGifPicker = false;
     }
 

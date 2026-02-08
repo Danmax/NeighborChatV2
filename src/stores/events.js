@@ -43,21 +43,21 @@ export const EVENT_STATUSES = [
     { id: 'closed', label: 'Closed', color: '#F44336' }
 ];
 
-// Derived: upcoming events (future dates, sorted)
+// Derived: upcoming events (future dates, published only, sorted)
 export const upcomingEvents = derived(events, ($events) => {
     const now = new Date();
     return $events
-        .filter(e => new Date(e.date) >= now)
+        .filter(e => new Date(e.date) >= now && e.status !== 'draft')
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 });
 
-// Derived: my events (created by or attending)
+// Derived: my events (created by or attending, published only)
 export const myEvents = derived([events, currentUser], ([$events, $currentUser]) => {
     if (!$currentUser) return [];
     const currentId = $currentUser.user_uuid || $currentUser.user_id;
     return $events.filter(e =>
-        e.created_by === currentId ||
-        e.attendees?.includes(currentId)
+        (e.created_by === currentId || e.attendees?.includes(currentId)) &&
+        e.status !== 'draft'
     );
 });
 

@@ -381,13 +381,37 @@ export async function reactToCelebration(celebrationId, emoji) {
         throw new Error('Please sign in to react to celebrations.');
     }
 
+    // Validate emoji parameter
+    if (!emoji || typeof emoji !== 'string') {
+        throw new Error('Invalid emoji provided');
+    }
+
     try {
+        // Normalize emoji - ensure it's a valid single emoji string
+        const normalizedEmoji = emoji.trim();
+        if (normalizedEmoji.length === 0) {
+            throw new Error('Emoji cannot be empty');
+        }
+
+        // Call RPC function with the emoji
         const { data, error } = await supabase.rpc('add_celebration_reaction', {
             p_celebration_id: celebrationId,
-            p_emoji: emoji
+            p_emoji: normalizedEmoji
         });
 
-        if (error) throw error;
+        if (error) {
+            // Provide clearer error message for JSON parsing issues
+            if (error.message?.includes('invalid input syntax') || error.message?.includes('JSON')) {
+                console.error('Emoji encoding issue:', {
+                    emoji: normalizedEmoji,
+                    length: normalizedEmoji.length,
+                    charCodes: Array.from(normalizedEmoji).map(c => c.charCodeAt(0)),
+                    error: error.message
+                });
+                throw new Error('Failed to add reaction. Please try another emoji.');
+            }
+            throw error;
+        }
 
         if (data) {
             updateCelebration(celebrationId, { reactions: data });

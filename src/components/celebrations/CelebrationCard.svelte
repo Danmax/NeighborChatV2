@@ -37,7 +37,9 @@
 
     function hasUserReacted(emoji) {
         if (!$currentUser) return false;
-        const currentId = $currentUser?.user_uuid || $currentUser?.user_id;
+        // Use UUID for consistent comparison with database reactions
+        const currentId = $currentUser?.user_uuid;
+        if (!currentId) return false;
         return celebration.reactions?.[emoji]?.includes(currentId);
     }
 

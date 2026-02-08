@@ -121,8 +121,10 @@
         const { celebration: target, emoji } = event.detail;
         try {
             await reactToCelebration(target.id, emoji);
+            showToast('Reaction added!', 'success');
         } catch (err) {
-            showToast('Failed to update reaction.', 'error');
+            console.error('Failed to add reaction:', err);
+            showToast(err.message || 'Failed to add reaction. Please try again.', 'error');
         }
     }
 

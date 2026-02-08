@@ -175,14 +175,12 @@
 
     async function handleGifSelect(event) {
         const gif = event.detail;
-
-        // If there's an optional message with the GIF, send it first
-        if (gif.message) {
-            await handleSendMessage({ detail: { message: gif.message, isGif: false } });
+        // Send GIF with caption in a single message
+        const caption = gif.message ? gif.message.trim() : '';
+        const sentMessage = await sendLobbyMessage(gif.url, currentChannel.id, true, gif.url, caption || null);
+        if (sentMessage) {
+            handleNewMessage(sentMessage);
         }
-
-        // Send the GIF
-        await handleSendMessage({ detail: { message: gif.url, isGif: true } });
         showGifPicker = false;
     }
 </script>

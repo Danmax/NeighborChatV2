@@ -43,11 +43,11 @@
     function getEventsForTab(tab) {
         switch (tab) {
             case 'upcoming':
-                // Filter out drafts from upcoming - only show published events
-                return $upcomingEvents.filter(e => e.status !== 'draft');
+                // Drafts are already filtered out at store level
+                return $upcomingEvents;
             case 'mine':
-                // Filter out drafts from my events - drafts have their own tab
-                return $myEvents.filter(e => e.status !== 'draft');
+                // Drafts are already filtered out at store level
+                return $myEvents;
             case 'drafts':
                 return $draftEvents;
             case 'past':
