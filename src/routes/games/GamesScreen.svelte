@@ -585,6 +585,13 @@
                                 </div>
                                 <div class="template-actions">
                                     <button
+                                        class="action-btn action-btn-schedule"
+                                        on:click|stopPropagation={() => { selectTemplate(template); setTimeout(() => openSessionModal(), 0); }}
+                                        title="Schedule a game session"
+                                    >
+                                        📅
+                                    </button>
+                                    <button
                                         class="action-btn"
                                         on:click|stopPropagation={() => openRulesModal(template)}
                                         title="View rules"
@@ -1192,6 +1199,16 @@
 
     .action-btn-danger:hover {
         background: #ffebee;
+    }
+
+    .action-btn-schedule {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .action-btn-schedule:hover {
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+        transform: scale(1.1);
     }
 
     /* Keep old class for backwards compatibility */
