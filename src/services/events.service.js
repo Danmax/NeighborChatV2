@@ -24,7 +24,7 @@ export async function getActiveMembershipId() {
         .eq('user_id', authUserUuid)
         .eq('status', 'active')
         .limit(1)
-        .single();
+        .maybeSingle();
 
     if (error || !data?.id) {
         return null;
@@ -44,7 +44,7 @@ export async function getUserRole() {
         .eq('user_id', authUserUuid)
         .eq('status', 'active')
         .limit(1)
-        .single();
+        .maybeSingle();
 
     if (error || !data?.role) {
         return 'member';

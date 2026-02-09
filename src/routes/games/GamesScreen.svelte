@@ -89,6 +89,7 @@
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
             userRole = await getUserRole();
+            console.log('[GamesScreen] membershipId:', currentMembershipId, 'role:', userRole, 'isAdmin:', userRole === 'admin' || userRole === 'moderator');
             fetchGameTemplates();
             fetchGameSessions();
             fetchGameTeams();
