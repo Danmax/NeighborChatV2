@@ -1937,3 +1937,115 @@ export async function removeReferee(refereeId) {
     if (error) throw error;
     return true;
 }
+
+// ============================================================================
+// INSTANCE MEMBERSHIP FUNCTIONS
+// ============================================================================
+
+export async function fetchAvailableInstances() {
+    const supabase = getSupabase();
+    const userId = await getAuthUserId();
+
+    if (!userId) {
+        throw new Error('User not authenticated');
+    }
+
+    // Get instances user is NOT already a member of
+    const { data: instances, error } = await supabase
+        .from('community_instances')
+        .select(`
+            id,
+            name,
+            description,
+            icon,
+            member_count:instance_memberships(count)
+        `)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    // Filter out instances user already belongs to
+    const { data: userMemberships } = await supabase
+        .from('instance_memberships')
+        .select('instance_id')
+        .eq('user_id', userId);
+
+    const userInstanceIds = userMemberships?.map(m => m.instance_id) || [];
+
+    return instances?.filter(instance => !userInstanceIds.includes(instance.id)) || [];
+}
+
+export async function joinInstance(instanceId) {
+    const supabase = getSupabase();
+    const userId = await getAuthUserId();
+
+    if (!userId) {
+        throw new Error('User not authenticated');
+    }
+
+    // Check if already a member
+    const { data: existing } = await supabase
+        .from('instance_memberships')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('instance_id', instanceId)
+        .single();
+
+    if (existing) {
+        throw new Error('Already a member of this community');
+    }
+
+    // Create membership
+    const { data, error } = await supabase
+        .from('instance_memberships')
+        .insert({
+            user_id: userId,
+            instance_id: instanceId,
+            status: 'active',
+            role: 'member'
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function getUserInstances() {
+    const supabase = getSupabase();
+    const userId = await getAuthUserId();
+
+    if (!userId) {
+        throw new Error('User not authenticated');
+    }
+
+    const { data, error } = await supabase
+        .from('instance_memberships')
+        .select(`
+            id,
+            user_id,
+            instance_id,
+            role,
+            status,
+            community_instances(id, name, icon, description)
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+}
+
+export async function leaveInstance(membershipId) {
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('instance_memberships')
+        .update({ status: 'inactive' })
+        .eq('id', membershipId);
+
+    if (error) throw error;
+    return true;
+}

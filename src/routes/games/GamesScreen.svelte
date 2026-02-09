@@ -38,7 +38,8 @@
         fetchMyGameRoles
     } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
-    import { getActiveMembershipId, getUserRole, getActiveInstanceId } from '../../services/events.service.js';
+    import { getActiveMembershipId, getUserRole } from '../../services/events.service.js';
+    import { getSupabase } from '../../lib/supabase.js';
 
     // Components
     import GameRulesModal from '../../components/games/GameRulesModal.svelte';
@@ -54,8 +55,9 @@
     import CreateLocationModal from '../../components/games/CreateLocationModal.svelte';
     import CreateTournamentModal from '../../components/games/CreateTournamentModal.svelte';
     import LocationCard from '../../components/games/LocationCard.svelte';
+    import JoinInstanceModal from '../../components/games/JoinInstanceModal.svelte';
     import { gameLocations, gameLocationsLoading, gameTournaments } from '../../stores/games.js';
-    import { fetchGameLocations, deleteGameLocation } from '../../services/games.service.js';
+    import { fetchGameLocations, deleteGameLocation, fetchAvailableInstances, joinInstance } from '../../services/games.service.js';
 
     // State
     let activeTab = 'dashboard';
@@ -75,6 +77,9 @@
     let savingTemplate = false;
     let showRoleRequestModal = false;
     let editingLocation = null;
+    let availableInstances = [];
+    let loadingInstances = false;
+    let showJoinInstanceModal = false;
 
     $: isAdmin = userRole === 'admin' || userRole === 'moderator';
     $: isGameManager = $gameRoles.some(r => r.role === 'game_manager' && r.isActive) || isAdmin;
@@ -149,14 +154,37 @@
     onMount(async () => {
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
-            currentInstanceId = await getActiveInstanceId();
+
+            // Get instance ID from the active membership
+            if (currentMembershipId) {
+                try {
+                    const supabase = getSupabase();
+                    const { data: membership } = await supabase
+                        .from('instance_memberships')
+                        .select('instance_id')
+                        .eq('id', currentMembershipId)
+                        .single();
+
+                    if (membership?.instance_id) {
+                        currentInstanceId = membership.instance_id;
+                    }
+                } catch (error) {
+                    console.error('Error fetching instance ID:', error);
+                }
+            }
+
             userRole = await getUserRole();
             fetchGameTemplates();
             fetchGameSessions();
             fetchGameTeams();
+
             if (currentInstanceId) {
                 fetchMyGameRoles(currentInstanceId);
                 fetchGameLocations(currentInstanceId);
+            } else {
+                // Show join instance modal if user doesn't have active instance
+                showJoinInstanceModal = true;
+                await loadAvailableInstances();
             }
         }
     });
@@ -425,6 +453,36 @@
         // Re-fetch roles to reflect the request
         if (currentInstanceId) {
             fetchMyGameRoles(currentInstanceId);
+        }
+    }
+
+    async function loadAvailableInstances() {
+        loadingInstances = true;
+        try {
+            availableInstances = await fetchAvailableInstances();
+        } catch (error) {
+            console.error('Error loading instances:', error);
+            showToast('Failed to load communities', 'error');
+        } finally {
+            loadingInstances = false;
+        }
+    }
+
+    async function handleJoinInstance(event) {
+        const { instanceId } = event.detail;
+        try {
+            await joinInstance(instanceId);
+            showToast('Successfully joined community!', 'success');
+            // Reload page or update instance
+            currentInstanceId = instanceId;
+            await fetchMyGameRoles(instanceId);
+            fetchGameTemplates();
+            fetchGameSessions();
+            fetchGameTeams();
+            fetchGameLocations(instanceId);
+        } catch (error) {
+            console.error('Error joining instance:', error);
+            showToast(error.message || 'Failed to join community', 'error');
         }
     }
 </script>
@@ -828,6 +886,14 @@
             loading={selectedSession ? sessionActionLoading[selectedSession.id] : false}
             on:close={() => { showAddPlayersModal = false; selectedSession = null; }}
             on:add={handleAddPlayers}
+        />
+
+        <JoinInstanceModal
+            show={showJoinInstanceModal}
+            instances={availableInstances}
+            loading={loadingInstances}
+            on:close={() => showJoinInstanceModal = false}
+            on:join={handleJoinInstance}
         />
 
         {#if showSessionModal}
