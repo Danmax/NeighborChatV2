@@ -760,7 +760,7 @@
                 <div class="section-header">
                     <h3>Game Locations</h3>
                     <CreateLocationModal
-                        {instanceId}={currentInstanceId}
+                        instanceId={currentInstanceId}
                         isGameManager={isGameManager}
                         on:locationCreated={handleLocationCreated}
                     />
