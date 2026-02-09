@@ -27,10 +27,16 @@
         leaveGameTeam,
         createGameTemplate,
         updateGameTemplate,
-        deleteGameTemplate
+        deleteGameTemplate,
+        startGameSession,
+        endGameSession,
+        cancelGameSession,
+        addPlayerToSession,
+        fetchSessionScores
     } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
     import { getActiveMembershipId, getUserRole } from '../../services/events.service.js';
+    import { sessionScores } from '../../stores/games.js';
 
     // Components
     import GameRulesModal from '../../components/games/GameRulesModal.svelte';
@@ -40,6 +46,7 @@
     import AwardsSection from '../../components/games/AwardsSection.svelte';
     import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
     import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
+    import AddPlayersModal from '../../components/games/AddPlayersModal.svelte';
 
     // State
     let activeTab = 'templates';
@@ -48,6 +55,9 @@
     let showRulesModal = false;
     let showCreateTeamModal = false;
     let showCreateTemplateModal = false;
+    let showAddPlayersModal = false;
+    let selectedSession = null;
+    let sessionActionLoading = {};
     let editTeam = null;
     let editTemplateData = null;
     let currentMembershipId = null;
@@ -89,7 +99,6 @@
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
             userRole = await getUserRole();
-            console.log('[GamesScreen] membershipId:', currentMembershipId, 'role:', userRole, 'isAdmin:', userRole === 'admin' || userRole === 'moderator');
             fetchGameTemplates();
             fetchGameSessions();
             fetchGameTeams();
@@ -244,6 +253,88 @@
         const date = new Date(value);
         return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
+
+    // Session Management Functions
+    function isSessionHost(session) {
+        return session.hostMembershipId === currentMembershipId;
+    }
+
+    function canManageSession(session) {
+        return isAdmin || isSessionHost(session);
+    }
+
+    async function handleStartSession(session) {
+        if (!confirm(`Start "${session.name}"? Players can begin competing.`)) return;
+        sessionActionLoading[session.id] = true;
+        try {
+            await startGameSession(session.id);
+            await fetchGameSessions();
+            showToast('Game started!', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to start game', 'error');
+        } finally {
+            sessionActionLoading[session.id] = false;
+        }
+    }
+
+    async function handleEndSession(session) {
+        if (!confirm(`End "${session.name}"? Final scores will be recorded.`)) return;
+        sessionActionLoading[session.id] = true;
+        try {
+            await endGameSession(session.id);
+            await fetchGameSessions();
+            showToast('Game ended! Scores recorded.', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to end game', 'error');
+        } finally {
+            sessionActionLoading[session.id] = false;
+        }
+    }
+
+    async function handleCancelSession(session) {
+        if (!confirm(`Cancel "${session.name}"? This cannot be undone.`)) return;
+        sessionActionLoading[session.id] = true;
+        try {
+            await cancelGameSession(session.id);
+            await fetchGameSessions();
+            showToast('Game cancelled', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to cancel game', 'error');
+        } finally {
+            sessionActionLoading[session.id] = false;
+        }
+    }
+
+    function openAddPlayersModal(session) {
+        selectedSession = session;
+        fetchSessionScores(session.id);
+        showAddPlayersModal = true;
+    }
+
+    async function handleAddPlayers(event) {
+        const { members, teamId } = event.detail;
+        if (!selectedSession || members.length === 0) return;
+
+        sessionActionLoading[selectedSession.id] = true;
+        try {
+            for (const member of members) {
+                await addPlayerToSession(selectedSession.id, member.membershipId, teamId);
+            }
+            showToast(`Added ${members.length} player${members.length > 1 ? 's' : ''}!`, 'success');
+            showAddPlayersModal = false;
+            selectedSession = null;
+        } catch (err) {
+            showToast(err.message || 'Failed to add players', 'error');
+        } finally {
+            if (selectedSession) {
+                sessionActionLoading[selectedSession.id] = false;
+            }
+        }
+    }
+
+    $: existingPlayerIds = selectedSession
+        ? ($sessionScores[selectedSession.id] || []).map(p => p.membershipId)
+        : [];
 </script>
 
 {#if $isAuthenticated}
@@ -401,6 +492,7 @@
                         <div class="sessions-list">
                             {#each $upcomingSessions as session (session.id)}
                                 {@const gameInfo = getGameTypeInfo(session.settings?.game_type)}
+                                {@const canManage = canManageSession(session)}
                                 <div class="session-card">
                                     <div class="session-header">
                                         <span class="session-icon">{gameInfo.icon}</span>
@@ -418,7 +510,35 @@
                                     <div class="session-meta">
                                         <span class="badge">{session.settings?.duration_minutes || 60} min</span>
                                         <span class="badge">{session.settings?.heat_count || 4} rounds</span>
+                                        {#if isSessionHost(session)}
+                                            <span class="badge host-badge">Host</span>
+                                        {/if}
                                     </div>
+                                    {#if canManage}
+                                        <div class="session-actions">
+                                            <button
+                                                class="btn btn-primary btn-small"
+                                                on:click={() => handleStartSession(session)}
+                                                disabled={sessionActionLoading[session.id]}
+                                            >
+                                                {sessionActionLoading[session.id] ? '...' : '▶ Start Game'}
+                                            </button>
+                                            <button
+                                                class="btn btn-secondary btn-small"
+                                                on:click={() => openAddPlayersModal(session)}
+                                                disabled={sessionActionLoading[session.id]}
+                                            >
+                                                👥 Add Players
+                                            </button>
+                                            <button
+                                                class="btn btn-danger btn-small"
+                                                on:click={() => handleCancelSession(session)}
+                                                disabled={sessionActionLoading[session.id]}
+                                            >
+                                                ✕ Cancel
+                                            </button>
+                                        </div>
+                                    {/if}
                                 </div>
                             {/each}
                         </div>
@@ -433,11 +553,32 @@
                             <span class="live-indicator">● Live</span>
                         </div>
                         {#each $activeSessions as session (session.id)}
-                            <GameScoreEntry
-                                sessionId={session.id}
-                                isHost={session.hostMembershipId === currentMembershipId}
-                                teamMode={session.settings?.scoring_mode || 'individual'}
-                            />
+                            {@const canManage = canManageSession(session)}
+                            <div class="active-session-wrapper">
+                                {#if canManage}
+                                    <div class="active-session-controls">
+                                        <button
+                                            class="btn btn-secondary btn-small"
+                                            on:click={() => openAddPlayersModal(session)}
+                                            disabled={sessionActionLoading[session.id]}
+                                        >
+                                            👥 Add Players
+                                        </button>
+                                        <button
+                                            class="btn btn-danger btn-small"
+                                            on:click={() => handleEndSession(session)}
+                                            disabled={sessionActionLoading[session.id]}
+                                        >
+                                            {sessionActionLoading[session.id] ? '...' : '🏁 End Game'}
+                                        </button>
+                                    </div>
+                                {/if}
+                                <GameScoreEntry
+                                    sessionId={session.id}
+                                    isHost={canManage}
+                                    teamMode={session.settings?.scoring_mode || 'individual'}
+                                />
+                            </div>
                         {/each}
                     </div>
                 {/if}
@@ -516,6 +657,16 @@
             loading={savingTemplate}
             on:close={() => { showCreateTemplateModal = false; editTemplateData = null; }}
             on:submit={handleCreateTemplate}
+        />
+
+        <AddPlayersModal
+            show={showAddPlayersModal}
+            sessionId={selectedSession?.id}
+            {existingPlayerIds}
+            teamMode={selectedSession?.settings?.scoring_mode || 'individual'}
+            loading={selectedSession ? sessionActionLoading[selectedSession.id] : false}
+            on:close={() => { showAddPlayersModal = false; selectedSession = null; }}
+            on:add={handleAddPlayers}
         />
 
         {#if showSessionModal}
@@ -897,7 +1048,48 @@
 
     .session-meta {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
+    }
+
+    .session-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .host-badge {
+        background: #4CAF50 !important;
+        color: white !important;
+    }
+
+    .active-session-wrapper {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .active-session-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .btn-danger {
+        background: #ffebee;
+        color: #D32F2F;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+        background: #ffcdd2;
     }
 
     /* Teams Grid */

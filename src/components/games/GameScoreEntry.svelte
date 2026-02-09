@@ -1,7 +1,7 @@
 <script>
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { sessionScores } from '../../stores/games.js';
-    import { fetchSessionScores, recordPlayerScore, updatePlayerScore, subscribeToSessionScores } from '../../services/games.service.js';
+    import { fetchSessionScores, recordPlayerScore, updatePlayerScore, subscribeToSessionScores, removePlayerFromSession } from '../../services/games.service.js';
 
     export let sessionId;
     export let isHost = false;
@@ -12,6 +12,7 @@
     let scores = [];
     let subscription = null;
     let loading = false;
+    let removingPlayer = {};
 
     $: scores = $sessionScores[sessionId] || [];
     $: sortedScores = [...scores].sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
@@ -50,6 +51,20 @@
             console.error('Failed to update score:', err);
         } finally {
             loading = false;
+        }
+    }
+
+    async function handleRemovePlayer(membershipId, playerName) {
+        if (!isHost) return;
+        if (!confirm(`Remove ${playerName || 'this player'} from the session?`)) return;
+
+        removingPlayer[membershipId] = true;
+        try {
+            await removePlayerFromSession(sessionId, membershipId);
+        } catch (err) {
+            console.error('Failed to remove player:', err);
+        } finally {
+            removingPlayer[membershipId] = false;
         }
     }
 
@@ -112,6 +127,13 @@
                                     {#if isHost}
                                         <button class="score-btn plus" on:click={() => handleScoreChange(player.membershipId, 1)} disabled={loading}>+1</button>
                                         <button class="score-btn plus-five" on:click={() => handleScoreChange(player.membershipId, 5)} disabled={loading}>+5</button>
+                                        <button class="score-btn plus-ten" on:click={() => handleScoreChange(player.membershipId, 10)} disabled={loading}>+10</button>
+                                        <button
+                                            class="remove-player-btn"
+                                            on:click={() => handleRemovePlayer(player.membershipId, player.displayName)}
+                                            disabled={removingPlayer[player.membershipId]}
+                                            title="Remove player"
+                                        >✕</button>
                                     {/if}
                                 </div>
                             </div>
@@ -150,6 +172,13 @@
                             {#if isHost}
                                 <button class="score-btn plus" on:click={() => handleScoreChange(player.membershipId, 1)} disabled={loading}>+1</button>
                                 <button class="score-btn plus-five" on:click={() => handleScoreChange(player.membershipId, 5)} disabled={loading}>+5</button>
+                                <button class="score-btn plus-ten" on:click={() => handleScoreChange(player.membershipId, 10)} disabled={loading}>+10</button>
+                                <button
+                                    class="remove-player-btn"
+                                    on:click={() => handleRemovePlayer(player.membershipId, player.displayName)}
+                                    disabled={removingPlayer[player.membershipId]}
+                                    title="Remove player"
+                                >✕</button>
                             {/if}
                         </div>
                     </div>
@@ -366,7 +395,40 @@
         background: #43A047;
     }
 
+    .score-btn.plus-ten {
+        background: #1976D2;
+        color: white;
+    }
+
+    .score-btn.plus-ten:hover:not(:disabled) {
+        background: #1565C0;
+    }
+
     .score-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .remove-player-btn {
+        width: 24px;
+        height: 24px;
+        border: none;
+        border-radius: 50%;
+        background: #ffebee;
+        color: #F44336;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-left: 4px;
+    }
+
+    .remove-player-btn:hover:not(:disabled) {
+        background: #F44336;
+        color: white;
+    }
+
+    .remove-player-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }

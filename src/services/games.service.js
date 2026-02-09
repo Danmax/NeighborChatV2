@@ -285,7 +285,7 @@ export async function fetchGameSessions() {
 
         const { data, error } = await supabase
             .from('game_sessions')
-            .select('id, name, scheduled_start, status, settings, template_id, created_at')
+            .select('id, name, scheduled_start, status, settings, template_id, host_membership_id, created_at')
             .eq('instance_id', membership.instance_id)
             .order('scheduled_start', { ascending: true });
 
@@ -297,6 +297,7 @@ export async function fetchGameSessions() {
             status: row.status,
             settings: row.settings || {},
             templateId: row.template_id,
+            hostMembershipId: row.host_membership_id,
             createdAt: row.created_at
         }));
         setGameSessions(sessions);
@@ -309,6 +310,222 @@ export async function fetchGameSessions() {
     } finally {
         gameSessionsLoading.set(false);
     }
+}
+
+// ============================================================================
+// SESSION MANAGEMENT FUNCTIONS (Admin/Host only)
+// ============================================================================
+
+export async function startGameSession(sessionId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to start game sessions.');
+    }
+
+    const { data, error } = await supabase
+        .from('game_sessions')
+        .update({
+            status: 'active',
+            started_at: new Date().toISOString()
+        })
+        .eq('id', sessionId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    updateGameSession(sessionId, { status: 'active' });
+    return data;
+}
+
+export async function endGameSession(sessionId, winnerMembershipId = null, winningTeamId = null) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to end game sessions.');
+    }
+
+    const updates = {
+        status: 'completed',
+        ended_at: new Date().toISOString()
+    };
+
+    if (winningTeamId) {
+        updates.winning_team_id = winningTeamId;
+    }
+
+    const { data, error } = await supabase
+        .from('game_sessions')
+        .update(updates)
+        .eq('id', sessionId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    // Update ranks for all players in the session
+    await updateSessionRanks(sessionId);
+
+    updateGameSession(sessionId, { status: 'completed' });
+    return data;
+}
+
+export async function cancelGameSession(sessionId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to cancel game sessions.');
+    }
+
+    const { data, error } = await supabase
+        .from('game_sessions')
+        .update({ status: 'cancelled' })
+        .eq('id', sessionId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    updateGameSession(sessionId, { status: 'cancelled' });
+    return data;
+}
+
+export async function addPlayerToSession(sessionId, membershipId, teamId = null) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to add players.');
+    }
+
+    // Check if player already exists
+    const { data: existing } = await supabase
+        .from('game_players')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('membership_id', membershipId)
+        .maybeSingle();
+
+    if (existing) {
+        throw new Error('Player is already in this session.');
+    }
+
+    const playerId = `gp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const { data, error } = await supabase
+        .from('game_players')
+        .insert([{
+            id: playerId,
+            session_id: sessionId,
+            membership_id: membershipId,
+            team_id: teamId,
+            final_score: 0,
+            status: 'joined'
+        }])
+        .select(`
+            *,
+            instance_memberships (display_name, avatar)
+        `)
+        .single();
+
+    if (error) throw error;
+
+    addSessionScore(sessionId, {
+        id: playerId,
+        membershipId,
+        teamId,
+        finalScore: 0,
+        displayName: data.instance_memberships?.display_name,
+        avatar: data.instance_memberships?.avatar
+    });
+
+    return data;
+}
+
+export async function removePlayerFromSession(sessionId, membershipId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to remove players.');
+    }
+
+    const { error } = await supabase
+        .from('game_players')
+        .delete()
+        .eq('session_id', sessionId)
+        .eq('membership_id', membershipId);
+
+    if (error) throw error;
+
+    // Refresh scores
+    await fetchSessionScores(sessionId);
+    return true;
+}
+
+async function updateSessionRanks(sessionId) {
+    const supabase = getSupabase();
+
+    // Get all players ordered by score
+    const { data: players } = await supabase
+        .from('game_players')
+        .select('id, final_score')
+        .eq('session_id', sessionId)
+        .order('final_score', { ascending: false });
+
+    if (!players || players.length === 0) return;
+
+    // Update ranks
+    for (let i = 0; i < players.length; i++) {
+        await supabase
+            .from('game_players')
+            .update({
+                final_rank: i + 1,
+                points_earned: calculatePointsEarned(i + 1, players.length)
+            })
+            .eq('id', players[i].id);
+    }
+}
+
+function calculatePointsEarned(rank, totalPlayers) {
+    // Points based on placement
+    if (rank === 1) return 100;
+    if (rank === 2) return 75;
+    if (rank === 3) return 50;
+    if (rank <= Math.ceil(totalPlayers / 2)) return 25;
+    return 10; // Participation points
+}
+
+export async function fetchInstanceMembers() {
+    const supabase = getSupabase();
+
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) return [];
+
+    const { data: membership } = await supabase
+        .from('instance_memberships')
+        .select('instance_id')
+        .eq('id', membershipId)
+        .single();
+
+    if (!membership?.instance_id) return [];
+
+    const { data, error } = await supabase
+        .from('instance_memberships')
+        .select('id, display_name, avatar, role, status')
+        .eq('instance_id', membership.instance_id)
+        .eq('status', 'active')
+        .order('display_name', { ascending: true });
+
+    if (error) {
+        console.error('Failed to fetch instance members:', error);
+        return [];
+    }
+
+    return (data || []).map(m => ({
+        membershipId: m.id,
+        displayName: m.display_name,
+        avatar: m.avatar,
+        role: m.role
+    }));
 }
 
 // ============================================================================
