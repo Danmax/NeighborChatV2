@@ -1,4 +1,4 @@
-import { getSupabase, getAuthUserId } from '../lib/supabase.js';
+import { getSupabase, getAuthUserId, getAuthUserUuid } from '../lib/supabase.js';
 import {
     setGameTemplates,
     gameTemplatesLoading,
@@ -1944,9 +1944,9 @@ export async function removeReferee(refereeId) {
 
 export async function fetchAvailableInstances() {
     const supabase = getSupabase();
-    const userId = await getAuthUserId();
+    const userUuid = await getAuthUserUuid();
 
-    if (!userId) {
+    if (!userUuid) {
         throw new Error('User not authenticated');
     }
 
@@ -1969,7 +1969,7 @@ export async function fetchAvailableInstances() {
     const { data: userMemberships } = await supabase
         .from('instance_memberships')
         .select('instance_id')
-        .eq('user_id', userId);
+        .eq('user_id', userUuid);
 
     const userInstanceIds = userMemberships?.map(m => m.instance_id) || [];
 
@@ -1978,9 +1978,9 @@ export async function fetchAvailableInstances() {
 
 export async function joinInstance(instanceId) {
     const supabase = getSupabase();
-    const userId = await getAuthUserId();
+    const userUuid = await getAuthUserUuid();
 
-    if (!userId) {
+    if (!userUuid) {
         throw new Error('User not authenticated');
     }
 
@@ -1988,7 +1988,7 @@ export async function joinInstance(instanceId) {
     const { data: existing } = await supabase
         .from('instance_memberships')
         .select('id')
-        .eq('user_id', userId)
+        .eq('user_id', userUuid)
         .eq('instance_id', instanceId)
         .single();
 
@@ -2000,7 +2000,7 @@ export async function joinInstance(instanceId) {
     const { data, error } = await supabase
         .from('instance_memberships')
         .insert({
-            user_id: userId,
+            user_id: userUuid,
             instance_id: instanceId,
             status: 'active',
             role: 'member'
@@ -2014,9 +2014,9 @@ export async function joinInstance(instanceId) {
 
 export async function getUserInstances() {
     const supabase = getSupabase();
-    const userId = await getAuthUserId();
+    const userUuid = await getAuthUserUuid();
 
-    if (!userId) {
+    if (!userUuid) {
         throw new Error('User not authenticated');
     }
 
@@ -2030,7 +2030,7 @@ export async function getUserInstances() {
             status,
             community_instances(id, name, icon, description)
         `)
-        .eq('user_id', userId)
+        .eq('user_id', userUuid)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
