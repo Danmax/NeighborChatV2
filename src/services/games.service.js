@@ -1266,3 +1266,674 @@ export function subscribeToSessionScores(sessionId, callback) {
 
     return subscription;
 }
+
+// ============================================================================
+// ROLE MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export async function requestGameRole(instanceId, role, reason = '') {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to request game roles.');
+    }
+
+    const { data, error } = await supabase
+        .rpc('request_game_role', {
+            p_instance_id: instanceId,
+            p_role: role,
+            p_reason: reason
+        });
+
+    if (error) throw error;
+    return data;
+}
+
+export async function fetchMyGameRoles(instanceId) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) return [];
+
+    const { data, error} = await supabase
+        .from('game_roles')
+        .select('*')
+        .eq('user_id', authUserId)
+        .eq('instance_id', instanceId)
+        .eq('is_active', true);
+
+    if (error) {
+        console.error('Failed to fetch game roles:', error);
+        return [];
+    }
+
+    return (data || []).map(role => ({
+        id: role.id,
+        userId: role.user_id,
+        instanceId: role.instance_id,
+        role: role.role,
+        grantedBy: role.granted_by,
+        grantedAt: role.granted_at,
+        expiresAt: role.expires_at,
+        isActive: role.is_active
+    }));
+}
+
+export async function fetchGameRoleRequests(instanceId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_role_requests')
+        .select(`
+            *,
+            user_profiles!user_id(user_id, display_name, username, avatar)
+        `)
+        .eq('instance_id', instanceId)
+        .order('requested_at', { ascending: false });
+
+    if (error) {
+        console.error('Failed to fetch role requests:', error);
+        return [];
+    }
+
+    return (data || []).map(req => ({
+        id: req.id,
+        userId: req.user_id,
+        instanceId: req.instance_id,
+        requestedRole: req.requested_role,
+        reason: req.reason,
+        status: req.status,
+        requestedAt: req.requested_at,
+        reviewedBy: req.reviewed_by,
+        reviewedAt: req.reviewed_at,
+        user: req.user_profiles ? {
+            userId: req.user_profiles.user_id,
+            displayName: req.user_profiles.display_name,
+            username: req.user_profiles.username,
+            avatar: req.user_profiles.avatar
+        } : null
+    }));
+}
+
+export async function reviewGameRoleRequest(requestId, status) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .rpc('review_game_role_request', {
+            p_request_id: requestId,
+            p_status: status
+        });
+
+    if (error) throw error;
+    return data;
+}
+
+// ============================================================================
+// LOCATION MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export async function fetchGameLocations(instanceId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_locations')
+        .select('*')
+        .eq('instance_id', instanceId)
+        .eq('is_active', true)
+        .order('name');
+
+    if (error) {
+        console.error('Failed to fetch locations:', error);
+        return [];
+    }
+
+    return (data || []).map(loc => ({
+        id: loc.id,
+        instanceId: loc.instance_id,
+        name: loc.name,
+        description: loc.description,
+        address: loc.address,
+        coordinates: loc.coordinates,
+        venueType: loc.venue_type,
+        capacity: loc.capacity,
+        amenities: loc.amenities || [],
+        imageUrl: loc.image_url,
+        isActive: loc.is_active,
+        createdByMembershipId: loc.created_by_membership_id,
+        createdAt: loc.created_at
+    }));
+}
+
+export async function createGameLocation(instanceId, locationData) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Please sign in to create locations.');
+    }
+
+    const locationId = `loc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data, error } = await supabase
+        .from('game_locations')
+        .insert([{
+            id: locationId,
+            instance_id: instanceId,
+            created_by_membership_id: membershipId,
+            name: locationData.name,
+            description: locationData.description,
+            address: locationData.address,
+            coordinates: locationData.coordinates,
+            venue_type: locationData.venueType || 'office',
+            capacity: locationData.capacity,
+            amenities: locationData.amenities || [],
+            image_url: locationData.imageUrl
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        instanceId: data.instance_id,
+        name: data.name,
+        description: data.description,
+        address: data.address,
+        coordinates: data.coordinates,
+        venueType: data.venue_type,
+        capacity: data.capacity,
+        amenities: data.amenities || [],
+        imageUrl: data.image_url,
+        createdAt: data.created_at
+    };
+}
+
+export async function updateGameLocation(locationId, updates) {
+    const supabase = getSupabase();
+
+    const dbUpdates = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.address !== undefined) dbUpdates.address = updates.address;
+    if (updates.coordinates !== undefined) dbUpdates.coordinates = updates.coordinates;
+    if (updates.venueType !== undefined) dbUpdates.venue_type = updates.venueType;
+    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+    if (updates.amenities !== undefined) dbUpdates.amenities = updates.amenities;
+    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+    if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+    dbUpdates.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+        .from('game_locations')
+        .update(dbUpdates)
+        .eq('id', locationId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteGameLocation(locationId) {
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('game_locations')
+        .delete()
+        .eq('id', locationId);
+
+    if (error) throw error;
+    return true;
+}
+
+// ============================================================================
+// HIGHLIGHT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export async function createHighlight(sessionId, highlightData) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Please sign in to create highlights.');
+    }
+
+    const highlightId = `hl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data, error } = await supabase
+        .from('game_highlights')
+        .insert([{
+            id: highlightId,
+            session_id: sessionId,
+            created_by_membership_id: membershipId,
+            membership_id: highlightData.membershipId,
+            team_id: highlightData.teamId,
+            highlight_type: highlightData.type,
+            title: highlightData.title,
+            description: highlightData.description,
+            media_url: highlightData.mediaUrl,
+            media_type: highlightData.mediaType,
+            timestamp_in_game: highlightData.timestampInGame,
+            is_featured: highlightData.isFeatured || false
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        sessionId: data.session_id,
+        membershipId: data.membership_id,
+        teamId: data.team_id,
+        type: data.highlight_type,
+        title: data.title,
+        description: data.description,
+        mediaUrl: data.media_url,
+        mediaType: data.media_type,
+        timestampInGame: data.timestamp_in_game,
+        reactions: data.reactions,
+        isFeatured: data.is_featured,
+        createdAt: data.created_at
+    };
+}
+
+export async function fetchSessionHighlights(sessionId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_highlights')
+        .select(`
+            *,
+            instance_memberships!membership_id(id, display_name, avatar),
+            game_teams(id, name, icon, color)
+        `)
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Failed to fetch highlights:', error);
+        return [];
+    }
+
+    return (data || []).map(hl => ({
+        id: hl.id,
+        sessionId: hl.session_id,
+        membershipId: hl.membership_id,
+        teamId: hl.team_id,
+        type: hl.highlight_type,
+        title: hl.title,
+        description: hl.description,
+        mediaUrl: hl.media_url,
+        mediaType: hl.media_type,
+        timestampInGame: hl.timestamp_in_game,
+        reactions: hl.reactions || { likes: 0, loves: 0, fire: 0, clap: 0 },
+        isFeatured: hl.is_featured,
+        createdAt: hl.created_at,
+        player: hl.instance_memberships ? {
+            id: hl.instance_memberships.id,
+            displayName: hl.instance_memberships.display_name,
+            avatar: hl.instance_memberships.avatar
+        } : null,
+        team: hl.game_teams ? {
+            id: hl.game_teams.id,
+            name: hl.game_teams.name,
+            icon: hl.game_teams.icon,
+            color: hl.game_teams.color
+        } : null
+    }));
+}
+
+export async function updateHighlightReactions(highlightId, reactionType) {
+    const supabase = getSupabase();
+
+    // Get current reactions
+    const { data: current, error: fetchError } = await supabase
+        .from('game_highlights')
+        .select('reactions')
+        .eq('id', highlightId)
+        .single();
+
+    if (fetchError) throw fetchError;
+
+    const reactions = current.reactions || { likes: 0, loves: 0, fire: 0, clap: 0 };
+    reactions[reactionType] = (reactions[reactionType] || 0) + 1;
+
+    const { data, error } = await supabase
+        .from('game_highlights')
+        .update({ reactions, updated_at: new Date().toISOString() })
+        .eq('id', highlightId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function toggleHighlightFeatured(highlightId, isFeatured) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_highlights')
+        .update({ is_featured: isFeatured, updated_at: new Date().toISOString() })
+        .eq('id', highlightId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+// ============================================================================
+// TOURNAMENT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export async function createTournament(instanceId, tournamentData) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Please sign in to create tournaments.');
+    }
+
+    const tournamentId = `trn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data, error } = await supabase
+        .from('game_tournaments')
+        .insert([{
+            id: tournamentId,
+            instance_id: instanceId,
+            organizer_membership_id: membershipId,
+            name: tournamentData.name,
+            description: tournamentData.description,
+            icon: tournamentData.icon || '🏆',
+            banner_image_url: tournamentData.bannerImageUrl,
+            tournament_type: tournamentData.tournamentType || 'single_elimination',
+            game_template_id: tournamentData.gameTemplateId,
+            status: 'upcoming',
+            start_date: tournamentData.startDate,
+            end_date: tournamentData.endDate,
+            registration_deadline: tournamentData.registrationDeadline,
+            max_participants: tournamentData.maxParticipants,
+            participant_type: tournamentData.participantType || 'individual',
+            prize_info: tournamentData.prizeInfo || {},
+            rules: tournamentData.rules
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        instanceId: data.instance_id,
+        name: data.name,
+        description: data.description,
+        icon: data.icon,
+        bannerImageUrl: data.banner_image_url,
+        tournamentType: data.tournament_type,
+        gameTemplateId: data.game_template_id,
+        status: data.status,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        registrationDeadline: data.registration_deadline,
+        maxParticipants: data.max_participants,
+        participantType: data.participant_type,
+        prizeInfo: data.prize_info,
+        bracketData: data.bracket_data,
+        rules: data.rules,
+        organizerMembershipId: data.organizer_membership_id,
+        createdAt: data.created_at
+    };
+}
+
+export async function fetchTournaments(instanceId, status = null) {
+    const supabase = getSupabase();
+
+    let query = supabase
+        .from('game_tournaments')
+        .select('*')
+        .eq('instance_id', instanceId)
+        .order('start_date', { ascending: false });
+
+    if (status) {
+        query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Failed to fetch tournaments:', error);
+        return [];
+    }
+
+    return (data || []).map(t => ({
+        id: t.id,
+        instanceId: t.instance_id,
+        name: t.name,
+        description: t.description,
+        icon: t.icon,
+        bannerImageUrl: t.banner_image_url,
+        tournamentType: t.tournament_type,
+        gameTemplateId: t.game_template_id,
+        status: t.status,
+        startDate: t.start_date,
+        endDate: t.end_date,
+        registrationDeadline: t.registration_deadline,
+        maxParticipants: t.max_participants,
+        participantType: t.participant_type,
+        prizeInfo: t.prize_info,
+        bracketData: t.bracket_data,
+        rules: t.rules,
+        organizerMembershipId: t.organizer_membership_id,
+        createdAt: t.created_at
+    }));
+}
+
+export async function registerForTournament(tournamentId, teamId = null) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Please sign in to register for tournaments.');
+    }
+
+    const participantId = `tp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data, error } = await supabase
+        .from('game_tournament_participants')
+        .insert([{
+            id: participantId,
+            tournament_id: tournamentId,
+            membership_id: teamId ? null : membershipId,
+            team_id: teamId,
+            status: 'registered'
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function withdrawFromTournament(tournamentId) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Please sign in.');
+    }
+
+    const { error } = await supabase
+        .from('game_tournament_participants')
+        .delete()
+        .eq('tournament_id', tournamentId)
+        .eq('membership_id', membershipId);
+
+    if (error) throw error;
+    return true;
+}
+
+export async function updateTournamentBracket(tournamentId, bracketData) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_tournaments')
+        .update({
+            bracket_data: bracketData,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', tournamentId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function updateTournamentStatus(tournamentId, status) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_tournaments')
+        .update({
+            status,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', tournamentId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function fetchTournamentParticipants(tournamentId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_tournament_participants')
+        .select(`
+            *,
+            instance_memberships(id, display_name, avatar),
+            game_teams(id, name, icon, color)
+        `)
+        .eq('tournament_id', tournamentId)
+        .order('registered_at');
+
+    if (error) {
+        console.error('Failed to fetch tournament participants:', error);
+        return [];
+    }
+
+    return (data || []).map(p => ({
+        id: p.id,
+        tournamentId: p.tournament_id,
+        membershipId: p.membership_id,
+        teamId: p.team_id,
+        seedNumber: p.seed_number,
+        status: p.status,
+        currentWins: p.current_wins,
+        currentLosses: p.current_losses,
+        placement: p.placement,
+        registeredAt: p.registered_at,
+        player: p.instance_memberships ? {
+            id: p.instance_memberships.id,
+            displayName: p.instance_memberships.display_name,
+            avatar: p.instance_memberships.avatar
+        } : null,
+        team: p.game_teams ? {
+            id: p.game_teams.id,
+            name: p.game_teams.name,
+            icon: p.game_teams.icon,
+            color: p.game_teams.color
+        } : null
+    }));
+}
+
+// ============================================================================
+// REFEREE MANAGEMENT FUNCTIONS
+// ============================================================================
+
+export async function assignReferee(sessionId, membershipId, refereeRole = 'scorer') {
+    const supabase = getSupabase();
+    const assignedByMembershipId = await getActiveMembershipId();
+    if (!assignedByMembershipId) {
+        throw new Error('Please sign in to assign referees.');
+    }
+
+    const refereeId = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data, error } = await supabase
+        .from('game_referees')
+        .insert([{
+            id: refereeId,
+            session_id: sessionId,
+            membership_id: membershipId,
+            referee_role: refereeRole,
+            assigned_by_membership_id: assignedByMembershipId
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function fetchSessionReferees(sessionId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_referees')
+        .select(`
+            *,
+            instance_memberships(id, display_name, avatar)
+        `)
+        .eq('session_id', sessionId)
+        .order('assigned_at');
+
+    if (error) {
+        console.error('Failed to fetch referees:', error);
+        return [];
+    }
+
+    return (data || []).map(ref => ({
+        id: ref.id,
+        sessionId: ref.session_id,
+        membershipId: ref.membership_id,
+        refereeRole: ref.referee_role,
+        notes: ref.notes,
+        assignedByMembershipId: ref.assigned_by_membership_id,
+        assignedAt: ref.assigned_at,
+        referee: ref.instance_memberships ? {
+            id: ref.instance_memberships.id,
+            displayName: ref.instance_memberships.display_name,
+            avatar: ref.instance_memberships.avatar
+        } : null
+    }));
+}
+
+export async function updateRefereeNotes(refereeId, notes) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('game_referees')
+        .update({
+            notes,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', refereeId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function removeReferee(refereeId) {
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+        .from('game_referees')
+        .delete()
+        .eq('id', refereeId);
+
+    if (error) throw error;
+    return true;
+}

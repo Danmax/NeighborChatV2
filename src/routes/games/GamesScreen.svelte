@@ -14,7 +14,9 @@
         myTeam,
         upcomingSessions,
         activeSessions,
-        getGameTypeInfo
+        getGameTypeInfo,
+        gameRoles,
+        sessionScores
     } from '../../stores/games.js';
     import {
         fetchGameTemplates,
@@ -32,11 +34,11 @@
         endGameSession,
         cancelGameSession,
         addPlayerToSession,
-        fetchSessionScores
+        fetchSessionScores,
+        fetchMyGameRoles
     } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
-    import { getActiveMembershipId, getUserRole } from '../../services/events.service.js';
-    import { sessionScores } from '../../stores/games.js';
+    import { getActiveMembershipId, getUserRole, getActiveInstanceId } from '../../services/events.service.js';
 
     // Components
     import GameRulesModal from '../../components/games/GameRulesModal.svelte';
@@ -47,9 +49,10 @@
     import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
     import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
     import AddPlayersModal from '../../components/games/AddPlayersModal.svelte';
+    import UserDashboard from '../../components/games/UserDashboard.svelte';
 
     // State
-    let activeTab = 'templates';
+    let activeTab = 'dashboard';
     let selectedTemplate = null;
     let showSessionModal = false;
     let showRulesModal = false;
@@ -61,10 +64,15 @@
     let editTeam = null;
     let editTemplateData = null;
     let currentMembershipId = null;
+    let currentInstanceId = null;
     let userRole = null;
     let savingTemplate = false;
 
     $: isAdmin = userRole === 'admin' || userRole === 'moderator';
+    $: isGameManager = $gameRoles.some(r => r.role === 'game_manager' && r.isActive) || isAdmin;
+    $: isTeamLead = $gameRoles.some(r => r.role === 'team_lead' && r.isActive);
+    $: isReferee = $gameRoles.some(r => r.role === 'referee' && r.isActive);
+    $: hasAnyGameRole = isGameManager || isTeamLead || isReferee;
 
     // Session form
     let sessionName = '';
@@ -79,13 +87,48 @@
     // Team actions
     let teamActionLoading = {};
 
-    const tabs = [
+    // Base tabs (always visible)
+    const baseTabs = [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'templates', label: 'Templates', icon: '🎮' },
         { id: 'sessions', label: 'Sessions', icon: '📅' },
         { id: 'teams', label: 'Teams', icon: '👥' },
         { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
         { id: 'awards', label: 'Awards', icon: '🎖️' }
     ];
+
+    // Role-specific tabs
+    const roleBasedTabs = [
+        { id: 'locations', label: 'Locations', icon: '📍', requiresRole: 'game_manager' }
+    ];
+
+    // Dynamic tabs based on roles
+    $: tabs = [
+        ...baseTabs,
+        ...roleBasedTabs.filter(tab => {
+            if (tab.requiresRole === 'game_manager') return isGameManager;
+            return true;
+        })
+    ];
+
+    // Helper functions for role badges
+    function getRoleIcon(role) {
+        const icons = {
+            game_manager: '🎮',
+            team_lead: '👥',
+            referee: '⚖️'
+        };
+        return icons[role] || '🎯';
+    }
+
+    function getRoleLabel(role) {
+        const labels = {
+            game_manager: 'Game Manager',
+            team_lead: 'Team Lead',
+            referee: 'Referee'
+        };
+        return labels[role] || role;
+    }
 
     $: isCaptain = (team) => {
         return team.captainMembershipId === currentMembershipId;
@@ -98,10 +141,14 @@
     onMount(async () => {
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
+            currentInstanceId = await getActiveInstanceId();
             userRole = await getUserRole();
             fetchGameTemplates();
             fetchGameSessions();
             fetchGameTeams();
+            if (currentInstanceId) {
+                fetchMyGameRoles(currentInstanceId);
+            }
         }
     });
 
@@ -341,7 +388,18 @@
     <div class="games-screen">
         <div class="screen-header">
             <button class="back-btn" on:click={() => push('/')}>← Back</button>
-            <h2 class="card-title">Office Games</h2>
+            <div class="header-content">
+                <h2 class="card-title">Office Games</h2>
+                {#if hasAnyGameRole}
+                    <div class="role-badges">
+                        {#each $gameRoles.filter(r => r.isActive) as role}
+                            <span class="role-badge">
+                                {getRoleIcon(role.role)} {getRoleLabel(role.role)}
+                            </span>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
         </div>
 
         <div class="screen-subtitle">
@@ -361,6 +419,13 @@
                 </button>
             {/each}
         </div>
+
+        <!-- Dashboard Tab -->
+        {#if activeTab === 'dashboard'}
+            <div class="tab-content">
+                <UserDashboard instanceId={currentInstanceId} />
+            </div>
+        {/if}
 
         <!-- Templates Tab -->
         {#if activeTab === 'templates'}
@@ -637,6 +702,23 @@
             </div>
         {/if}
 
+        <!-- Locations Tab (Game Manager Only) -->
+        {#if activeTab === 'locations'}
+            <div class="tab-content">
+                <div class="section-header">
+                    <h3>Game Locations</h3>
+                    <button class="btn btn-primary btn-small">
+                        + Add Location
+                    </button>
+                </div>
+                <div class="empty-state">
+                    <span class="empty-icon">📍</span>
+                    <p>Location management coming soon!</p>
+                    <p style="font-size: 13px; color: #999;">Manage game venues, capacity, and amenities</p>
+                </div>
+            </div>
+        {/if}
+
         <!-- Modals -->
         <GameRulesModal
             show={showRulesModal}
@@ -732,9 +814,37 @@
 
     .screen-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 12px;
         margin-bottom: 8px;
+    }
+
+    .header-content {
+        flex: 1;
+    }
+
+    .card-title {
+        margin: 0 0 8px;
+    }
+
+    .role-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .role-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .screen-subtitle {

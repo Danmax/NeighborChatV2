@@ -83,6 +83,37 @@ export const awardsError = writable(null);
 export const sessionScores = writable({}); // { [sessionId]: scores[] }
 
 // ============================================================================
+// NEW STORES - Game Roles
+// ============================================================================
+
+export const gameRoles = writable([]); // User's game roles
+export const gameRoleRequests = writable([]); // Pending role requests (admin view)
+export const gameRolesLoading = writable(false);
+
+// ============================================================================
+// NEW STORES - Locations
+// ============================================================================
+
+export const gameLocations = writable([]);
+export const gameLocationsLoading = writable(false);
+export const gameLocationsError = writable(null);
+
+// ============================================================================
+// NEW STORES - Highlights
+// ============================================================================
+
+export const sessionHighlights = writable({}); // { [sessionId]: highlights[] }
+export const highlightsLoading = writable(false);
+
+// ============================================================================
+// NEW STORES - Tournaments
+// ============================================================================
+
+export const gameTournaments = writable([]);
+export const tournamentsLoading = writable(false);
+export const tournamentsError = writable(null);
+
+// ============================================================================
 // DERIVED STORES
 // ============================================================================
 
@@ -128,6 +159,28 @@ export const upcomingSessions = derived(gameSessions, ($sessions) =>
 export const activeSessions = derived(gameSessions, ($sessions) =>
     $sessions.filter(s => s.status === 'active')
 );
+
+// Upcoming tournaments
+export const upcomingTournaments = derived(gameTournaments, ($tournaments) =>
+    $tournaments
+        .filter(t => t.status === 'upcoming' || t.status === 'registration')
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+);
+
+// Active tournaments
+export const activeTournaments = derived(gameTournaments, ($tournaments) =>
+    $tournaments.filter(t => t.status === 'active')
+);
+
+// User's game roles derived
+export const myGameRoles = derived(gameRoles, ($roles) => $roles);
+
+// Has specific game role
+export function hasGameRole(role) {
+    let roles = [];
+    gameRoles.subscribe(r => roles = r)();
+    return roles.some(r => r.role === role && r.isActive);
+}
 
 // ============================================================================
 // SETTERS - Templates & Sessions
@@ -256,6 +309,97 @@ export function clearSessionScores(sessionId) {
         delete newSs[sessionId];
         return newSs;
     });
+}
+
+// ============================================================================
+// SETTERS - Game Roles
+// ============================================================================
+
+export function setGameRoles(list) {
+    gameRoles.set(list);
+}
+
+export function setGameRoleRequests(list) {
+    gameRoleRequests.set(list);
+}
+
+export function addGameRole(role) {
+    gameRoles.update(list => [role, ...list]);
+}
+
+export function removeGameRole(roleId) {
+    gameRoles.update(list => list.filter(r => r.id !== roleId));
+}
+
+// ============================================================================
+// SETTERS - Locations
+// ============================================================================
+
+export function setGameLocations(list) {
+    gameLocations.set(list);
+}
+
+export function addGameLocation(location) {
+    gameLocations.update(list => [location, ...list]);
+}
+
+export function updateGameLocation(locationId, updates) {
+    gameLocations.update(list =>
+        list.map(l => (l.id === locationId ? { ...l, ...updates } : l))
+    );
+}
+
+export function removeGameLocation(locationId) {
+    gameLocations.update(list => list.filter(l => l.id !== locationId));
+}
+
+// ============================================================================
+// SETTERS - Highlights
+// ============================================================================
+
+export function setSessionHighlights(sessionId, highlights) {
+    sessionHighlights.update(sh => ({ ...sh, [sessionId]: highlights }));
+}
+
+export function addSessionHighlight(sessionId, highlight) {
+    sessionHighlights.update(sh => {
+        const sessionData = sh[sessionId] || [];
+        return { ...sh, [sessionId]: [highlight, ...sessionData] };
+    });
+}
+
+export function updateSessionHighlight(sessionId, highlightId, updates) {
+    sessionHighlights.update(sh => {
+        const sessionData = sh[sessionId] || [];
+        return {
+            ...sh,
+            [sessionId]: sessionData.map(h =>
+                h.id === highlightId ? { ...h, ...updates } : h
+            )
+        };
+    });
+}
+
+// ============================================================================
+// SETTERS - Tournaments
+// ============================================================================
+
+export function setGameTournaments(list) {
+    gameTournaments.set(list);
+}
+
+export function addGameTournament(tournament) {
+    gameTournaments.update(list => [tournament, ...list]);
+}
+
+export function updateGameTournament(tournamentId, updates) {
+    gameTournaments.update(list =>
+        list.map(t => (t.id === tournamentId ? { ...t, ...updates } : t))
+    );
+}
+
+export function removeGameTournament(tournamentId) {
+    gameTournaments.update(list => list.filter(t => t.id !== tournamentId));
 }
 
 // ============================================================================
