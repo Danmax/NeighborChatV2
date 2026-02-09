@@ -279,7 +279,18 @@ export async function updateProfileDetails(details) {
         .update(updateData)
         .eq('clerk_user_id', user.user_id);
 
-    if (error) throw error;
+    if (error) {
+        console.error('Profile update error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+            statusCode: error.status,
+            userIdBeingChecked: user.user_id,
+            updateDataKeys: Object.keys(updateData)
+        });
+        throw new Error(`Failed to update profile: ${error.message || 'Unknown error'}`);
+    }
 
     updateCurrentUser(sanitizedDetails);
     cacheData('profileDetails', sanitizedDetails);
