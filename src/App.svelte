@@ -259,6 +259,10 @@
             </a>
             <p class="tagline">{$brandingSettings.tagline || 'Connect with neighbors, one chat at a time'}</p>
         </header>
+        <div class="beta-banner" role="status">
+            <span class="beta-badge">Beta</span>
+            <span>We’re testing this app — your feedback is appreciated.</span>
+        </div>
 
         {#if $isAuthenticated && $showTopMenu}
             <nav class="top-nav" transition:slide={{ duration: 200 }}>
@@ -431,6 +435,35 @@
 {/if}
 
 <style>
+    .beta-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: #fff7e6;
+        border: 1px solid #ffd28a;
+        color: #7a4a00;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 16px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .beta-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #ffb74d;
+        color: #3d2a00;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
     /* Modern Top Navigation - Glassmorphism */
     .top-nav {
         display: flex;

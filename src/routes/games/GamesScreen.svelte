@@ -50,6 +50,12 @@
     import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
     import AddPlayersModal from '../../components/games/AddPlayersModal.svelte';
     import UserDashboard from '../../components/games/UserDashboard.svelte';
+    import RoleRequestModal from '../../components/games/RoleRequestModal.svelte';
+    import CreateLocationModal from '../../components/games/CreateLocationModal.svelte';
+    import CreateTournamentModal from '../../components/games/CreateTournamentModal.svelte';
+    import LocationCard from '../../components/games/LocationCard.svelte';
+    import { gameLocations, gameLocationsLoading, gameTournaments } from '../../stores/games.js';
+    import { fetchGameLocations, deleteGameLocation } from '../../services/games.service.js';
 
     // State
     let activeTab = 'dashboard';
@@ -67,6 +73,8 @@
     let currentInstanceId = null;
     let userRole = null;
     let savingTemplate = false;
+    let showRoleRequestModal = false;
+    let editingLocation = null;
 
     $: isAdmin = userRole === 'admin' || userRole === 'moderator';
     $: isGameManager = $gameRoles.some(r => r.role === 'game_manager' && r.isActive) || isAdmin;
@@ -148,6 +156,7 @@
             fetchGameTeams();
             if (currentInstanceId) {
                 fetchMyGameRoles(currentInstanceId);
+                fetchGameLocations(currentInstanceId);
             }
         }
     });
@@ -382,6 +391,42 @@
     $: existingPlayerIds = selectedSession
         ? ($sessionScores[selectedSession.id] || []).map(p => p.membershipId)
         : [];
+
+    // Location Management
+    async function handleLocationCreated(event) {
+        showToast('Location created successfully!', 'success');
+        if (currentInstanceId) {
+            await fetchGameLocations(currentInstanceId);
+        }
+    }
+
+    async function handleDeleteLocation(locationId) {
+        if (!confirm('Are you sure you want to delete this location?')) return;
+        try {
+            await deleteGameLocation(locationId);
+            showToast('Location deleted', 'success');
+            if (currentInstanceId) {
+                await fetchGameLocations(currentInstanceId);
+            }
+        } catch (err) {
+            showToast(err.message || 'Failed to delete location', 'error');
+        }
+    }
+
+    async function handleTournamentCreated(event) {
+        showToast('Tournament created successfully!', 'success');
+        if (currentInstanceId) {
+            // Tournaments will be fetched when needed
+        }
+    }
+
+    function handleRoleRequested(event) {
+        showRoleRequestModal = false;
+        // Re-fetch roles to reflect the request
+        if (currentInstanceId) {
+            fetchMyGameRoles(currentInstanceId);
+        }
+    }
 </script>
 
 {#if $isAuthenticated}
@@ -399,6 +444,13 @@
                         {/each}
                     </div>
                 {/if}
+            </div>
+            <div class="header-actions">
+                <RoleRequestModal
+                    instanceId={currentInstanceId}
+                    currentRoles={$gameRoles}
+                    on:roleRequested={handleRoleRequested}
+                />
             </div>
         </div>
 
@@ -707,15 +759,35 @@
             <div class="tab-content">
                 <div class="section-header">
                     <h3>Game Locations</h3>
-                    <button class="btn btn-primary btn-small">
-                        + Add Location
-                    </button>
+                    <CreateLocationModal
+                        {instanceId}={currentInstanceId}
+                        isGameManager={isGameManager}
+                        on:locationCreated={handleLocationCreated}
+                    />
                 </div>
-                <div class="empty-state">
-                    <span class="empty-icon">📍</span>
-                    <p>Location management coming soon!</p>
-                    <p style="font-size: 13px; color: #999;">Manage game venues, capacity, and amenities</p>
-                </div>
+
+                {#if $gameLocationsLoading}
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading locations...</p>
+                    </div>
+                {:else if $gameLocations.length === 0}
+                    <div class="empty-state">
+                        <span class="empty-icon">📍</span>
+                        <p>No game locations yet.</p>
+                        <p style="font-size: 13px; color: #999;">Create locations to host your games</p>
+                    </div>
+                {:else}
+                    <div class="locations-grid">
+                        {#each $gameLocations as location (location.id)}
+                            <LocationCard
+                                {location}
+                                isGameManager={isGameManager}
+                                onDelete={() => handleDeleteLocation(location.id)}
+                            />
+                        {/each}
+                    </div>
+                {/if}
             </div>
         {/if}
 
@@ -739,6 +811,13 @@
             loading={savingTemplate}
             on:close={() => { showCreateTemplateModal = false; editTemplateData = null; }}
             on:submit={handleCreateTemplate}
+        />
+
+        <CreateTournamentModal
+            instanceId={currentInstanceId}
+            gameTemplates={$gameTemplates}
+            isGameManager={isGameManager}
+            on:tournamentCreated={handleTournamentCreated}
         />
 
         <AddPlayersModal
@@ -821,6 +900,12 @@
 
     .header-content {
         flex: 1;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
 
     .card-title {
@@ -1206,6 +1291,13 @@
     .teams-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    /* Locations Grid */
+    .locations-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: 16px;
     }
 
