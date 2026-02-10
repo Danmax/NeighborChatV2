@@ -630,10 +630,7 @@ export async function addPlayerToSession(sessionId, membershipId, teamId = null)
             final_score: 0,
             status: 'joined'
         }])
-        .select(`
-            *,
-            instance_memberships (display_name, avatar)
-        `)
+        .select('id, membership_id, team_id, final_score')
         .single();
 
     if (error) throw error;
@@ -642,9 +639,7 @@ export async function addPlayerToSession(sessionId, membershipId, teamId = null)
         id: playerId,
         membershipId,
         teamId,
-        finalScore: 0,
-        displayName: data.instance_memberships?.display_name,
-        avatar: normalizeAvatarUrl(data.instance_memberships?.avatar)
+        finalScore: data?.final_score ?? 0
     });
 
     return data;
@@ -1438,7 +1433,7 @@ export async function fetchSessionScores(sessionId) {
     const supabase = getSupabase();
 
     try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from('game_players')
             .select(`
                 *,
@@ -1447,6 +1442,16 @@ export async function fetchSessionScores(sessionId) {
             `)
             .eq('session_id', sessionId)
             .order('final_score', { ascending: false, nullsFirst: false });
+
+        if (error) {
+            const fallback = await supabase
+                .from('game_players')
+                .select('*')
+                .eq('session_id', sessionId)
+                .order('final_score', { ascending: false, nullsFirst: false });
+            data = fallback.data;
+            error = fallback.error;
+        }
 
         if (error) throw error;
 
