@@ -516,6 +516,34 @@
             Compete in office games, join teams, climb the leaderboard, and earn awards!
         </div>
 
+        <!-- Quick Action Buttons -->
+        <div class="quick-actions">
+            <button
+                class="quick-action-btn profile-btn"
+                on:click={() => activeTab = 'dashboard'}
+                class:active={activeTab === 'dashboard'}
+            >
+                <span class="quick-action-icon">👤</span>
+                <span class="quick-action-label">Player Profile</span>
+            </button>
+            <button
+                class="quick-action-btn games-btn"
+                on:click={() => activeTab = 'templates'}
+                class:active={activeTab === 'templates'}
+            >
+                <span class="quick-action-icon">🎮</span>
+                <span class="quick-action-label">Games</span>
+            </button>
+            <button
+                class="quick-action-btn play-btn"
+                on:click={() => activeTab = 'sessions'}
+                class:active={activeTab === 'sessions'}
+            >
+                <span class="quick-action-icon">▶️</span>
+                <span class="quick-action-label">Play</span>
+            </button>
+        </div>
+
         <!-- Tab Navigation -->
         <div class="tabs">
             {#each tabs as tab}
@@ -1009,6 +1037,82 @@
         color: var(--text-muted);
         font-size: 14px;
         margin-bottom: 16px;
+    }
+
+    /* Quick Action Buttons */
+    .quick-actions {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        padding: 16px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+        border-radius: 16px;
+        border: 1px solid #e0e7ff;
+    }
+
+    .quick-action-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 20px 16px;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .quick-action-btn:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+    }
+
+    .quick-action-btn.active {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e8edff 100%);
+    }
+
+    .quick-action-icon {
+        font-size: 2rem;
+        line-height: 1;
+    }
+
+    .quick-action-label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .quick-action-btn.profile-btn:hover {
+        border-color: #667eea;
+    }
+
+    .quick-action-btn.games-btn:hover {
+        border-color: #764ba2;
+    }
+
+    .quick-action-btn.play-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .quick-action-btn.play-btn .quick-action-label {
+        color: white;
+    }
+
+    .quick-action-btn.play-btn .quick-action-icon {
+        filter: brightness(0) invert(1);
+    }
+
+    .quick-action-btn.play-btn:hover {
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+        transform: translateY(-4px) scale(1.02);
+    }
+
+    .quick-action-btn.play-btn.active {
+        border-color: white;
     }
 
     .back-btn {
@@ -1587,6 +1691,25 @@
 
         .tab {
             padding: 10px 12px;
+        }
+
+        .quick-actions {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .quick-action-btn {
+            width: 100%;
+            justify-content: center;
+            padding: 14px 20px;
+        }
+
+        .quick-action-icon {
+            font-size: 1.3rem;
+        }
+
+        .quick-action-label {
+            font-size: 0.95rem;
         }
     }
 </style>
