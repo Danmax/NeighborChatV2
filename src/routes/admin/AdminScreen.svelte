@@ -8,11 +8,6 @@
         canManageEventAccess,
         fetchAppSettings,
         upsertAppSetting,
-        fetchStatusOptions,
-        deleteStatusOption,
-        fetchInterestOptions,
-        upsertInterestOption,
-        deleteInterestOption,
         fetchEventManagerRequests,
         reviewEventManagerRequest,
         getUsageMetrics,
@@ -31,10 +26,9 @@
     let settings = {};
     let branding = { name: '', logo: '', tagline: '' };
     let aiSettings = { enabled: false, provider: 'openai', status: 'unset' };
-    let statusOptions = [];
-    let interestOptions = [];
     let requests = [];
     let feedback = [];
+    let feedbackFilter = 'open';
     let metrics = null;
     let dbStatus = null;
     let communityInstance = null;
@@ -61,7 +55,6 @@
         is_public: true
     };
 
-    let newInterest = { id: '', label: '', emoji: '', sort_order: 0 };
     let feedbackResolutionNotes = {};
 
     onMount(async () => {
@@ -94,10 +87,8 @@
     });
 
     async function loadAll() {
-        const [settingsRows, statusRows, interestRows, requestRows, feedbackRows, metricsData, dbData, instanceData, managedInstances] = await Promise.all([
+        const [settingsRows, requestRows, feedbackRows, metricsData, dbData, instanceData, managedInstances] = await Promise.all([
             fetchAppSettings(),
-            fetchStatusOptions(),
-            fetchInterestOptions(),
             fetchEventManagerRequests(),
             fetchAllFeedback(),
             getUsageMetrics(),
@@ -113,8 +104,6 @@
 
         branding = settings.branding || { name: '', logo: '', tagline: '' };
         aiSettings = settings.ai_settings || { enabled: false, provider: 'openai', status: 'unset' };
-        statusOptions = statusRows || [];
-        interestOptions = interestRows || [];
         requests = requestRows || [];
         feedback = feedbackRows || [];
         metrics = metricsData || null;
@@ -249,39 +238,15 @@
         }
     }
 
-    async function removeStatus(id) {
-        try {
-            await deleteStatusOption(id);
-            statusOptions = await fetchStatusOptions();
-        } catch (err) {
-            showToast(`Failed to remove status: ${err.message}`, 'error');
-        }
-    }
+    $: filteredFeedback = feedbackFilter === 'resolved'
+        ? feedback.filter(item => item.status === 'resolved')
+        : feedback.filter(item => item.status !== 'resolved');
 
-    async function addInterestOption() {
-        if (!newInterest.id.trim() || !newInterest.label.trim()) return;
-        try {
-            await upsertInterestOption({
-                id: newInterest.id.trim(),
-                label: newInterest.label.trim(),
-                emoji: newInterest.emoji.trim() || null,
-                sort_order: parseInt(newInterest.sort_order) || 0,
-                active: true
-            });
-            newInterest = { id: '', label: '', emoji: '', sort_order: 0 };
-            interestOptions = await fetchInterestOptions();
-        } catch (err) {
-            showToast(`Failed to add interest: ${err.message}`, 'error');
+    function getFeedbackCount(filter) {
+        if (filter === 'resolved') {
+            return feedback.filter(item => item.status === 'resolved').length;
         }
-    }
-
-    async function removeInterest(id) {
-        try {
-            await deleteInterestOption(id);
-            interestOptions = await fetchInterestOptions();
-        } catch (err) {
-            showToast(`Failed to remove interest: ${err.message}`, 'error');
-        }
+        return feedback.filter(item => item.status !== 'resolved').length;
     }
 
     async function reviewRequest(requestId, status) {
@@ -514,45 +479,28 @@
 
         {#if isAdminUser}
             <section class="admin-section">
-                <h2>Status Options</h2>
-                <div class="pill-list">
-                    {#each statusOptions as option}
-                        <div class="pill" style="border-color: {option.color}">
-                            <span class="dot" style="background: {option.color}"></span>
-                            {option.label}
-                            <button class="x" on:click={() => removeStatus(option.id)}>✕</button>
-                        </div>
-                    {/each}
-                </div>
-            </section>
-
-            <section class="admin-section">
-                <h2>Interest Options</h2>
-                <div class="inline-form">
-                    <input placeholder="id" bind:value={newInterest.id} />
-                    <input placeholder="label" bind:value={newInterest.label} />
-                    <input placeholder="emoji" bind:value={newInterest.emoji} />
-                    <input type="number" placeholder="order" bind:value={newInterest.sort_order} />
-                    <button class="btn" on:click={addInterestOption}>Add</button>
-                </div>
-                <div class="pill-list">
-                    {#each interestOptions as option}
-                        <div class="pill">
-                            <span class="emoji">{option.emoji}</span>
-                            {option.label}
-                            <button class="x" on:click={() => removeInterest(option.id)}>✕</button>
-                        </div>
-                    {/each}
-                </div>
-            </section>
-
-            <section class="admin-section">
                 <h2>Feedback Review</h2>
-                {#if feedback.length === 0}
+                <div class="feedback-filters">
+                    <button
+                        class="btn"
+                        class:primary={feedbackFilter === 'open'}
+                        on:click={() => feedbackFilter = 'open'}
+                    >
+                        Open ({getFeedbackCount('open')})
+                    </button>
+                    <button
+                        class="btn"
+                        class:primary={feedbackFilter === 'resolved'}
+                        on:click={() => feedbackFilter = 'resolved'}
+                    >
+                        Resolved ({getFeedbackCount('resolved')})
+                    </button>
+                </div>
+                {#if filteredFeedback.length === 0}
                     <p class="empty">No feedback yet.</p>
                 {:else}
                     <div class="feedback-list">
-                        {#each feedback as item}
+                        {#each filteredFeedback as item}
                             <div class="feedback-card" class:resolved={item.status === 'resolved'}>
                                 <div class="feedback-card-header">
                                     <span class="feedback-category">{item.category}</span>
@@ -918,44 +866,10 @@
         gap: 8px;
     }
 
-    .inline-form {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    .feedback-filters {
+        display: flex;
         gap: 8px;
         margin-bottom: 12px;
-    }
-
-    .pill-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 1px solid var(--cream-dark);
-        background: white;
-    }
-
-    .pill .dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-    }
-
-    .pill .x {
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 12px;
-    }
-
-    .emoji {
-        font-size: 14px;
     }
 
     .toggle {
@@ -976,10 +890,6 @@
 
     @media (max-width: 720px) {
         .row {
-            grid-template-columns: 1fr;
-        }
-
-        .inline-form {
             grid-template-columns: 1fr;
         }
 
