@@ -19,6 +19,12 @@
         fetchGameTemplates,
         fetchGameSessions,
         fetchGameTeams,
+        createGameSession,
+        joinGameSession,
+        leaveGameSession,
+        fetchMyJoinedSessionIds,
+        fetchMyGameProfile,
+        saveMyGameProfile,
         createGameTemplate,
         updateGameTemplate,
         deleteGameTemplate,
@@ -60,9 +66,35 @@
     let activeTab = 'dashboard';
     let showCreateTeamModal = false;
     let showCreateTemplateModal = false;
+    let showCreateSessionModal = false;
+    let sessionCreateLoading = false;
     let templateSaveLoading = false;
     let templateDeleteLoading = {};
     let editTemplate = null;
+    let joiningSessionLoading = {};
+    let myJoinedSessionIds = [];
+    let showGameProfileModal = false;
+    let gameProfileLoading = false;
+    let gameProfileId = null;
+    let gameProfileForm = {
+        displayName: '',
+        avatar: '🎮',
+        skillLevel: 'beginner',
+        favoriteGameTypesText: '',
+        bio: '',
+        visibility: 'instance'
+    };
+    let sessionForm = {
+        templateId: '',
+        name: '',
+        date: '',
+        time: '',
+        durationMinutes: 60,
+        heatCount: 4,
+        maxPlayers: '',
+        allowSelfJoin: true,
+        registrationDeadline: ''
+    };
     let showAddPlayersModal = false;
     let selectedSession = null;
     let sessionActionLoading = {};
@@ -137,6 +169,35 @@
         return team.members?.some(m => m.membershipId === currentMembershipId && m.status === 'active');
     };
 
+    $: selectedSessionTemplate = $gameTemplates.find(t => t.id === sessionForm.templateId) || null;
+
+    function getDefaultSessionDateTime() {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 60);
+        const date = now.toISOString().slice(0, 10);
+        const time = now.toTimeString().slice(0, 5);
+        return { date, time };
+    }
+
+    function resetSessionForm() {
+        const defaults = getDefaultSessionDateTime();
+        sessionForm = {
+            templateId: $gameTemplates[0]?.id || '',
+            name: '',
+            date: defaults.date,
+            time: defaults.time,
+            durationMinutes: 60,
+            heatCount: 4,
+            maxPlayers: '',
+            allowSelfJoin: true,
+            registrationDeadline: ''
+        };
+    }
+
+    function isJoinedSession(sessionId) {
+        return myJoinedSessionIds.includes(sessionId);
+    }
+
     onMount(async () => {
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
@@ -160,13 +221,26 @@
             }
 
             userRole = await getUserRole();
-            fetchGameTemplates();
-            fetchGameSessions();
-            fetchGameTeams();
+            const [templates] = await Promise.all([
+                fetchGameTemplates(),
+                fetchGameSessions(),
+                fetchGameTeams()
+            ]);
+
+            if ((templates || []).length > 0 && !(templates || []).some(t => t.id === sessionForm.templateId)) {
+                sessionForm.templateId = templates[0].id;
+            }
+
+            await Promise.all([
+                refreshMyJoinedSessions(),
+                loadGameProfile()
+            ]);
 
             if (currentInstanceId) {
-                fetchMyGameRoles(currentInstanceId);
-                fetchGameLocations(currentInstanceId);
+                await Promise.all([
+                    fetchMyGameRoles(currentInstanceId),
+                    fetchGameLocations(currentInstanceId)
+                ]);
                 if (isAdmin) {
                     await loadRoleRequests();
                 }
@@ -221,6 +295,34 @@
         }
     }
 
+    async function refreshMyJoinedSessions() {
+        try {
+            myJoinedSessionIds = await fetchMyJoinedSessionIds();
+        } catch (error) {
+            console.error('Error loading joined sessions:', error);
+            myJoinedSessionIds = [];
+        }
+    }
+
+    async function loadGameProfile() {
+        try {
+            const profile = await fetchMyGameProfile();
+            if (!profile) return;
+
+            gameProfileId = profile.id;
+            gameProfileForm = {
+                displayName: profile.displayName || '',
+                avatar: profile.avatar || '🎮',
+                skillLevel: profile.skillLevel || 'beginner',
+                favoriteGameTypesText: (profile.favoriteGameTypes || []).join(', '),
+                bio: profile.bio || '',
+                visibility: profile.visibility || 'instance'
+            };
+        } catch (error) {
+            console.error('Error loading game profile:', error);
+        }
+    }
+
     function handleEditTeam(event) {
         editTeam = event.detail.team;
         showCreateTeamModal = true;
@@ -248,7 +350,7 @@
     }
 
     function canManageSession(session) {
-        return isAdmin || isSessionHost(session);
+        return isGameManager || isSessionHost(session);
     }
 
     async function handleStartSession(session) {
@@ -290,6 +392,120 @@
             showToast(err.message || 'Failed to cancel game', 'error');
         } finally {
             sessionActionLoading[session.id] = false;
+        }
+    }
+
+    function openCreateSessionModal() {
+        if ($gameTemplates.length === 0) {
+            showToast('Create a game template first.', 'error');
+            activeTab = 'templates';
+            return;
+        }
+        resetSessionForm();
+        showCreateSessionModal = true;
+    }
+
+    async function handleScheduleSession() {
+        if (!sessionForm.templateId) {
+            showToast('Select a game template.', 'error');
+            return;
+        }
+        if (!sessionForm.date || !sessionForm.time) {
+            showToast('Select date and time.', 'error');
+            return;
+        }
+
+        const scheduledStart = new Date(`${sessionForm.date}T${sessionForm.time}`);
+        if (Number.isNaN(scheduledStart.getTime())) {
+            showToast('Invalid session date/time.', 'error');
+            return;
+        }
+
+        const template = $gameTemplates.find(t => t.id === sessionForm.templateId);
+        if (!template) {
+            showToast('Selected template no longer exists.', 'error');
+            return;
+        }
+
+        sessionCreateLoading = true;
+        try {
+            await createGameSession({
+                template,
+                name: sessionForm.name?.trim() || template.name,
+                scheduledStart: scheduledStart.toISOString(),
+                durationMinutes: Number(sessionForm.durationMinutes) || template.estimatedDuration || 60,
+                heatCount: Number(sessionForm.heatCount) || 4,
+                championshipEnabled: false,
+                maxPlayers: sessionForm.maxPlayers ? Number(sessionForm.maxPlayers) : null,
+                allowSelfJoin: !!sessionForm.allowSelfJoin,
+                registrationDeadline: sessionForm.registrationDeadline
+                    ? new Date(sessionForm.registrationDeadline).toISOString()
+                    : null,
+                teamMode: template.config?.teams?.mode || 'individual'
+            });
+            showToast('Game session scheduled!', 'success');
+            showCreateSessionModal = false;
+            await fetchGameSessions();
+        } catch (error) {
+            showToast(error.message || 'Failed to schedule session', 'error');
+        } finally {
+            sessionCreateLoading = false;
+        }
+    }
+
+    async function handleJoinSession(session) {
+        joiningSessionLoading[session.id] = true;
+        try {
+            await joinGameSession(session.id);
+            showToast(`Joined "${session.name}"`, 'success');
+            await refreshMyJoinedSessions();
+            await fetchSessionScores(session.id);
+        } catch (error) {
+            showToast(error.message || 'Failed to join session', 'error');
+        } finally {
+            joiningSessionLoading[session.id] = false;
+        }
+    }
+
+    async function handleLeaveSession(session) {
+        joiningSessionLoading[session.id] = true;
+        try {
+            await leaveGameSession(session.id);
+            showToast(`Left "${session.name}"`, 'success');
+            await refreshMyJoinedSessions();
+            await fetchSessionScores(session.id);
+        } catch (error) {
+            showToast(error.message || 'Failed to leave session', 'error');
+        } finally {
+            joiningSessionLoading[session.id] = false;
+        }
+    }
+
+    async function handleSaveGameProfile() {
+        gameProfileLoading = true;
+        try {
+            const favoriteGameTypes = gameProfileForm.favoriteGameTypesText
+                .split(',')
+                .map(v => v.trim())
+                .filter(Boolean);
+
+            const profile = await saveMyGameProfile({
+                id: gameProfileId,
+                displayName: gameProfileForm.displayName,
+                avatar: gameProfileForm.avatar,
+                skillLevel: gameProfileForm.skillLevel,
+                favoriteGameTypes,
+                bio: gameProfileForm.bio,
+                visibility: gameProfileForm.visibility
+            });
+
+            gameProfileId = profile?.id || gameProfileId;
+            showGameProfileModal = false;
+            showToast('Game profile saved', 'success');
+        } catch (error) {
+            showToast(error.message || 'Failed to save game profile', 'error');
+        } finally {
+            gameProfileLoading = false;
         }
     }
 
@@ -460,11 +676,19 @@
             showToast('Successfully joined community!', 'success');
             // Reload page or update instance
             currentInstanceId = instanceId;
+            showJoinInstanceModal = false;
             await fetchMyGameRoles(instanceId);
-            fetchGameTemplates();
-            fetchGameSessions();
-            fetchGameTeams();
-            fetchGameLocations(instanceId);
+            const [templates] = await Promise.all([
+                fetchGameTemplates(),
+                fetchGameSessions(),
+                fetchGameTeams(),
+                fetchGameLocations(instanceId),
+                refreshMyJoinedSessions(),
+                loadGameProfile()
+            ]);
+            if ((templates || []).length > 0 && !(templates || []).some(t => t.id === sessionForm.templateId)) {
+                sessionForm.templateId = templates[0].id;
+            }
             if (isAdmin) {
                 await loadRoleRequests();
             }
@@ -551,6 +775,25 @@
         <!-- Dashboard Tab -->
         {#if activeTab === 'dashboard'}
             <div class="tab-content">
+                <div class="profile-setup-card">
+                    <div>
+                        <h3>Game Profile</h3>
+                        <p>
+                            {#if gameProfileForm.displayName}
+                                {gameProfileForm.displayName}
+                                {#if gameProfileForm.skillLevel}
+                                    · {gameProfileForm.skillLevel}
+                                {/if}
+                            {:else}
+                                Set up your game identity, skill level, and preferences.
+                            {/if}
+                        </p>
+                    </div>
+                    <button class="btn btn-secondary btn-small" on:click={() => showGameProfileModal = true}>
+                        {gameProfileId ? 'Edit Profile' : 'Create Profile'}
+                    </button>
+                </div>
+
                 <UserDashboard instanceId={currentInstanceId} />
                 {#if isAdmin}
                     <div class="role-requests-panel">
@@ -680,7 +923,14 @@
                 <div class="sessions-section">
                     <div class="section-header">
                         <h3>Upcoming Sessions</h3>
-                        <span class="count-badge">{$upcomingSessions.length}</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="count-badge">{$upcomingSessions.length}</span>
+                            {#if isGameManager}
+                                <button class="btn btn-primary btn-small" on:click={openCreateSessionModal}>
+                                    + Schedule Game
+                                </button>
+                            {/if}
+                        </div>
                     </div>
 
                     {#if $gameSessionsLoading}
@@ -715,6 +965,12 @@
                                     <div class="session-meta">
                                         <span class="badge">{session.settings?.duration_minutes || 60} min</span>
                                         <span class="badge">{session.settings?.heat_count || 4} rounds</span>
+                                        {#if session.teamMode && session.teamMode !== 'individual'}
+                                            <span class="badge">{session.teamMode} mode</span>
+                                        {/if}
+                                        {#if session.maxPlayers}
+                                            <span class="badge">max {session.maxPlayers} players</span>
+                                        {/if}
                                         {#if isSessionHost(session)}
                                             <span class="badge host-badge">Host</span>
                                         {/if}
@@ -742,6 +998,30 @@
                                             >
                                                 ✕ Cancel
                                             </button>
+                                        </div>
+                                    {:else}
+                                        <div class="session-actions">
+                                            {#if isJoinedSession(session.id)}
+                                                <button
+                                                    class="btn btn-secondary btn-small"
+                                                    on:click={() => handleLeaveSession(session)}
+                                                    disabled={joiningSessionLoading[session.id] || session.status !== 'scheduled'}
+                                                >
+                                                    {joiningSessionLoading[session.id] ? '...' : 'Leave Game'}
+                                                </button>
+                                            {:else if session.allowSelfJoin === false}
+                                                <button class="btn btn-secondary btn-small" disabled>
+                                                    Invite Only
+                                                </button>
+                                            {:else}
+                                                <button
+                                                    class="btn btn-primary btn-small"
+                                                    on:click={() => handleJoinSession(session)}
+                                                    disabled={joiningSessionLoading[session.id] || session.status !== 'scheduled'}
+                                                >
+                                                    {joiningSessionLoading[session.id] ? '...' : 'Join Game'}
+                                                </button>
+                                            {/if}
                                         </div>
                                     {/if}
                                 </div>
@@ -879,6 +1159,148 @@
             </div>
         {/if}
 
+        {#if showCreateSessionModal}
+            <div class="session-modal" on:click|self={() => showCreateSessionModal = false}>
+                <div class="session-modal-content">
+                    <div class="session-modal-header">
+                        <h3>Schedule Game Session</h3>
+                        <button class="modal-close" type="button" on:click={() => showCreateSessionModal = false}>✕</button>
+                    </div>
+
+                    <form class="session-form" on:submit|preventDefault={handleScheduleSession}>
+                        <label>
+                            Template
+                            <select bind:value={sessionForm.templateId} required>
+                                <option value="" disabled>Select template</option>
+                                {#each $gameTemplates as template}
+                                    <option value={template.id}>{template.icon} {template.name}</option>
+                                {/each}
+                            </select>
+                        </label>
+
+                        <label>
+                            Session Name
+                            <input
+                                type="text"
+                                bind:value={sessionForm.name}
+                                placeholder={selectedSessionTemplate?.name || 'Enter session name'}
+                            />
+                        </label>
+
+                        <div class="session-row">
+                            <label>
+                                Date
+                                <input type="date" bind:value={sessionForm.date} required />
+                            </label>
+                            <label>
+                                Time
+                                <input type="time" bind:value={sessionForm.time} required />
+                            </label>
+                        </div>
+
+                        <div class="session-row">
+                            <label>
+                                Duration (minutes)
+                                <input type="number" min="15" max="480" bind:value={sessionForm.durationMinutes} />
+                            </label>
+                            <label>
+                                Rounds
+                                <input type="number" min="1" max="50" bind:value={sessionForm.heatCount} />
+                            </label>
+                        </div>
+
+                        <div class="session-row">
+                            <label>
+                                Max Players (optional)
+                                <input type="number" min="2" max="500" bind:value={sessionForm.maxPlayers} placeholder="No limit" />
+                            </label>
+                            <label>
+                                Registration Deadline (optional)
+                                <input type="datetime-local" bind:value={sessionForm.registrationDeadline} />
+                            </label>
+                        </div>
+
+                        <label class="session-toggle">
+                            <input type="checkbox" bind:checked={sessionForm.allowSelfJoin} />
+                            Allow players to self-join this session
+                        </label>
+
+                        <div class="session-actions">
+                            <button type="button" class="btn btn-secondary" on:click={() => showCreateSessionModal = false} disabled={sessionCreateLoading}>
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled={sessionCreateLoading || !$gameTemplates.length}>
+                                {sessionCreateLoading ? 'Scheduling...' : 'Schedule Session'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {/if}
+
+        {#if showGameProfileModal}
+            <div class="session-modal" on:click|self={() => showGameProfileModal = false}>
+                <div class="session-modal-content">
+                    <div class="session-modal-header">
+                        <h3>{gameProfileId ? 'Edit Game Profile' : 'Create Game Profile'}</h3>
+                        <button class="modal-close" type="button" on:click={() => showGameProfileModal = false}>✕</button>
+                    </div>
+
+                    <form class="session-form" on:submit|preventDefault={handleSaveGameProfile}>
+                        <div class="session-row">
+                            <label>
+                                Display Name
+                                <input type="text" bind:value={gameProfileForm.displayName} maxlength="60" placeholder="How players see you" />
+                            </label>
+                            <label>
+                                Avatar (emoji or URL)
+                                <input type="text" bind:value={gameProfileForm.avatar} maxlength="200" placeholder="🎮" />
+                            </label>
+                        </div>
+
+                        <div class="session-row">
+                            <label>
+                                Skill Level
+                                <select bind:value={gameProfileForm.skillLevel}>
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                    <option value="expert">Expert</option>
+                                </select>
+                            </label>
+                            <label>
+                                Visibility
+                                <select bind:value={gameProfileForm.visibility}>
+                                    <option value="private">Private</option>
+                                    <option value="instance">Community</option>
+                                    <option value="public">Public</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <label>
+                            Favorite Game Types (comma separated)
+                            <input type="text" bind:value={gameProfileForm.favoriteGameTypesText} placeholder="trivia, puzzle, table-tennis" />
+                        </label>
+
+                        <label>
+                            Bio
+                            <textarea rows="3" bind:value={gameProfileForm.bio} placeholder="Short gaming bio"></textarea>
+                        </label>
+
+                        <div class="session-actions">
+                            <button type="button" class="btn btn-secondary" on:click={() => showGameProfileModal = false} disabled={gameProfileLoading}>
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled={gameProfileLoading}>
+                                {gameProfileLoading ? 'Saving...' : 'Save Profile'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {/if}
+
         <!-- Modals -->
         <CreateTeamModal
             show={showCreateTeamModal}
@@ -982,6 +1404,30 @@
         font-size: 15px;
         margin-bottom: 24px;
         line-height: 1.5;
+    }
+
+    .profile-setup-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .profile-setup-card h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        color: #111827;
+    }
+
+    .profile-setup-card p {
+        margin: 0;
+        font-size: 13px;
+        color: #6b7280;
     }
 
     .role-requests-panel {
@@ -1856,8 +2302,10 @@
     .session-form input[type="text"],
     .session-form input[type="date"],
     .session-form input[type="time"],
+    .session-form input[type="datetime-local"],
     .session-form input[type="number"],
-    .session-form select {
+    .session-form select,
+    .session-form textarea {
         padding: 12px 14px;
         border: 1px solid #e5e7eb;
         border-radius: 10px;
@@ -1867,7 +2315,8 @@
     }
 
     .session-form input:focus,
-    .session-form select:focus {
+    .session-form select:focus,
+    .session-form textarea:focus {
         outline: none;
         border-color: #667eea;
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -1898,7 +2347,7 @@
         accent-color: #667eea;
     }
 
-    .session-actions {
+    .session-form .session-actions {
         display: flex;
         justify-content: flex-end;
         gap: 12px;
@@ -1920,6 +2369,11 @@
             width: 56px;
             height: 56px;
             font-size: 32px;
+        }
+
+        .profile-setup-card {
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .session-row {

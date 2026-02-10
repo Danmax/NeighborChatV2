@@ -42,6 +42,42 @@ function normalizeAvatarUrl(avatar) {
     return null;
 }
 
+function transformGameProfile(row) {
+    if (!row) return null;
+    return {
+        id: row.id,
+        membershipId: row.membership_id,
+        displayName: row.display_name || '',
+        avatar: normalizeAvatarUrl(row.avatar),
+        skillLevel: row.skill_level || 'beginner',
+        favoriteGameTypes: Array.isArray(row.favorite_game_types) ? row.favorite_game_types : [],
+        bio: row.bio || '',
+        visibility: row.visibility || 'instance',
+        preferences: row.preferences || {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
+}
+
+async function getActiveMembershipContext() {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) return null;
+
+    const { data: membership, error } = await supabase
+        .from('instance_memberships')
+        .select('id, instance_id, role')
+        .eq('id', membershipId)
+        .single();
+
+    if (error || !membership?.instance_id) return null;
+    return {
+        membershipId: membership.id,
+        instanceId: membership.instance_id,
+        role: membership.role
+    };
+}
+
 function transformTemplate(row) {
     return {
         id: row.id,
@@ -89,6 +125,66 @@ export async function fetchGameTemplates() {
 
 export async function getMyMembershipId() {
     return await getActiveMembershipId();
+}
+
+// ============================================================================
+// GAME PROFILE FUNCTIONS
+// ============================================================================
+
+export async function fetchMyGameProfile() {
+    const supabase = getSupabase();
+    const ctx = await getActiveMembershipContext();
+    if (!ctx) return null;
+
+    const { data, error } = await supabase
+        .from('game_player_profiles')
+        .select('*')
+        .eq('membership_id', ctx.membershipId)
+        .maybeSingle();
+
+    if (error) {
+        // Table might not exist before migration is applied.
+        if (error.code === 'PGRST205' || error.code === '42P01') return null;
+        throw error;
+    }
+
+    return transformGameProfile(data);
+}
+
+export async function saveMyGameProfile(profile) {
+    const supabase = getSupabase();
+    const ctx = await getActiveMembershipContext();
+    if (!ctx) {
+        throw new Error('Join a community to save your game profile.');
+    }
+
+    const payload = {
+        id: profile.id || `gprof_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        membership_id: ctx.membershipId,
+        display_name: profile.displayName?.trim() || null,
+        avatar: profile.avatar || null,
+        skill_level: profile.skillLevel || 'beginner',
+        favorite_game_types: Array.isArray(profile.favoriteGameTypes) ? profile.favoriteGameTypes : [],
+        bio: profile.bio?.trim() || null,
+        visibility: profile.visibility || 'instance',
+        preferences: profile.preferences || {},
+        updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+        .from('game_player_profiles')
+        .upsert(payload, { onConflict: 'membership_id' })
+        .select()
+        .single();
+
+    if (error) {
+        if (error.code === 'PGRST205' || error.code === '42P01') {
+            throw new Error('Game profile feature is not ready yet. Run migration_084 first.');
+        }
+        throw error;
+    }
+
+    return transformGameProfile(data);
 }
 
 // ============================================================================
@@ -242,7 +338,19 @@ export async function deleteGameTemplate(templateId) {
     return true;
 }
 
-export async function createGameSession({ template, name, scheduledStart, durationMinutes, heatCount, championshipEnabled }) {
+export async function createGameSession({
+    template,
+    templateId = null,
+    name,
+    scheduledStart,
+    durationMinutes,
+    heatCount,
+    championshipEnabled,
+    maxPlayers = null,
+    allowSelfJoin = true,
+    registrationDeadline = null,
+    teamMode = null
+}) {
     const supabase = getSupabase();
     const authUserId = await getAuthUserId();
     if (!authUserId) {
@@ -264,29 +372,79 @@ export async function createGameSession({ template, name, scheduledStart, durati
         throw new Error('Unable to resolve instance.');
     }
 
+    let resolvedTemplate = template || null;
+    if (!resolvedTemplate && templateId) {
+        const { data: templateData, error: templateError } = await supabase
+            .from('game_templates')
+            .select('id, name, description, game_type, config')
+            .eq('id', templateId)
+            .single();
+        if (templateError || !templateData) {
+            throw new Error('Selected game template is not available.');
+        }
+        resolvedTemplate = {
+            id: templateData.id,
+            name: templateData.name,
+            description: templateData.description,
+            gameType: templateData.game_type,
+            config: templateData.config || {}
+        };
+    }
+
+    if (!resolvedTemplate) {
+        throw new Error('Please select a game template.');
+    }
+
+    const resolvedTeamMode = teamMode || resolvedTemplate?.config?.teams?.mode || 'individual';
     const sessionId = `game_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
         id: sessionId,
         instance_id: membership.instance_id,
-        template_id: template.id,
-        name: name || template.name,
-        description: template.description || null,
+        template_id: resolvedTemplate.id,
+        name: name || resolvedTemplate.name,
+        description: resolvedTemplate.description || null,
         scheduled_start: scheduledStart,
         status: 'scheduled',
         host_membership_id: membershipId,
+        team_mode: resolvedTeamMode,
+        max_players: maxPlayers || null,
+        allow_self_join: allowSelfJoin !== false,
+        registration_deadline: registrationDeadline || null,
         settings: {
             duration_minutes: durationMinutes,
             heat_count: heatCount,
             championship_enabled: championshipEnabled,
-            game_type: template.gameType
+            game_type: resolvedTemplate.gameType
         }
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('game_sessions')
         .insert([payload])
         .select()
         .single();
+
+    if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+        const legacyPayload = {
+            id: payload.id,
+            instance_id: payload.instance_id,
+            template_id: payload.template_id,
+            name: payload.name,
+            description: payload.description,
+            scheduled_start: payload.scheduled_start,
+            status: payload.status,
+            host_membership_id: payload.host_membership_id,
+            team_mode: payload.team_mode,
+            settings: payload.settings
+        };
+        const legacyResult = await supabase
+            .from('game_sessions')
+            .insert([legacyPayload])
+            .select()
+            .single();
+        data = legacyResult.data;
+        error = legacyResult.error;
+    }
 
     if (error) throw error;
     return data;
@@ -320,11 +478,21 @@ export async function fetchGameSessions() {
             throw new Error('Unable to resolve instance.');
         }
 
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from('game_sessions')
-            .select('id, name, scheduled_start, status, settings, template_id, host_membership_id, created_at')
+            .select('id, name, scheduled_start, status, settings, template_id, host_membership_id, created_at, team_mode, max_players, allow_self_join, registration_deadline')
             .eq('instance_id', membership.instance_id)
             .order('scheduled_start', { ascending: true });
+
+        if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+            const legacyResult = await supabase
+                .from('game_sessions')
+                .select('id, name, scheduled_start, status, settings, template_id, host_membership_id, created_at, team_mode')
+                .eq('instance_id', membership.instance_id)
+                .order('scheduled_start', { ascending: true });
+            data = legacyResult.data;
+            error = legacyResult.error;
+        }
 
         if (error) throw error;
         const sessions = (data || []).map(row => ({
@@ -335,6 +503,10 @@ export async function fetchGameSessions() {
             settings: row.settings || {},
             templateId: row.template_id,
             hostMembershipId: row.host_membership_id,
+            teamMode: row.team_mode || 'individual',
+            maxPlayers: row.max_players,
+            allowSelfJoin: row.allow_self_join !== false,
+            registrationDeadline: row.registration_deadline,
             createdAt: row.created_at
         }));
         setGameSessions(sessions);
@@ -364,7 +536,7 @@ export async function startGameSession(sessionId) {
         .from('game_sessions')
         .update({
             status: 'active',
-            started_at: new Date().toISOString()
+            actual_start: new Date().toISOString()
         })
         .eq('id', sessionId)
         .select()
@@ -496,6 +668,103 @@ export async function removePlayerFromSession(sessionId, membershipId) {
     // Refresh scores
     await fetchSessionScores(sessionId);
     return true;
+}
+
+export async function joinGameSession(sessionId, teamId = null) {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to join game sessions.');
+    }
+
+    const ctx = await getActiveMembershipContext();
+    if (!ctx) {
+        throw new Error('Join a community to participate in games.');
+    }
+
+    let { data: session, error: sessionError } = await supabase
+        .from('game_sessions')
+        .select('id, instance_id, status, max_players, allow_self_join, registration_deadline')
+        .eq('id', sessionId)
+        .single();
+
+    if (sessionError && (sessionError.code === '42703' || sessionError.code === 'PGRST204')) {
+        const legacyResult = await supabase
+            .from('game_sessions')
+            .select('id, instance_id, status')
+            .eq('id', sessionId)
+            .single();
+        session = legacyResult.data
+            ? { ...legacyResult.data, max_players: null, allow_self_join: true, registration_deadline: null }
+            : null;
+        sessionError = legacyResult.error;
+    }
+
+    if (sessionError || !session) {
+        throw new Error('Game session not found.');
+    }
+
+    if (session.instance_id !== ctx.instanceId) {
+        throw new Error('You can only join sessions in your active community.');
+    }
+
+    if (session.status !== 'scheduled' && session.status !== 'active') {
+        throw new Error('This session is not open for joining.');
+    }
+
+    if (session.allow_self_join === false) {
+        throw new Error('This session requires host approval to join.');
+    }
+
+    if (session.registration_deadline && new Date(session.registration_deadline) < new Date()) {
+        throw new Error('Registration has closed for this session.');
+    }
+
+    if (session.max_players) {
+        const { count, error: countError } = await supabase
+            .from('game_players')
+            .select('id', { count: 'exact', head: true })
+            .eq('session_id', sessionId);
+        if (countError) throw countError;
+        if ((count || 0) >= session.max_players) {
+            throw new Error('This session is already full.');
+        }
+    }
+
+    return await addPlayerToSession(sessionId, ctx.membershipId, teamId);
+}
+
+export async function leaveGameSession(sessionId) {
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to leave game sessions.');
+    }
+
+    const ctx = await getActiveMembershipContext();
+    if (!ctx) {
+        throw new Error('No active community found.');
+    }
+
+    await removePlayerFromSession(sessionId, ctx.membershipId);
+    return true;
+}
+
+export async function fetchMyJoinedSessionIds() {
+    const supabase = getSupabase();
+    const ctx = await getActiveMembershipContext();
+    if (!ctx) return [];
+
+    const { data, error } = await supabase
+        .from('game_players')
+        .select('session_id, status')
+        .eq('membership_id', ctx.membershipId);
+
+    if (error) {
+        console.error('Failed to fetch joined sessions:', error);
+        return [];
+    }
+
+    return [...new Set((data || []).map(row => row.session_id).filter(Boolean))];
 }
 
 async function updateSessionRanks(sessionId) {
@@ -1131,6 +1400,40 @@ export async function grantAward(awardId, membershipId, sessionId = null, reason
 // SCORING FUNCTIONS
 // ============================================================================
 
+async function logScoreEvent({
+    sessionId,
+    membershipId,
+    teamId = null,
+    pointsDelta,
+    reason = null,
+    eventType = 'score_adjustment',
+    metadata = {}
+}) {
+    if (!Number.isFinite(pointsDelta) || pointsDelta === 0) return;
+
+    const supabase = getSupabase();
+    const createdByMembershipId = await getActiveMembershipId();
+    if (!createdByMembershipId) return;
+
+    const payload = {
+        id: `gse_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        session_id: sessionId,
+        membership_id: membershipId,
+        team_id: teamId,
+        event_type: eventType,
+        points_delta: Math.trunc(pointsDelta),
+        reason,
+        metadata,
+        created_by_membership_id: createdByMembershipId
+    };
+
+    const { error } = await supabase.from('game_score_events').insert([payload]);
+    if (error) {
+        // Keep scoring functional even if migration/policy isn't applied yet.
+        console.error('Failed to log score event:', error);
+    }
+}
+
 export async function fetchSessionScores(sessionId) {
     const supabase = getSupabase();
 
@@ -1184,12 +1487,13 @@ export async function recordPlayerScore(sessionId, membershipId, score, teamId =
     // Check if player already exists in session
     const { data: existing } = await supabase
         .from('game_players')
-        .select('id')
+        .select('id, final_score')
         .eq('session_id', sessionId)
         .eq('membership_id', membershipId)
         .maybeSingle();
 
     if (existing) {
+        const previousScore = existing.final_score || 0;
         // Update existing score
         const { data, error } = await supabase
             .from('game_players')
@@ -1201,6 +1505,14 @@ export async function recordPlayerScore(sessionId, membershipId, score, teamId =
         if (error) throw error;
 
         updateSessionScore(sessionId, membershipId, score);
+        await logScoreEvent({
+            sessionId,
+            membershipId,
+            teamId,
+            pointsDelta: score - previousScore,
+            reason: 'Manual score update',
+            metadata: { previousScore, newScore: score }
+        });
         return data;
     } else {
         // Create new player entry
@@ -1225,6 +1537,14 @@ export async function recordPlayerScore(sessionId, membershipId, score, teamId =
             membershipId,
             teamId,
             finalScore: score
+        });
+        await logScoreEvent({
+            sessionId,
+            membershipId,
+            teamId,
+            pointsDelta: score,
+            reason: 'Initial score set',
+            metadata: { previousScore: 0, newScore: score }
         });
         return data;
     }
@@ -1256,6 +1576,13 @@ export async function updatePlayerScore(sessionId, membershipId, scoreDelta) {
     if (error) throw error;
 
     updateSessionScore(sessionId, membershipId, newScore);
+    await logScoreEvent({
+        sessionId,
+        membershipId,
+        pointsDelta: scoreDelta,
+        reason: 'Score delta applied',
+        metadata: { previousScore: existing.final_score || 0, newScore }
+    });
     return data;
 }
 
