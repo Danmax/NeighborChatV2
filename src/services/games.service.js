@@ -33,6 +33,15 @@ import {
 } from '../stores/games.js';
 import { getActiveMembershipId } from './events.service.js';
 
+function normalizeAvatarUrl(avatar) {
+    if (!avatar) return null;
+    if (typeof avatar === 'string') return avatar;
+    if (typeof avatar === 'object') {
+        return avatar.url || avatar.image_url || avatar.avatar_url || avatar.src || null;
+    }
+    return null;
+}
+
 function transformTemplate(row) {
     return {
         id: row.id,
@@ -441,7 +450,7 @@ export async function addPlayerToSession(sessionId, membershipId, teamId = null)
         teamId,
         finalScore: 0,
         displayName: data.instance_memberships?.display_name,
-        avatar: data.instance_memberships?.avatar
+        avatar: normalizeAvatarUrl(data.instance_memberships?.avatar)
     });
 
     return data;
@@ -529,7 +538,7 @@ export async function fetchInstanceMembers() {
     return (data || []).map(m => ({
         membershipId: m.id,
         displayName: m.display_name,
-        avatar: m.avatar,
+        avatar: normalizeAvatarUrl(m.avatar),
         role: m.role
     }));
 }
@@ -560,7 +569,7 @@ function transformTeam(row) {
             joinedAt: m.joined_at,
             playerStats: m.player_stats || { gamesPlayed: 0, gamesWon: 0, pointsContributed: 0 },
             displayName: m.instance_memberships?.display_name,
-            avatar: m.instance_memberships?.avatar
+            avatar: normalizeAvatarUrl(m.instance_memberships?.avatar)
         }))
     };
 }
@@ -600,7 +609,7 @@ export async function fetchGameTeams() {
                 *,
                 game_team_members (
                     id, membership_id, role, status, joined_at, player_stats,
-                    instance_memberships (display_name, avatar)
+                    instance_memberships!game_team_members_membership_id_fkey (display_name, avatar)
                 )
             `)
             .eq('instance_id', membership.instance_id)
@@ -889,7 +898,7 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
                     rank: idx + 1,
                     membershipId: row.membership_id,
                     displayName: row.display_name,
-                    avatar: row.avatar,
+                    avatar: normalizeAvatarUrl(row.avatar),
                     gameType: row.game_type,
                     gamesPlayed: row.games_played,
                     gamesWon: row.games_won,
@@ -1129,7 +1138,7 @@ export async function fetchSessionScores(sessionId) {
             joinedAt: row.joined_at,
             finishedAt: row.finished_at,
             displayName: row.instance_memberships?.display_name,
-            avatar: row.instance_memberships?.avatar,
+            avatar: normalizeAvatarUrl(row.instance_memberships?.avatar),
             teamName: row.game_teams?.name,
             teamIcon: row.game_teams?.icon,
             teamColor: row.game_teams?.color
@@ -1375,7 +1384,7 @@ export async function fetchGameRoleRequests(instanceId) {
             userId: req.user_profiles.id,
             displayName: req.user_profiles.display_name,
             username: req.user_profiles.username,
-            avatar: req.user_profiles.avatar
+            avatar: normalizeAvatarUrl(req.user_profiles.avatar)
         } : null
     }));
 }
@@ -1598,7 +1607,7 @@ export async function fetchSessionHighlights(sessionId) {
         player: hl.instance_memberships ? {
             id: hl.instance_memberships.id,
             displayName: hl.instance_memberships.display_name,
-            avatar: hl.instance_memberships.avatar
+            avatar: normalizeAvatarUrl(hl.instance_memberships.avatar)
         } : null,
         team: hl.game_teams ? {
             id: hl.game_teams.id,
@@ -1862,7 +1871,7 @@ export async function fetchTournamentParticipants(tournamentId) {
         player: p.instance_memberships ? {
             id: p.instance_memberships.id,
             displayName: p.instance_memberships.display_name,
-            avatar: p.instance_memberships.avatar
+            avatar: normalizeAvatarUrl(p.instance_memberships.avatar)
         } : null,
         team: p.game_teams ? {
             id: p.game_teams.id,
@@ -1930,7 +1939,7 @@ export async function fetchSessionReferees(sessionId) {
         referee: ref.instance_memberships ? {
             id: ref.instance_memberships.id,
             displayName: ref.instance_memberships.display_name,
-            avatar: ref.instance_memberships.avatar
+            avatar: normalizeAvatarUrl(ref.instance_memberships.avatar)
         } : null
     }));
 }
