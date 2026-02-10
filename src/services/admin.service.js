@@ -278,6 +278,8 @@ export async function createCommunityInstance({
             instance_type: instance_type || 'neighborhood',
             settings: defaultSettings,
             enabled_features: defaultEnabledFeatures,
+            admin_ids: [authUserUuid],
+            moderator_ids: [],
             invite_code: inviteCode,
             is_public: !!is_public,
             created_at: now,
