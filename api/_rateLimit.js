@@ -1,20 +1,7 @@
-// api/_rateLimit.js - Simple in-memory rate limiting
-const rateLimitStore = new Map();
+import { getSupabaseAdmin } from './_shared.js';
 
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const DEFAULT_MAX_REQUESTS = 100;
-
-/**
- * Clean up expired entries from rate limit store
- */
-function cleanupExpiredEntries() {
-    const now = Date.now();
-    for (const [key, data] of rateLimitStore.entries()) {
-        if (now > data.windowEnd) {
-            rateLimitStore.delete(key);
-        }
-    }
-}
 
 /**
  * Check rate limit for a user
@@ -24,38 +11,30 @@ function cleanupExpiredEntries() {
  * @param {number} options.maxRequests - Max requests per window (default: 100)
  * @returns {{ allowed: boolean, remaining: number, resetAt: number }}
  */
-export function checkRateLimit(userId, options = {}) {
+export async function checkRateLimit(userId, options = {}) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+        // Fail open if DB is not configured
+        return { allowed: true, remaining: 1, resetAt: Date.now() + 1000 };
+    }
+
     const windowMs = options.windowMs || DEFAULT_WINDOW_MS;
     const maxRequests = options.maxRequests || DEFAULT_MAX_REQUESTS;
-    const now = Date.now();
-
-    // Periodically clean up (every 100 checks)
-    if (Math.random() < 0.01) {
-        cleanupExpiredEntries();
-    }
-
     const key = `rate:${userId}`;
-    let data = rateLimitStore.get(key);
 
-    // Initialize or reset if window expired
-    if (!data || now > data.windowEnd) {
-        data = {
-            count: 0,
-            windowEnd: now + windowMs
-        };
+    const { data, error } = await supabase.rpc('check_rate_limit', {
+        p_key: key,
+        p_window_ms: windowMs,
+        p_max_requests: maxRequests
+    });
+
+    if (error) {
+        console.error('Rate limit error:', error);
+        // Fail open on error so we don't block users if the DB hiccups
+        return { allowed: true, remaining: 1, resetAt: Date.now() + windowMs };
     }
 
-    data.count++;
-    rateLimitStore.set(key, data);
-
-    const allowed = data.count <= maxRequests;
-    const remaining = Math.max(0, maxRequests - data.count);
-
-    return {
-        allowed,
-        remaining,
-        resetAt: data.windowEnd
-    };
+    return data;
 }
 
 /**
@@ -66,8 +45,8 @@ export function checkRateLimit(userId, options = {}) {
  * @param {object} options - Rate limit options
  * @returns {boolean} - True if allowed, false if rate limited (response already sent)
  */
-export function rateLimitMiddleware(req, res, userId, options = {}) {
-    const result = checkRateLimit(userId, options);
+export async function rateLimitMiddleware(req, res, userId, options = {}) {
+    const result = await checkRateLimit(userId, options);
 
     // Set rate limit headers
     res.setHeader('X-RateLimit-Remaining', result.remaining);

@@ -81,7 +81,7 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (!rateLimitMiddleware(req, res, authResult.userId)) {
+    if (!await rateLimitMiddleware(req, res, authResult.userId)) {
         return;
     }
 

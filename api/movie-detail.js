@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     }
 
     // Rate limit: 100 requests per hour per user
-    if (!rateLimitMiddleware(req, res, authResult.userId)) {
+    if (!await rateLimitMiddleware(req, res, authResult.userId)) {
         return;
     }
 

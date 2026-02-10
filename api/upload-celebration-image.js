@@ -1,11 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { requireClerkUser } from './_clerk.js';
-
-function cors(res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
+import { cors, getSupabaseAdmin, getOrCreateUserProfile, parseBody } from './_shared.js';
 
 export default async function handler(req, res) {
     cors(res);
@@ -26,9 +20,7 @@ export default async function handler(req, res) {
         return;
     }
 
-    const { fileName, contentType, base64 } = typeof req.body === 'string'
-        ? JSON.parse(req.body)
-        : (req.body || {});
+    const { fileName, contentType, base64 } = parseBody(req.body);
 
     if (!fileName || !contentType || !base64) {
         res.status(400).json({ error: 'Missing file payload' });
@@ -40,44 +32,18 @@ export default async function handler(req, res) {
         return;
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
         res.status(500).json({ error: 'Server misconfigured' });
         return;
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    const { data: existing, error: findError } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('clerk_user_id', auth.userId)
-        .maybeSingle();
-
-    if (findError) {
-        res.status(500).json({ error: 'Failed to resolve user profile' });
+    let userUuid;
+    try {
+        userUuid = await getOrCreateUserProfile(supabase, auth.userId);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
         return;
-    }
-
-    let userUuid = existing?.id;
-    if (!userUuid) {
-        const { data: inserted, error: insertError } = await supabase
-            .from('user_profiles')
-            .insert({
-                clerk_user_id: auth.userId,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .select('id')
-            .single();
-
-        if (insertError) {
-            res.status(500).json({ error: 'Failed to create user profile' });
-            return;
-        }
-
-        userUuid = inserted?.id;
     }
 
     const safeName = String(fileName).replace(/\s+/g, '_');
