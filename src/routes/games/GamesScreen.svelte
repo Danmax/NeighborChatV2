@@ -27,7 +27,9 @@
         cancelGameSession,
         addPlayerToSession,
         fetchSessionScores,
-        fetchMyGameRoles
+        fetchMyGameRoles,
+        fetchGameRoleRequests,
+        reviewGameRoleRequest
     } from '../../services/games.service.js';
     import { showToast } from '../../stores/toasts.js';
     import { getActiveMembershipId, getUserRole } from '../../services/events.service.js';
@@ -62,6 +64,9 @@
     let availableInstances = [];
     let loadingInstances = false;
     let showJoinInstanceModal = false;
+    let roleRequests = [];
+    let loadingRoleRequests = false;
+    let reviewingRoleRequest = {};
 
     $: isAdmin = userRole === 'admin' || userRole === 'moderator';
     $: isGameManager = $gameRoles.some(r => r.role === 'game_manager' && r.isActive) || isAdmin;
@@ -152,6 +157,9 @@
             if (currentInstanceId) {
                 fetchMyGameRoles(currentInstanceId);
                 fetchGameLocations(currentInstanceId);
+                if (isAdmin) {
+                    await loadRoleRequests();
+                }
             } else {
                 // Show join instance modal if user doesn't have active instance
                 showJoinInstanceModal = true;
@@ -338,6 +346,36 @@
         // Re-fetch roles to reflect the request
         if (currentInstanceId) {
             fetchMyGameRoles(currentInstanceId);
+            if (isAdmin) {
+                loadRoleRequests();
+            }
+        }
+    }
+
+    async function loadRoleRequests() {
+        if (!currentInstanceId || !isAdmin) return;
+        loadingRoleRequests = true;
+        try {
+            roleRequests = await fetchGameRoleRequests(currentInstanceId);
+        } catch (error) {
+            console.error('Error loading game role requests:', error);
+            showToast('Failed to load game role requests', 'error');
+        } finally {
+            loadingRoleRequests = false;
+        }
+    }
+
+    async function handleReviewRoleRequest(requestId, status) {
+        reviewingRoleRequest[requestId] = true;
+        try {
+            await reviewGameRoleRequest(requestId, status);
+            showToast(`Role request ${status}`, 'success');
+            await loadRoleRequests();
+        } catch (error) {
+            console.error('Error reviewing role request:', error);
+            showToast(error.message || 'Failed to review role request', 'error');
+        } finally {
+            reviewingRoleRequest[requestId] = false;
         }
     }
 
@@ -365,6 +403,9 @@
             fetchGameSessions();
             fetchGameTeams();
             fetchGameLocations(instanceId);
+            if (isAdmin) {
+                await loadRoleRequests();
+            }
         } catch (error) {
             console.error('Error joining instance:', error);
             showToast(error.message || 'Failed to join community', 'error');
@@ -449,6 +490,59 @@
         {#if activeTab === 'dashboard'}
             <div class="tab-content">
                 <UserDashboard instanceId={currentInstanceId} />
+                {#if isAdmin}
+                    <div class="role-requests-panel">
+                        <div class="section-header">
+                            <h3>Game Role Requests</h3>
+                            <span class="count-badge">{roleRequests.filter(r => r.status === 'pending').length}</span>
+                        </div>
+
+                        {#if loadingRoleRequests}
+                            <div class="loading-state">
+                                <div class="loading-spinner"></div>
+                                <p>Loading role requests...</p>
+                            </div>
+                        {:else if roleRequests.filter(r => r.status === 'pending').length === 0}
+                            <div class="empty-state compact">
+                                <p>No pending game role requests.</p>
+                            </div>
+                        {:else}
+                            <div class="role-requests-list">
+                                {#each roleRequests.filter(r => r.status === 'pending') as req (req.id)}
+                                    <div class="role-request-card">
+                                        <div class="role-request-main">
+                                            <div class="role-request-user">
+                                                {req.user?.displayName || req.user?.username || req.userId}
+                                            </div>
+                                            <div class="role-request-meta">
+                                                Requested: {getRoleLabel(req.requestedRole)}
+                                            </div>
+                                            {#if req.reason}
+                                                <div class="role-request-reason">{req.reason}</div>
+                                            {/if}
+                                        </div>
+                                        <div class="role-request-actions">
+                                            <button
+                                                class="btn btn-primary btn-small"
+                                                on:click={() => handleReviewRoleRequest(req.id, 'approved')}
+                                                disabled={reviewingRoleRequest[req.id]}
+                                            >
+                                                {reviewingRoleRequest[req.id] ? '...' : 'Approve'}
+                                            </button>
+                                            <button
+                                                class="btn btn-danger btn-small"
+                                                on:click={() => handleReviewRoleRequest(req.id, 'rejected')}
+                                                disabled={reviewingRoleRequest[req.id]}
+                                            >
+                                                {reviewingRoleRequest[req.id] ? '...' : 'Reject'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
             </div>
         {/if}
 
@@ -749,6 +843,57 @@
         font-size: 15px;
         margin-bottom: 24px;
         line-height: 1.5;
+    }
+
+    .role-requests-panel {
+        margin-top: 20px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 14px;
+    }
+
+    .role-requests-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .role-request-card {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fafafa;
+    }
+
+    .role-request-main {
+        min-width: 0;
+    }
+
+    .role-request-user {
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 4px;
+    }
+
+    .role-request-meta {
+        font-size: 13px;
+        color: #4b5563;
+    }
+
+    .role-request-reason {
+        font-size: 13px;
+        color: #374151;
+        margin-top: 6px;
+        white-space: pre-wrap;
+    }
+
+    .role-request-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
 
     /* Quick Action Buttons */

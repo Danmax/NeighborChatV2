@@ -768,7 +768,7 @@ export async function joinGameTeam(teamId) {
         }])
         .select(`
             *,
-            instance_memberships (display_name, avatar)
+            instance_memberships!game_team_members_membership_id_fkey (display_name, avatar)
         `)
         .single();
 
