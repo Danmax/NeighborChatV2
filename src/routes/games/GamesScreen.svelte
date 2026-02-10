@@ -1,17 +1,13 @@
 <script>
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { isAuthenticated, currentUser } from '../../stores/auth.js';
+    import { isAuthenticated } from '../../stores/auth.js';
     import {
         gameTemplates,
-        gameTemplatesLoading,
-        gameTemplatesError,
         gameSessions,
         gameSessionsLoading,
-        gameSessionsError,
         gameTeams,
         gameTeamsLoading,
-        myTeam,
         upcomingSessions,
         activeSessions,
         getGameTypeInfo,
@@ -22,14 +18,10 @@
         fetchGameTemplates,
         fetchGameSessions,
         fetchGameTeams,
-        createGameSession,
         createGameTeam,
         updateGameTeamDetails,
         joinGameTeam,
         leaveGameTeam,
-        createGameTemplate,
-        updateGameTemplate,
-        deleteGameTemplate,
         startGameSession,
         endGameSession,
         cancelGameSession,
@@ -42,13 +34,11 @@
     import { getSupabase } from '../../lib/supabase.js';
 
     // Components
-    import GameRulesModal from '../../components/games/GameRulesModal.svelte';
     import TeamCard from '../../components/games/TeamCard.svelte';
     import CreateTeamModal from '../../components/games/CreateTeamModal.svelte';
     import LeaderboardTab from '../../components/games/LeaderboardTab.svelte';
     import AwardsSection from '../../components/games/AwardsSection.svelte';
     import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
-    import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
     import AddPlayersModal from '../../components/games/AddPlayersModal.svelte';
     import UserDashboard from '../../components/games/UserDashboard.svelte';
     import RoleRequestModal from '../../components/games/RoleRequestModal.svelte';
@@ -56,27 +46,19 @@
     import CreateTournamentModal from '../../components/games/CreateTournamentModal.svelte';
     import LocationCard from '../../components/games/LocationCard.svelte';
     import JoinInstanceModal from '../../components/games/JoinInstanceModal.svelte';
-    import { gameLocations, gameLocationsLoading, gameTournaments } from '../../stores/games.js';
+    import { gameLocations, gameLocationsLoading } from '../../stores/games.js';
     import { fetchGameLocations, deleteGameLocation, fetchAvailableInstances, joinInstance } from '../../services/games.service.js';
 
     // State
     let activeTab = 'dashboard';
-    let selectedTemplate = null;
-    let showSessionModal = false;
-    let showRulesModal = false;
     let showCreateTeamModal = false;
-    let showCreateTemplateModal = false;
     let showAddPlayersModal = false;
     let selectedSession = null;
     let sessionActionLoading = {};
     let editTeam = null;
-    let editTemplateData = null;
     let currentMembershipId = null;
     let currentInstanceId = null;
     let userRole = null;
-    let savingTemplate = false;
-    let showRoleRequestModal = false;
-    let editingLocation = null;
     let availableInstances = [];
     let loadingInstances = false;
     let showJoinInstanceModal = false;
@@ -87,23 +69,12 @@
     $: isReferee = $gameRoles.some(r => r.role === 'referee' && r.isActive);
     $: hasAnyGameRole = isGameManager || isTeamLead || isReferee;
 
-    // Session form
-    let sessionName = '';
-    let sessionDate = '';
-    let sessionTime = '';
-    let sessionDuration = '';
-    let heatCount = '';
-    let championshipEnabled = true;
-    let savingSession = false;
-    let scoringMode = 'team';
-
     // Team actions
     let teamActionLoading = {};
 
     // Base tabs (always visible)
     const baseTabs = [
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-        { id: 'templates', label: 'Templates', icon: '🎮' },
         { id: 'sessions', label: 'Sessions', icon: '📅' },
         { id: 'teams', label: 'Teams', icon: '👥' },
         { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
@@ -189,47 +160,6 @@
         }
     });
 
-    function selectTemplate(template) {
-        selectedTemplate = template;
-    }
-
-    function openRulesModal(template) {
-        selectedTemplate = template;
-        showRulesModal = true;
-    }
-
-    function openSessionModal() {
-        if (!selectedTemplate) return;
-        sessionName = `${selectedTemplate.name} Session`;
-        sessionDuration = selectedTemplate.estimatedDuration || 60;
-        heatCount = selectedTemplate?.config?.sessions?.rounds || 4;
-        championshipEnabled = true;
-        showSessionModal = true;
-    }
-
-    async function handleCreateSession() {
-        if (!sessionDate || !sessionTime || savingSession) return;
-        savingSession = true;
-        try {
-            const scheduledStart = new Date(`${sessionDate}T${sessionTime}`).toISOString();
-            await createGameSession({
-                template: selectedTemplate,
-                name: sessionName,
-                scheduledStart,
-                durationMinutes: Number(sessionDuration) || selectedTemplate.estimatedDuration || 60,
-                heatCount: Number(heatCount) || 4,
-                championshipEnabled
-            });
-            await fetchGameSessions();
-            showToast('Game session scheduled!', 'success');
-            showSessionModal = false;
-        } catch (err) {
-            showToast(err.message || 'Failed to create session', 'error');
-        } finally {
-            savingSession = false;
-        }
-    }
-
     async function handleCreateTeam(event) {
         const { name, description, icon, color, teamId } = event.detail;
         try {
@@ -276,50 +206,6 @@
     function handleEditTeam(event) {
         editTeam = event.detail.team;
         showCreateTeamModal = true;
-    }
-
-    // Template CRUD handlers
-    function openCreateTemplateModal() {
-        editTemplateData = null;
-        showCreateTemplateModal = true;
-    }
-
-    function openEditTemplateModal(template) {
-        editTemplateData = template;
-        showCreateTemplateModal = true;
-    }
-
-    async function handleCreateTemplate(event) {
-        const data = event.detail;
-        savingTemplate = true;
-        try {
-            if (data.templateId) {
-                await updateGameTemplate(data.templateId, data);
-                showToast('Template updated!', 'success');
-            } else {
-                await createGameTemplate(data);
-                showToast('Template created!', 'success');
-            }
-            showCreateTemplateModal = false;
-            editTemplateData = null;
-        } catch (err) {
-            showToast(err.message || 'Failed to save template', 'error');
-        } finally {
-            savingTemplate = false;
-        }
-    }
-
-    async function handleDeleteTemplate(template) {
-        if (!confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
-        try {
-            await deleteGameTemplate(template.id);
-            if (selectedTemplate?.id === template.id) {
-                selectedTemplate = null;
-            }
-            showToast('Template deleted', 'success');
-        } catch (err) {
-            showToast(err.message || 'Failed to delete template', 'error');
-        }
     }
 
     function formatSessionDate(value) {
@@ -449,7 +335,6 @@
     }
 
     function handleRoleRequested(event) {
-        showRoleRequestModal = false;
         // Re-fetch roles to reflect the request
         if (currentInstanceId) {
             fetchMyGameRoles(currentInstanceId);
@@ -532,19 +417,6 @@
                 </div>
             </button>
             <button
-                class="quick-action-btn"
-                on:click={() => activeTab = 'templates'}
-                class:active={activeTab === 'templates'}
-            >
-                <div class="quick-action-icon-wrapper games-icon">
-                    <span class="quick-action-icon">🎮</span>
-                </div>
-                <div class="quick-action-text">
-                    <span class="quick-action-label">Games</span>
-                    <span class="quick-action-sublabel">Browse & Schedule</span>
-                </div>
-            </button>
-            <button
                 class="quick-action-btn play-btn"
                 on:click={() => activeTab = 'sessions'}
                 class:active={activeTab === 'sessions'}
@@ -580,120 +452,6 @@
             </div>
         {/if}
 
-        <!-- Templates Tab -->
-        {#if activeTab === 'templates'}
-            <div class="tab-content">
-                {#if isAdmin}
-                    <div class="admin-actions">
-                        <button class="btn btn-primary btn-small" on:click={openCreateTemplateModal}>
-                            + Create Template
-                        </button>
-                    </div>
-                {/if}
-
-                {#if $gameTemplatesLoading}
-                    <div class="loading-state">
-                        <div class="loading-spinner"></div>
-                        <p>Loading game templates...</p>
-                    </div>
-                {:else if $gameTemplatesError}
-                    <div class="empty-state">
-                        <p>{$gameTemplatesError}</p>
-                    </div>
-                {:else if $gameTemplates.length === 0}
-                    <div class="empty-state">
-                        <span class="empty-icon">🎮</span>
-                        <p>No game templates yet.</p>
-                        {#if isAdmin}
-                            <button class="btn btn-primary" on:click={openCreateTemplateModal}>Create First Template</button>
-                        {/if}
-                    </div>
-                {:else}
-                    <div class="templates-grid">
-                        {#each $gameTemplates as template (template.id)}
-                            <button
-                                class="template-card"
-                                class:selected={selectedTemplate?.id === template.id}
-                                on:click={() => selectTemplate(template)}
-                            >
-                                <div class="template-icon">{template.icon || '🎮'}</div>
-                                <div class="template-content">
-                                    <h3>{template.name}</h3>
-                                    <p>{template.description}</p>
-                                    <div class="template-meta">
-                                        <span>{template.gameType}</span>
-                                        <span>{template.estimatedDuration} min</span>
-                                        <span>{template.minPlayers}+ players</span>
-                                    </div>
-                                </div>
-                                <div class="template-actions">
-                                    <button
-                                        class="action-btn action-btn-schedule"
-                                        on:click|stopPropagation={() => { selectTemplate(template); setTimeout(() => openSessionModal(), 0); }}
-                                        title="Schedule a game session"
-                                    >
-                                        📅
-                                    </button>
-                                    <button
-                                        class="action-btn"
-                                        on:click|stopPropagation={() => openRulesModal(template)}
-                                        title="View rules"
-                                    >
-                                        📋
-                                    </button>
-                                    {#if isAdmin && template.instanceId}
-                                        <button
-                                            class="action-btn"
-                                            on:click|stopPropagation={() => openEditTemplateModal(template)}
-                                            title="Edit template"
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button
-                                            class="action-btn action-btn-danger"
-                                            on:click|stopPropagation={() => handleDeleteTemplate(template)}
-                                            title="Delete template"
-                                        >
-                                            🗑️
-                                        </button>
-                                    {/if}
-                                </div>
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-
-                <!-- Selected Template Detail -->
-                {#if selectedTemplate}
-                    <div class="detail-card">
-                        <div class="detail-header">
-                            <div class="detail-title">
-                                <span class="detail-icon">{selectedTemplate.icon}</span>
-                                <div>
-                                    <h3>{selectedTemplate.name}</h3>
-                                    <p>{selectedTemplate.description}</p>
-                                </div>
-                            </div>
-                            <div class="detail-actions">
-                                <button class="btn btn-secondary" on:click={() => openRulesModal(selectedTemplate)}>
-                                    📋 Rules
-                                </button>
-                                <button class="btn btn-primary" on:click={openSessionModal}>
-                                    📅 Schedule
-                                </button>
-                            </div>
-                        </div>
-                        <div class="detail-meta">
-                            <span class="badge">{selectedTemplate.gameType}</span>
-                            <span class="badge">{selectedTemplate.estimatedDuration} min</span>
-                            <span class="badge">{selectedTemplate.minPlayers}-{selectedTemplate.maxPlayers || '∞'} players</span>
-                            <span class="badge">{selectedTemplate.config?.teams?.mode || 'Any'} mode</span>
-                        </div>
-                    </div>
-                {/if}
-            </div>
-        {/if}
-
         <!-- Sessions Tab -->
         {#if activeTab === 'sessions'}
             <div class="tab-content">
@@ -711,7 +469,7 @@
                     {:else if $upcomingSessions.length === 0}
                         <div class="empty-state">
                             <span class="empty-icon">📅</span>
-                            <p>No upcoming sessions. Schedule one from the Templates tab!</p>
+                            <p>No upcoming sessions yet.</p>
                         </div>
                     {:else}
                         <div class="sessions-list">
@@ -900,25 +658,11 @@
         {/if}
 
         <!-- Modals -->
-        <GameRulesModal
-            show={showRulesModal}
-            template={selectedTemplate}
-            on:close={() => showRulesModal = false}
-        />
-
         <CreateTeamModal
             show={showCreateTeamModal}
             {editTeam}
             on:close={() => { showCreateTeamModal = false; editTeam = null; }}
             on:submit={handleCreateTeam}
-        />
-
-        <CreateGameTemplateModal
-            show={showCreateTemplateModal}
-            editTemplate={editTemplateData}
-            loading={savingTemplate}
-            on:close={() => { showCreateTemplateModal = false; editTemplateData = null; }}
-            on:submit={handleCreateTemplate}
         />
 
         <CreateTournamentModal
@@ -946,59 +690,6 @@
             on:join={handleJoinInstance}
         />
 
-        {#if showSessionModal}
-            <div class="session-modal" role="dialog" aria-modal="true" on:click|self={() => showSessionModal = false}>
-                <div class="session-modal-content">
-                    <div class="session-modal-header">
-                        <h3>Schedule Game Session</h3>
-                        <button class="modal-close" on:click={() => showSessionModal = false}>✕</button>
-                    </div>
-                    <div class="session-form">
-                        <label>
-                            Session Name
-                            <input type="text" bind:value={sessionName} />
-                        </label>
-                        <div class="session-row">
-                            <label>
-                                Date
-                                <input type="date" bind:value={sessionDate} />
-                            </label>
-                            <label>
-                                Time
-                                <input type="time" bind:value={sessionTime} />
-                            </label>
-                        </div>
-                        <div class="session-row">
-                            <label>
-                                Duration (minutes)
-                                <input type="number" min="10" max="240" bind:value={sessionDuration} />
-                            </label>
-                            <label>
-                                Heats / Rounds
-                                <input type="number" min="1" max="20" bind:value={heatCount} />
-                            </label>
-                        </div>
-                        <label class="session-toggle">
-                            <input type="checkbox" bind:checked={championshipEnabled} />
-                            Championship round enabled
-                        </label>
-                        <label>
-                            Scoring Mode
-                            <select bind:value={scoringMode}>
-                                <option value="team">Team-based</option>
-                                <option value="individual">Individual</option>
-                            </select>
-                        </label>
-                        <div class="session-actions">
-                            <button class="btn btn-secondary" on:click={() => showSessionModal = false}>Cancel</button>
-                            <button class="btn btn-primary" on:click={handleCreateSession} disabled={savingSession || !sessionDate || !sessionTime}>
-                                {savingSession ? 'Saving...' : 'Create Session'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        {/if}
     </div>
 {/if}
 
