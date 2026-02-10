@@ -2,17 +2,26 @@
 	import { createEventDispatcher } from 'svelte';
 	import { showToast } from '../../stores/toasts.js';
 
-	export let availableInstances = [];
-	export let isLoading = false;
+export let availableInstances = [];
+export let isLoading = false;
+export let instances = undefined;
+export let loading = undefined;
+export let show = undefined;
 
 	const dispatch = createEventDispatcher();
 
-	let showModal = false;
+let showModal = false;
 	let selectedInstanceId = null;
 	let isSubmitting = false;
-	let searchQuery = '';
+let searchQuery = '';
 
-	$: filteredInstances = availableInstances.filter(instance => {
+$: resolvedInstances = instances ?? availableInstances;
+$: resolvedLoading = loading ?? isLoading;
+$: if (show !== undefined) {
+	showModal = !!show;
+}
+
+	$: filteredInstances = resolvedInstances.filter(instance => {
 		if (!searchQuery) return true;
 		const query = searchQuery.toLowerCase();
 		return (
@@ -31,6 +40,7 @@
 		showModal = false;
 		selectedInstanceId = null;
 		searchQuery = '';
+		dispatch('close');
 	}
 
 	async function handleJoinInstance() {
@@ -42,6 +52,7 @@
 		isSubmitting = true;
 		try {
 			dispatch('joinInstance', { instanceId: selectedInstanceId });
+			dispatch('join', { instanceId: selectedInstanceId });
 			showToast('Joining community...', 'success');
 			closeModal();
 		} catch (error) {
@@ -60,7 +71,7 @@
 <button
 	class="join-instance-btn"
 	on:click={openModal}
-	disabled={isLoading}
+	disabled={resolvedLoading}
 	aria-label="Join a community"
 >
 	<span class="icon">➕</span>
@@ -83,7 +94,7 @@
 			</div>
 
 			<div class="modal-body">
-				{#if availableInstances.length === 0}
+				{#if resolvedInstances.length === 0}
 					<div class="empty-state">
 						<p class="empty-icon">🏘️</p>
 						<p>No communities available to join.</p>
@@ -140,7 +151,7 @@
 				{/if}
 			</div>
 
-			{#if availableInstances.length > 0}
+			{#if resolvedInstances.length > 0}
 				<div class="modal-footer">
 					<button
 						class="button secondary"

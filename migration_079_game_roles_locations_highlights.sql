@@ -11,13 +11,13 @@ BEGIN;
 -- Table: game_role_requests (follows event_manager_requests pattern)
 CREATE TABLE IF NOT EXISTS public.game_role_requests (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id text NOT NULL REFERENCES public.user_profiles(user_id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     instance_id text NOT NULL REFERENCES public.community_instances(id) ON DELETE CASCADE,
     requested_role text NOT NULL CHECK (requested_role IN ('game_manager', 'team_lead', 'referee')),
     reason text,
     status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     requested_at timestamptz DEFAULT now(),
-    reviewed_by text REFERENCES public.user_profiles(user_id) ON DELETE SET NULL,
+    reviewed_by uuid REFERENCES public.user_profiles(id) ON DELETE SET NULL,
     reviewed_at timestamptz,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
@@ -31,10 +31,10 @@ CREATE INDEX IF NOT EXISTS idx_game_role_requests_status ON public.game_role_req
 -- Table: game_roles (active role assignments)
 CREATE TABLE IF NOT EXISTS public.game_roles (
     id text PRIMARY KEY,
-    user_id text NOT NULL REFERENCES public.user_profiles(user_id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
     instance_id text NOT NULL REFERENCES public.community_instances(id) ON DELETE CASCADE,
     role text NOT NULL CHECK (role IN ('game_manager', 'team_lead', 'referee')),
-    granted_by text REFERENCES public.user_profiles(user_id) ON DELETE SET NULL,
+    granted_by uuid REFERENCES public.user_profiles(id) ON DELETE SET NULL,
     granted_at timestamptz DEFAULT now(),
     expires_at timestamptz,
     is_active boolean DEFAULT true,
@@ -117,7 +117,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_has_role boolean;
 BEGIN
     v_user_uuid := public.current_user_uuid();
@@ -150,7 +150,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_is_manager boolean;
 BEGIN
     v_user_uuid := public.current_user_uuid();
@@ -191,7 +191,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_is_referee boolean;
 BEGIN
     v_user_uuid := public.current_user_uuid();
@@ -216,7 +216,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_session RECORD;
     v_can_manage boolean;
 BEGIN
@@ -265,7 +265,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_request_id uuid;
 BEGIN
     v_user_uuid := public.current_user_uuid();
@@ -305,7 +305,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_user_uuid text;
+    v_user_uuid uuid;
     v_request RECORD;
     v_role_id text;
 BEGIN

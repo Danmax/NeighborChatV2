@@ -684,10 +684,10 @@
 
         <JoinInstanceModal
             show={showJoinInstanceModal}
-            instances={availableInstances}
-            loading={loadingInstances}
+            availableInstances={availableInstances}
+            isLoading={loadingInstances}
             on:close={() => showJoinInstanceModal = false}
-            on:join={handleJoinInstance}
+            on:joinInstance={handleJoinInstance}
         />
 
     </div>

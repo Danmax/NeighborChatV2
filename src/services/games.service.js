@@ -27,7 +27,9 @@ import {
     setSessionScores,
     updateSessionScore,
     addSessionScore,
-    updateGameSession
+    updateGameSession,
+    setGameRoles,
+    gameRolesLoading
 } from '../stores/games.js';
 import { getActiveMembershipId } from './events.service.js';
 
@@ -1298,22 +1300,36 @@ export async function requestGameRole(instanceId, role, reason = '') {
 
 export async function fetchMyGameRoles(instanceId) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) return [];
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) {
+        setGameRoles([]);
+        return [];
+    }
+
+    gameRolesLoading.set(true);
 
     const { data, error} = await supabase
         .from('game_roles')
         .select('*')
-        .eq('user_id', authUserId)
+        .eq('user_id', authUserUuid)
         .eq('instance_id', instanceId)
         .eq('is_active', true);
 
     if (error) {
+        if (error.code === 'PGRST205') {
+            // Backward compatibility for deployments where migration_079 hasn't run yet.
+            console.warn('game_roles table not found; returning no roles.');
+            setGameRoles([]);
+            gameRolesLoading.set(false);
+            return [];
+        }
         console.error('Failed to fetch game roles:', error);
+        setGameRoles([]);
+        gameRolesLoading.set(false);
         return [];
     }
 
-    return (data || []).map(role => ({
+    const roles = (data || []).map(role => ({
         id: role.id,
         userId: role.user_id,
         instanceId: role.instance_id,
@@ -1323,6 +1339,9 @@ export async function fetchMyGameRoles(instanceId) {
         expiresAt: role.expires_at,
         isActive: role.is_active
     }));
+    setGameRoles(roles);
+    gameRolesLoading.set(false);
+    return roles;
 }
 
 export async function fetchGameRoleRequests(instanceId) {
@@ -1332,7 +1351,7 @@ export async function fetchGameRoleRequests(instanceId) {
         .from('game_role_requests')
         .select(`
             *,
-            user_profiles!user_id(user_id, display_name, username, avatar)
+            user_profiles!user_id(id, display_name, username, avatar)
         `)
         .eq('instance_id', instanceId)
         .order('requested_at', { ascending: false });
@@ -1353,7 +1372,7 @@ export async function fetchGameRoleRequests(instanceId) {
         reviewedBy: req.reviewed_by,
         reviewedAt: req.reviewed_at,
         user: req.user_profiles ? {
-            userId: req.user_profiles.user_id,
+            userId: req.user_profiles.id,
             displayName: req.user_profiles.display_name,
             username: req.user_profiles.username,
             avatar: req.user_profiles.avatar
@@ -1957,20 +1976,44 @@ export async function fetchAvailableInstances() {
         throw new Error('User not authenticated');
     }
 
-    // Get instances user is NOT already a member of
-    const { data: instances, error } = await supabase
-        .from('community_instances')
-        .select(`
-            id,
-            name,
-            description,
-            icon,
-            member_count:instance_memberships(count)
-        `)
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
+    // Get instances user is NOT already a member of.
+    // Support both schemas: older uses "logo", newer may use "icon".
+    let instances = [];
+    let instancesError = null;
 
-    if (error) throw error;
+    {
+        const { data, error } = await supabase
+            .from('community_instances')
+            .select(`
+                id,
+                name,
+                description,
+                logo,
+                member_count:instance_memberships(count)
+            `)
+            .is('deleted_at', null)
+            .order('name', { ascending: true });
+        instances = data || [];
+        instancesError = error;
+    }
+
+    if (instancesError?.code === '42703') {
+        const { data, error } = await supabase
+            .from('community_instances')
+            .select(`
+                id,
+                name,
+                description,
+                icon,
+                member_count:instance_memberships(count)
+            `)
+            .is('deleted_at', null)
+            .order('name', { ascending: true });
+        instances = data || [];
+        instancesError = error;
+    }
+
+    if (instancesError) throw instancesError;
 
     // Filter out instances user already belongs to
     const { data: userMemberships } = await supabase
@@ -1980,7 +2023,20 @@ export async function fetchAvailableInstances() {
 
     const userInstanceIds = userMemberships?.map(m => m.instance_id) || [];
 
-    return instances?.filter(instance => !userInstanceIds.includes(instance.id)) || [];
+    const toCount = (value) => {
+        if (typeof value === 'number') return value;
+        if (Array.isArray(value)) return Number(value[0]?.count || 0);
+        if (value && typeof value === 'object') return Number(value.count || 0);
+        return 0;
+    };
+
+    return (instances || [])
+        .filter(instance => !userInstanceIds.includes(instance.id))
+        .map(instance => ({
+            ...instance,
+            icon: instance.icon || instance.logo || '🏘️',
+            member_count: toCount(instance.member_count)
+        }));
 }
 
 export async function joinInstance(instanceId) {
@@ -2035,7 +2091,7 @@ export async function getUserInstances() {
             instance_id,
             role,
             status,
-            community_instances(id, name, icon, description)
+            community_instances(id, name, logo, description)
         `)
         .eq('user_id', userUuid)
         .eq('status', 'active')
