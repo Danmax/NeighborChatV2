@@ -5,31 +5,58 @@ const CLERK_PUBLISHABLE_KEY =
 const CLERK_SCRIPT_SRC =
     'https://social-escargot-0.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
+
 let clerkPromise = null;
 
-export async function loadClerk() {
-    if (typeof window === 'undefined') return null;
-    if (window.Clerk) return window.Clerk;
-    if (clerkPromise) return clerkPromise;
+function loadClerkScript() {
+    return new Promise((resolve, reject) => {
+        // If Clerk is already on window, we're done
+        if (window.Clerk) {
+            resolve(window.Clerk);
+            return;
+        }
 
-    clerkPromise = new Promise((resolve, reject) => {
+        // Remove any previously failed script tags
         const existing = document.querySelector(`script[src="${CLERK_SCRIPT_SRC}"]`);
         if (existing) {
-            existing.addEventListener('load', () => resolve(window.Clerk));
-            existing.addEventListener('error', () => reject(new Error('Failed to load Clerk')));
-            return;
+            existing.remove();
         }
 
         const script = document.createElement('script');
         script.src = CLERK_SCRIPT_SRC;
         script.async = true;
-        script.defer = true;
         script.crossOrigin = 'anonymous';
         script.setAttribute('data-clerk-publishable-key', CLERK_PUBLISHABLE_KEY);
         script.onload = () => resolve(window.Clerk);
         script.onerror = () => reject(new Error('Failed to load Clerk'));
         document.head.appendChild(script);
     });
+}
+
+export async function loadClerk() {
+    if (typeof window === 'undefined') return null;
+    if (window.Clerk) return window.Clerk;
+    if (clerkPromise) return clerkPromise;
+
+    clerkPromise = (async () => {
+        let lastError;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                if (attempt > 0) {
+                    await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+                    console.warn(`Clerk load retry ${attempt}/${MAX_RETRIES}`);
+                }
+                return await loadClerkScript();
+            } catch (err) {
+                lastError = err;
+            }
+        }
+        // All retries exhausted — clear the cached promise so a future call can retry
+        clerkPromise = null;
+        throw lastError;
+    })();
 
     return clerkPromise;
 }
