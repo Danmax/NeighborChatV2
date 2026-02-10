@@ -17,7 +17,7 @@
             clerk.mountSignIn(clerkNode, {
                 routing: 'hash',
                 signUpUrl: '#/auth',
-                fallbackRedirectUrl: '#/'
+                forceRedirectUrl: '#/'
             });
         } catch (err) {
             error = err.message || 'Unable to load sign-in';
