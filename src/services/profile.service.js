@@ -63,6 +63,7 @@ export async function saveUserProfile(profileData) {
 
     // Extended profile fields
     if (profileData.birthday !== undefined) upsertData.birthday = profileData.birthday;
+    if (profileData.timezone !== undefined) upsertData.timezone = profileData.timezone?.trim() || null;
     if (profileData.title !== undefined) upsertData.title = profileData.title;
     if (profileData.phone !== undefined) upsertData.phone = profileData.phone ? normalizePhoneNumber(profileData.phone) : null;
     if (profileData.city !== undefined) upsertData.city = profileData.city;
@@ -106,6 +107,7 @@ export async function saveUserProfile(profileData) {
     if (profileData.interests !== undefined) localUpdate.interests = profileData.interests;
     if (profileData.location !== undefined) localUpdate.location = profileData.location;
     if (profileData.birthday !== undefined) localUpdate.birthday = profileData.birthday;
+    if (profileData.timezone !== undefined) localUpdate.timezone = profileData.timezone?.trim() || null;
     if (profileData.title !== undefined) localUpdate.title = profileData.title;
     if (profileData.phone !== undefined) localUpdate.phone = profileData.phone;
     if (profileData.city !== undefined) localUpdate.city = profileData.city;

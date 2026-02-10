@@ -16,7 +16,9 @@
         fetchEventManagerRequests,
         reviewEventManagerRequest,
         getUsageMetrics,
-        getDatabaseStatus
+        getDatabaseStatus,
+        fetchMyCommunityInstance,
+        updateMyCommunityInstanceSettings
     } from '../../services/admin.service.js';
     import { fetchAllFeedback, updateFeedbackStatus } from '../../services/feedback.service.js';
 
@@ -33,6 +35,19 @@
     let feedback = [];
     let metrics = null;
     let dbStatus = null;
+    let communityInstance = null;
+    let communityFeatureSettings = {
+        enableGames: true,
+        enableEvents: true,
+        enableCelebrations: true,
+        enableChat: true,
+        enableAwards: true,
+        enableSponsors: true,
+        enableKnowledge: true,
+        requireApproval: false,
+        allowGuestAccess: true
+    };
+    let communityVisibility = true;
 
     let newInterest = { id: '', label: '', emoji: '', sort_order: 0 };
     let feedbackResolutionNotes = {};
@@ -67,14 +82,15 @@
     });
 
     async function loadAll() {
-        const [settingsRows, statusRows, interestRows, requestRows, feedbackRows, metricsData, dbData] = await Promise.all([
+        const [settingsRows, statusRows, interestRows, requestRows, feedbackRows, metricsData, dbData, instanceData] = await Promise.all([
             fetchAppSettings(),
             fetchStatusOptions(),
             fetchInterestOptions(),
             fetchEventManagerRequests(),
             fetchAllFeedback(),
             getUsageMetrics(),
-            getDatabaseStatus()
+            getDatabaseStatus(),
+            fetchMyCommunityInstance()
         ]);
 
         settings = settingsRows.reduce((acc, row) => {
@@ -90,6 +106,22 @@
         feedback = feedbackRows || [];
         metrics = metricsData || null;
         dbStatus = dbData || null;
+        communityInstance = instanceData || null;
+
+        const instanceSettings = communityInstance?.settings || {};
+        const enabledFeatures = new Set(communityInstance?.enabled_features || []);
+        communityVisibility = communityInstance?.is_public ?? true;
+        communityFeatureSettings = {
+            enableGames: instanceSettings.enableGames ?? enabledFeatures.has('games') ?? true,
+            enableEvents: instanceSettings.enableEvents ?? enabledFeatures.has('events') ?? true,
+            enableCelebrations: enabledFeatures.has('celebrations'),
+            enableChat: enabledFeatures.has('chat'),
+            enableAwards: instanceSettings.enableAwards ?? enabledFeatures.has('awards') ?? true,
+            enableSponsors: instanceSettings.enableSponsors ?? true,
+            enableKnowledge: instanceSettings.enableKnowledge ?? true,
+            requireApproval: instanceSettings.requireApproval ?? false,
+            allowGuestAccess: instanceSettings.allowGuestAccess ?? true
+        };
     }
 
     async function saveBranding() {
@@ -107,6 +139,43 @@
             showToast('AI settings updated.', 'success');
         } catch (err) {
             showToast(`Failed to update AI settings: ${err.message}`, 'error');
+        }
+    }
+
+    async function saveCommunityInstanceSettings() {
+        if (!communityInstance?.id) {
+            showToast('No active community instance found.', 'error');
+            return;
+        }
+
+        try {
+            const settingsPayload = {
+                ...(communityInstance.settings || {}),
+                enableGames: !!communityFeatureSettings.enableGames,
+                enableEvents: !!communityFeatureSettings.enableEvents,
+                enableAwards: !!communityFeatureSettings.enableAwards,
+                enableSponsors: !!communityFeatureSettings.enableSponsors,
+                enableKnowledge: !!communityFeatureSettings.enableKnowledge,
+                requireApproval: !!communityFeatureSettings.requireApproval,
+                allowGuestAccess: !!communityFeatureSettings.allowGuestAccess
+            };
+
+            const enabledFeatures = [
+                ...(communityFeatureSettings.enableGames ? ['games'] : []),
+                ...(communityFeatureSettings.enableEvents ? ['events'] : []),
+                ...(communityFeatureSettings.enableCelebrations ? ['celebrations'] : []),
+                ...(communityFeatureSettings.enableChat ? ['chat'] : []),
+                ...(communityFeatureSettings.enableAwards ? ['awards'] : [])
+            ];
+
+            communityInstance = await updateMyCommunityInstanceSettings({
+                is_public: !!communityVisibility,
+                settings: settingsPayload,
+                enabled_features: enabledFeatures
+            });
+            showToast('Community instance settings updated.', 'success');
+        } catch (err) {
+            showToast(`Failed to update community settings: ${err.message}`, 'error');
         }
     }
 
@@ -214,6 +283,56 @@
                     <input type="text" bind:value={aiSettings.status} placeholder="set in Supabase secrets" />
                 </div>
                 <button class="btn primary" on:click={saveAiSettings}>Save AI Settings</button>
+            </div>
+
+            <div class="admin-card">
+                <h2>Community Instance</h2>
+                {#if communityInstance}
+                    <p class="muted">Managing: <strong>{communityInstance.name}</strong></p>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityVisibility} />
+                        <span>Public community listing</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableGames} />
+                        <span>Enable Games</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableEvents} />
+                        <span>Enable Events</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableCelebrations} />
+                        <span>Enable Celebrations</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableChat} />
+                        <span>Enable Chat</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableAwards} />
+                        <span>Enable Awards</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableSponsors} />
+                        <span>Enable Sponsors</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.enableKnowledge} />
+                        <span>Enable Knowledge</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.requireApproval} />
+                        <span>Require Join Approval</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={communityFeatureSettings.allowGuestAccess} />
+                        <span>Allow Guest Access</span>
+                    </label>
+                    <button class="btn primary" on:click={saveCommunityInstanceSettings}>Save Community Settings</button>
+                {:else}
+                    <p class="empty">No active community instance found for your current membership.</p>
+                {/if}
             </div>
 
             <div class="admin-card">

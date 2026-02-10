@@ -1,6 +1,7 @@
 import { getSupabase, getAuthUserUuid } from '../lib/supabase.js';
 import { get } from 'svelte/store';
 import { currentUser } from '../stores/auth.js';
+import { getActiveMembershipId } from './events.service.js';
 
 export async function isPlatformAdmin() {
     const supabase = getSupabase();
@@ -168,6 +169,66 @@ export async function getUsageMetrics() {
 export async function getDatabaseStatus() {
     const supabase = getSupabase();
     const { data, error } = await supabase.rpc('get_database_status');
+    if (error) throw error;
+    return data;
+}
+
+export async function fetchMyCommunityInstance() {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) return null;
+
+    const { data: membership, error: membershipError } = await supabase
+        .from('instance_memberships')
+        .select('instance_id')
+        .eq('id', membershipId)
+        .maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership?.instance_id) return null;
+
+    const { data, error } = await supabase
+        .from('community_instances')
+        .select('id,name,description,logo,instance_type,is_public,invite_code,settings,enabled_features')
+        .eq('id', membership.instance_id)
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+export async function updateMyCommunityInstanceSettings({
+    is_public,
+    settings,
+    enabled_features
+}) {
+    const supabase = getSupabase();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('No active community membership found.');
+    }
+
+    const { data: membership, error: membershipError } = await supabase
+        .from('instance_memberships')
+        .select('instance_id')
+        .eq('id', membershipId)
+        .maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership?.instance_id) {
+        throw new Error('Unable to resolve community instance.');
+    }
+
+    const updates = {
+        updated_at: new Date().toISOString()
+    };
+    if (is_public !== undefined) updates.is_public = is_public;
+    if (settings !== undefined) updates.settings = settings;
+    if (enabled_features !== undefined) updates.enabled_features = enabled_features;
+
+    const { data, error } = await supabase
+        .from('community_instances')
+        .update(updates)
+        .eq('id', membership.instance_id)
+        .select('id,name,description,logo,instance_type,is_public,invite_code,settings,enabled_features')
+        .single();
     if (error) throw error;
     return data;
 }
