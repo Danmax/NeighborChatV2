@@ -462,7 +462,7 @@
                                 {#if req.display_name && req.username}
                                     {req.display_name} (@{req.username})
                                 {:else}
-                                    {req.username || req.display_name || req.user_id}
+                                    {req.username || req.display_name || `user:${String(req.user_id).slice(0, 8)}`}
                                 {/if}
                             </span>
                             <span class="badge {req.status}">{req.status}</span>
@@ -652,17 +652,18 @@
     .table {
         background: white;
         border-radius: 12px;
-        overflow: hidden;
+        overflow-x: auto;
         box-shadow: 0 8px 24px rgba(0,0,0,0.06);
     }
 
     .row {
         display: grid;
-        grid-template-columns: 1.2fr 1.6fr 1fr 1.2fr;
+        grid-template-columns: minmax(180px, 1.2fr) minmax(90px, 0.7fr) minmax(220px, 1.8fr) minmax(170px, auto);
         gap: 12px;
         padding: 12px 14px;
         border-bottom: 1px solid var(--cream-dark);
         align-items: center;
+        min-width: 760px;
     }
 
     /* Feedback Card Styles */
@@ -864,6 +865,8 @@
     .actions {
         display: flex;
         gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     .feedback-filters {

@@ -114,20 +114,63 @@ export async function fetchEventManagerRequests() {
     const userIds = [...new Set(requests.map(r => r.user_id).filter(Boolean))];
     if (userIds.length === 0) return requests;
 
-    const { data: profiles, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('id, username, display_name')
-        .in('id', userIds);
+    const uuidIds = userIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id)));
+    const clerkIds = userIds.map(String);
 
-    if (profileError) {
-        return requests;
+    const profileQueries = [];
+    if (uuidIds.length > 0) {
+        profileQueries.push(
+            supabase
+                .from('user_profiles')
+                .select('id, clerk_user_id, username, display_name')
+                .in('id', uuidIds)
+        );
+    }
+    if (clerkIds.length > 0) {
+        profileQueries.push(
+            supabase
+                .from('user_profiles')
+                .select('id, clerk_user_id, username, display_name')
+                .in('clerk_user_id', clerkIds)
+        );
     }
 
-    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const profileResults = await Promise.all(profileQueries);
+    const profiles = profileResults.flatMap((result) => result.data || []);
+
+    const profileMap = new Map();
+    for (const profile of profiles || []) {
+        if (profile?.id) profileMap.set(String(profile.id), profile);
+        if (profile?.clerk_user_id) profileMap.set(String(profile.clerk_user_id), profile);
+    }
+
+    const unresolved = userIds.filter((id) => !profileMap.has(String(id)));
+    const unresolvedUuidIds = unresolved.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id)));
+
+    if (unresolvedUuidIds.length > 0) {
+        const { data: memberships } = await supabase
+            .from('instance_memberships')
+            .select('user_id, display_name')
+            .in('user_id', unresolvedUuidIds)
+            .eq('status', 'active');
+
+        for (const membership of memberships || []) {
+            const key = String(membership.user_id);
+            if (!profileMap.has(key)) {
+                profileMap.set(key, {
+                    id: membership.user_id,
+                    clerk_user_id: null,
+                    username: null,
+                    display_name: membership.display_name
+                });
+            }
+        }
+    }
+
     return requests.map(req => ({
         ...req,
-        username: profileMap.get(req.user_id)?.username || null,
-        display_name: profileMap.get(req.user_id)?.display_name || null
+        username: profileMap.get(String(req.user_id))?.username || null,
+        display_name: profileMap.get(String(req.user_id))?.display_name || null
     }));
 }
 
