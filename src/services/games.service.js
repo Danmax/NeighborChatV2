@@ -1977,40 +1977,42 @@ export async function fetchAvailableInstances() {
     }
 
     // Get instances user is NOT already a member of.
-    // Support both schemas: older uses "logo", newer may use "icon".
+    // Some environments do not have deleted_at or icon; query only stable columns first.
+    const runInstanceQuery = async ({ includeLogo = true, filterDeleted = true } = {}) => {
+        const columns = [
+            'id',
+            'name',
+            'description',
+            ...(includeLogo ? ['logo'] : []),
+            'member_count:instance_memberships(count)'
+        ].join(',');
+
+        let query = supabase
+            .from('community_instances')
+            .select(columns)
+            .order('name', { ascending: true });
+
+        if (filterDeleted) {
+            query = query.is('deleted_at', null);
+        }
+
+        return query;
+    };
+
     let instances = [];
     let instancesError = null;
 
-    {
-        const { data, error } = await supabase
-            .from('community_instances')
-            .select(`
-                id,
-                name,
-                description,
-                logo,
-                member_count:instance_memberships(count)
-            `)
-            .is('deleted_at', null)
-            .order('name', { ascending: true });
-        instances = data || [];
-        instancesError = error;
+    // Preferred: include logo and exclude deleted rows.
+    ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: true, filterDeleted: true }));
+
+    // Fallback: schema without deleted_at.
+    if (instancesError?.code === '42703' && instancesError?.message?.includes('deleted_at')) {
+        ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: true, filterDeleted: false }));
     }
 
-    if (instancesError?.code === '42703') {
-        const { data, error } = await supabase
-            .from('community_instances')
-            .select(`
-                id,
-                name,
-                description,
-                icon,
-                member_count:instance_memberships(count)
-            `)
-            .is('deleted_at', null)
-            .order('name', { ascending: true });
-        instances = data || [];
-        instancesError = error;
+    // Fallback: schema without logo.
+    if (instancesError?.code === '42703' && instancesError?.message?.includes('logo')) {
+        ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: false, filterDeleted: false }));
     }
 
     if (instancesError) throw instancesError;
@@ -2034,7 +2036,7 @@ export async function fetchAvailableInstances() {
         .filter(instance => !userInstanceIds.includes(instance.id))
         .map(instance => ({
             ...instance,
-            icon: instance.icon || instance.logo || '🏘️',
+            icon: instance.logo || '🏘️',
             member_count: toCount(instance.member_count)
         }));
 }
