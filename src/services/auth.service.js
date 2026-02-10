@@ -202,6 +202,9 @@ export function setupAuthListener(callback) {
         } else {
             clearAuth();
             callback?.({ event, user: null });
+            // Allow the same user to sign in again after a sign-out.
+            lastHandledUserId = null;
+            lastHandledEvent = event;
         }
     });
 
