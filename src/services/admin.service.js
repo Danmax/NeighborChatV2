@@ -3,6 +3,14 @@ import { get } from 'svelte/store';
 import { currentUser } from '../stores/auth.js';
 import { getActiveMembershipId } from './events.service.js';
 
+function makeTextId(prefix) {
+    return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-6)}`;
+}
+
+function makeInviteCode() {
+    return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
 export async function isPlatformAdmin() {
     const supabase = getSupabase();
     const { data, error } = await supabase.rpc('is_platform_admin');
@@ -195,25 +203,140 @@ export async function fetchMyCommunityInstance() {
     return data || null;
 }
 
+export async function fetchManagedCommunityInstances() {
+    const supabase = getSupabase();
+    const authUserUuid = await getAuthUserUuid();
+    if (!authUserUuid) return [];
+
+    const { data: memberships, error: membershipsError } = await supabase
+        .from('instance_memberships')
+        .select('instance_id, role')
+        .eq('user_id', authUserUuid)
+        .eq('status', 'active')
+        .in('role', ['admin', 'moderator']);
+
+    if (membershipsError) throw membershipsError;
+
+    const instanceIds = [...new Set((memberships || []).map(m => m.instance_id).filter(Boolean))];
+    if (instanceIds.length === 0) return [];
+
+    const { data, error } = await supabase
+        .from('community_instances')
+        .select('id,name,description,logo,instance_type,is_public,invite_code,settings,enabled_features')
+        .in('id', instanceIds)
+        .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+}
+
+export async function createCommunityInstance({
+    name,
+    description = '',
+    logo = '🏘️',
+    instance_type = 'neighborhood',
+    is_public = true
+}) {
+    const supabase = getSupabase();
+    const authUserUuid = await getAuthUserUuid();
+    const user = get(currentUser);
+
+    if (!authUserUuid) {
+        throw new Error('Please sign in.');
+    }
+
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+        throw new Error('Community name is required.');
+    }
+
+    const now = new Date().toISOString();
+    const instanceId = makeTextId('inst');
+    const membershipId = makeTextId('mbr');
+    const inviteCode = makeInviteCode();
+
+    const defaultSettings = {
+        theme: 'default',
+        maxMembers: null,
+        enableGames: true,
+        enableAwards: true,
+        enableEvents: true,
+        enableSponsors: true,
+        enableKnowledge: true,
+        requireApproval: false,
+        allowGuestAccess: true
+    };
+    const defaultEnabledFeatures = ['games', 'events', 'celebrations', 'chat', 'awards'];
+
+    const { data: instance, error: instanceError } = await supabase
+        .from('community_instances')
+        .insert({
+            id: instanceId,
+            name: cleanName,
+            description: description?.trim() || null,
+            logo: logo?.trim() || '🏘️',
+            instance_type: instance_type || 'neighborhood',
+            settings: defaultSettings,
+            enabled_features: defaultEnabledFeatures,
+            invite_code: inviteCode,
+            is_public: !!is_public,
+            created_at: now,
+            updated_at: now
+        })
+        .select('id,name,description,logo,instance_type,is_public,invite_code,settings,enabled_features')
+        .single();
+
+    if (instanceError) throw instanceError;
+
+    const displayName = user?.username || user?.name || user?.display_name || 'Admin';
+    const avatar = user?.avatar || {};
+
+    const { error: membershipError } = await supabase
+        .from('instance_memberships')
+        .insert({
+            id: membershipId,
+            user_id: authUserUuid,
+            instance_id: instanceId,
+            display_name: displayName,
+            avatar,
+            role: 'admin',
+            status: 'active',
+            joined_at: now,
+            last_active_at: now
+        });
+
+    if (membershipError) {
+        throw new Error(`Community created but admin membership failed: ${membershipError.message}`);
+    }
+
+    return instance;
+}
+
 export async function updateMyCommunityInstanceSettings({
+    instance_id,
     is_public,
     settings,
     enabled_features
 }) {
     const supabase = getSupabase();
-    const membershipId = await getActiveMembershipId();
-    if (!membershipId) {
-        throw new Error('No active community membership found.');
-    }
+    let targetInstanceId = instance_id;
 
-    const { data: membership, error: membershipError } = await supabase
-        .from('instance_memberships')
-        .select('instance_id')
-        .eq('id', membershipId)
-        .maybeSingle();
-    if (membershipError) throw membershipError;
-    if (!membership?.instance_id) {
-        throw new Error('Unable to resolve community instance.');
+    if (!targetInstanceId) {
+        const membershipId = await getActiveMembershipId();
+        if (!membershipId) {
+            throw new Error('No active community membership found.');
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+            .from('instance_memberships')
+            .select('instance_id')
+            .eq('id', membershipId)
+            .maybeSingle();
+        if (membershipError) throw membershipError;
+        if (!membership?.instance_id) {
+            throw new Error('Unable to resolve community instance.');
+        }
+        targetInstanceId = membership.instance_id;
     }
 
     const updates = {
@@ -226,7 +349,7 @@ export async function updateMyCommunityInstanceSettings({
     const { data, error } = await supabase
         .from('community_instances')
         .update(updates)
-        .eq('id', membership.instance_id)
+        .eq('id', targetInstanceId)
         .select('id,name,description,logo,instance_type,is_public,invite_code,settings,enabled_features')
         .single();
     if (error) throw error;

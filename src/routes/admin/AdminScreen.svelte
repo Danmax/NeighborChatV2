@@ -18,6 +18,8 @@
         getUsageMetrics,
         getDatabaseStatus,
         fetchMyCommunityInstance,
+        fetchManagedCommunityInstances,
+        createCommunityInstance,
         updateMyCommunityInstanceSettings
     } from '../../services/admin.service.js';
     import { fetchAllFeedback, updateFeedbackStatus } from '../../services/feedback.service.js';
@@ -36,6 +38,8 @@
     let metrics = null;
     let dbStatus = null;
     let communityInstance = null;
+    let managedCommunityInstances = [];
+    let selectedCommunityInstanceId = '';
     let communityFeatureSettings = {
         enableGames: true,
         enableEvents: true,
@@ -48,6 +52,14 @@
         allowGuestAccess: true
     };
     let communityVisibility = true;
+    let creatingCommunity = false;
+    let newCommunity = {
+        name: '',
+        description: '',
+        logo: '🏘️',
+        instance_type: 'neighborhood',
+        is_public: true
+    };
 
     let newInterest = { id: '', label: '', emoji: '', sort_order: 0 };
     let feedbackResolutionNotes = {};
@@ -82,7 +94,7 @@
     });
 
     async function loadAll() {
-        const [settingsRows, statusRows, interestRows, requestRows, feedbackRows, metricsData, dbData, instanceData] = await Promise.all([
+        const [settingsRows, statusRows, interestRows, requestRows, feedbackRows, metricsData, dbData, instanceData, managedInstances] = await Promise.all([
             fetchAppSettings(),
             fetchStatusOptions(),
             fetchInterestOptions(),
@@ -90,7 +102,8 @@
             fetchAllFeedback(),
             getUsageMetrics(),
             getDatabaseStatus(),
-            fetchMyCommunityInstance()
+            fetchMyCommunityInstance(),
+            fetchManagedCommunityInstances()
         ]);
 
         settings = settingsRows.reduce((acc, row) => {
@@ -106,11 +119,19 @@
         feedback = feedbackRows || [];
         metrics = metricsData || null;
         dbStatus = dbData || null;
-        communityInstance = instanceData || null;
+        managedCommunityInstances = managedInstances || [];
 
-        const instanceSettings = communityInstance?.settings || {};
-        const enabledFeatures = new Set(communityInstance?.enabled_features || []);
-        communityVisibility = communityInstance?.is_public ?? true;
+        // Prefer the current active membership instance; otherwise use first manageable instance.
+        const defaultInstance = instanceData || managedCommunityInstances[0] || null;
+        selectedCommunityInstanceId = defaultInstance?.id || '';
+        communityInstance = defaultInstance;
+        hydrateCommunitySettings(defaultInstance);
+    }
+
+    function hydrateCommunitySettings(instance) {
+        const instanceSettings = instance?.settings || {};
+        const enabledFeatures = new Set(instance?.enabled_features || []);
+        communityVisibility = instance?.is_public ?? true;
         communityFeatureSettings = {
             enableGames: instanceSettings.enableGames ?? enabledFeatures.has('games') ?? true,
             enableEvents: instanceSettings.enableEvents ?? enabledFeatures.has('events') ?? true,
@@ -122,6 +143,12 @@
             requireApproval: instanceSettings.requireApproval ?? false,
             allowGuestAccess: instanceSettings.allowGuestAccess ?? true
         };
+    }
+
+    function selectCommunityInstance(instanceId) {
+        selectedCommunityInstanceId = instanceId;
+        communityInstance = managedCommunityInstances.find(i => i.id === instanceId) || null;
+        hydrateCommunitySettings(communityInstance);
     }
 
     async function saveBranding() {
@@ -169,13 +196,56 @@
             ];
 
             communityInstance = await updateMyCommunityInstanceSettings({
+                instance_id: communityInstance.id,
                 is_public: !!communityVisibility,
                 settings: settingsPayload,
                 enabled_features: enabledFeatures
             });
+            managedCommunityInstances = managedCommunityInstances.map(instance =>
+                instance.id === communityInstance.id ? communityInstance : instance
+            );
             showToast('Community instance settings updated.', 'success');
         } catch (err) {
             showToast(`Failed to update community settings: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleCreateCommunity() {
+        if (!newCommunity.name?.trim()) {
+            showToast('Community name is required.', 'error');
+            return;
+        }
+
+        creatingCommunity = true;
+        try {
+            const created = await createCommunityInstance({
+                name: newCommunity.name,
+                description: newCommunity.description,
+                logo: newCommunity.logo || '🏘️',
+                instance_type: newCommunity.instance_type,
+                is_public: !!newCommunity.is_public
+            });
+
+            managedCommunityInstances = [...managedCommunityInstances, created].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '')
+            );
+            communityInstance = created;
+            selectedCommunityInstanceId = created.id;
+            hydrateCommunitySettings(created);
+
+            newCommunity = {
+                name: '',
+                description: '',
+                logo: '🏘️',
+                instance_type: 'neighborhood',
+                is_public: true
+            };
+
+            showToast(`Community created: ${created.name}`, 'success');
+        } catch (err) {
+            showToast(`Failed to create community: ${err.message}`, 'error');
+        } finally {
+            creatingCommunity = false;
         }
     }
 
@@ -289,6 +359,19 @@
                 <h2>Community Instance</h2>
                 {#if communityInstance}
                     <p class="muted">Managing: <strong>{communityInstance.name}</strong></p>
+                    {#if managedCommunityInstances.length > 1}
+                        <div class="field-row">
+                            <label>Community</label>
+                            <select
+                                bind:value={selectedCommunityInstanceId}
+                                on:change={(e) => selectCommunityInstance(e.target.value)}
+                            >
+                                {#each managedCommunityInstances as instance}
+                                    <option value={instance.id}>{instance.name}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    {/if}
                     <label class="toggle">
                         <input type="checkbox" bind:checked={communityVisibility} />
                         <span>Public community listing</span>
@@ -333,6 +416,40 @@
                 {:else}
                     <p class="empty">No active community instance found for your current membership.</p>
                 {/if}
+            </div>
+
+            <div class="admin-card">
+                <h2>Create Community</h2>
+                <div class="field-row">
+                    <label>Name</label>
+                    <input type="text" bind:value={newCommunity.name} placeholder="My Community" />
+                </div>
+                <div class="field-row">
+                    <label>Description</label>
+                    <input type="text" bind:value={newCommunity.description} placeholder="What this community is about" />
+                </div>
+                <div class="community-create-grid">
+                    <div class="field-row">
+                        <label>Logo</label>
+                        <input type="text" bind:value={newCommunity.logo} maxlength="3" />
+                    </div>
+                    <div class="field-row">
+                        <label>Type</label>
+                        <select bind:value={newCommunity.instance_type}>
+                            <option value="neighborhood">Neighborhood</option>
+                            <option value="office">Office</option>
+                            <option value="campus">Campus</option>
+                            <option value="club">Club</option>
+                        </select>
+                    </div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" bind:checked={newCommunity.is_public} />
+                    <span>Public community listing</span>
+                </label>
+                <button class="btn primary" on:click={handleCreateCommunity} disabled={creatingCommunity}>
+                    {creatingCommunity ? 'Creating...' : 'Create Community'}
+                </button>
             </div>
 
             <div class="admin-card">
@@ -543,6 +660,12 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
+    }
+
+    .community-create-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
     }
 
     input, select {
@@ -857,6 +980,10 @@
         }
 
         .inline-form {
+            grid-template-columns: 1fr;
+        }
+
+        .community-create-grid {
             grid-template-columns: 1fr;
         }
     }
