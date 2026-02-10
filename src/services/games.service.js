@@ -76,6 +76,10 @@ export async function fetchGameTemplates() {
     }
 }
 
+export async function getMyMembershipId() {
+    return await getActiveMembershipId();
+}
+
 // ============================================================================
 // TEMPLATE CRUD FUNCTIONS (Admin/Moderator only)
 // ============================================================================
@@ -859,6 +863,9 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
 
         const instanceId = membership.instance_id;
 
+        let individualEntries = [];
+        let teamEntries = [];
+
         if (participantType === 'individual' || participantType === 'both') {
             let query = supabase
                 .from('game_leaderboard_individual')
@@ -876,7 +883,7 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
             if (individualError) {
                 console.error('Individual leaderboard error:', individualError);
             } else {
-                const entries = (individualData || []).map((row, idx) => ({
+                individualEntries = (individualData || []).map((row, idx) => ({
                     rank: idx + 1,
                     membershipId: row.membership_id,
                     displayName: row.display_name,
@@ -890,7 +897,7 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
                     currentWinStreak: row.current_win_streak,
                     bestWinStreak: row.best_win_streak
                 }));
-                setLeaderboardIndividual(entries);
+                setLeaderboardIndividual(individualEntries);
             }
         }
 
@@ -905,7 +912,7 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
             if (teamError) {
                 console.error('Team leaderboard error:', teamError);
             } else {
-                const entries = (teamData || []).map((row, idx) => ({
+                teamEntries = (teamData || []).map((row, idx) => ({
                     rank: idx + 1,
                     teamId: row.team_id,
                     teamName: row.team_name,
@@ -918,11 +925,11 @@ export async function fetchLeaderboard({ period = 'all_time', participantType = 
                     currentWinStreak: row.current_win_streak,
                     memberCount: row.member_count
                 }));
-                setLeaderboardTeam(entries);
+                setLeaderboardTeam(teamEntries);
             }
         }
 
-        return { individual: [], team: [] };
+        return { individual: individualEntries, team: teamEntries };
     } catch (error) {
         console.error('Failed to fetch leaderboard:', error);
         leaderboardError.set(error.message);
