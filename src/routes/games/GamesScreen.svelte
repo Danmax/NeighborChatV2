@@ -4,6 +4,7 @@
     import { isAuthenticated } from '../../stores/auth.js';
     import {
         gameTemplates,
+        gameTemplatesLoading,
         gameSessions,
         gameSessionsLoading,
         gameTeams,
@@ -18,6 +19,9 @@
         fetchGameTemplates,
         fetchGameSessions,
         fetchGameTeams,
+        createGameTemplate,
+        updateGameTemplate,
+        deleteGameTemplate,
         createGameTeam,
         updateGameTeamDetails,
         joinGameTeam,
@@ -46,6 +50,7 @@
     import RoleRequestModal from '../../components/games/RoleRequestModal.svelte';
     import CreateLocationModal from '../../components/games/CreateLocationModal.svelte';
     import CreateTournamentModal from '../../components/games/CreateTournamentModal.svelte';
+    import CreateGameTemplateModal from '../../components/games/CreateGameTemplateModal.svelte';
     import LocationCard from '../../components/games/LocationCard.svelte';
     import JoinInstanceModal from '../../components/games/JoinInstanceModal.svelte';
     import { gameLocations, gameLocationsLoading } from '../../stores/games.js';
@@ -54,6 +59,10 @@
     // State
     let activeTab = 'dashboard';
     let showCreateTeamModal = false;
+    let showCreateTemplateModal = false;
+    let templateSaveLoading = false;
+    let templateDeleteLoading = {};
+    let editTemplate = null;
     let showAddPlayersModal = false;
     let selectedSession = null;
     let sessionActionLoading = {};
@@ -88,6 +97,7 @@
 
     // Role-specific tabs
     const roleBasedTabs = [
+        { id: 'templates', label: 'Templates', icon: '🎲', requiresRole: 'game_manager' },
         { id: 'locations', label: 'Locations', icon: '📍', requiresRole: 'game_manager' }
     ];
 
@@ -342,6 +352,58 @@
         }
     }
 
+    function canManageTemplate(template) {
+        return isGameManager && template?.instanceId === currentInstanceId;
+    }
+
+    function handleOpenCreateTemplate() {
+        editTemplate = null;
+        showCreateTemplateModal = true;
+    }
+
+    function handleOpenEditTemplate(template) {
+        editTemplate = template;
+        showCreateTemplateModal = true;
+    }
+
+    async function handleSubmitTemplate(event) {
+        templateSaveLoading = true;
+        try {
+            const templateData = event.detail;
+            if (templateData.templateId) {
+                const { templateId, ...updates } = templateData;
+                await updateGameTemplate(templateId, updates);
+                showToast('Game template updated!', 'success');
+            } else {
+                await createGameTemplate(templateData);
+                showToast('Game template created!', 'success');
+            }
+            showCreateTemplateModal = false;
+            editTemplate = null;
+            await fetchGameTemplates();
+        } catch (error) {
+            showToast(error.message || 'Failed to save template', 'error');
+        } finally {
+            templateSaveLoading = false;
+        }
+    }
+
+    async function handleDeleteTemplate(template) {
+        if (!canManageTemplate(template)) return;
+        if (!confirm(`Delete "${template.name}" template?`)) return;
+
+        templateDeleteLoading[template.id] = true;
+        try {
+            await deleteGameTemplate(template.id);
+            showToast('Game template deleted', 'success');
+            await fetchGameTemplates();
+        } catch (error) {
+            showToast(error.message || 'Failed to delete template', 'error');
+        } finally {
+            templateDeleteLoading[template.id] = false;
+        }
+    }
+
     function handleRoleRequested(event) {
         // Re-fetch roles to reflect the request
         if (currentInstanceId) {
@@ -541,6 +603,72 @@
                                 {/each}
                             </div>
                         {/if}
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
+        <!-- Templates Tab (Game Manager Only) -->
+        {#if activeTab === 'templates'}
+            <div class="tab-content">
+                <div class="section-header">
+                    <h3>Game Templates</h3>
+                    {#if isGameManager}
+                        <button class="btn btn-primary btn-small" on:click={handleOpenCreateTemplate}>
+                            + Create Template
+                        </button>
+                    {/if}
+                </div>
+
+                {#if $gameTemplatesLoading}
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading templates...</p>
+                    </div>
+                {:else if $gameTemplates.length === 0}
+                    <div class="empty-state">
+                        <span class="empty-icon">🎲</span>
+                        <p>No game templates yet.</p>
+                        <p style="font-size: 13px; color: #999;">Create your first template to standardize games.</p>
+                    </div>
+                {:else}
+                    <div class="templates-grid">
+                        {#each $gameTemplates as template (template.id)}
+                            {@const gameInfo = getGameTypeInfo(template.gameType)}
+                            <div class="template-card">
+                                <span class="template-icon">{template.icon || gameInfo.icon || '🎮'}</span>
+                                <div class="template-content">
+                                    <h3>{template.name}</h3>
+                                    <p>{template.description || 'No description provided.'}</p>
+                                    <div class="template-meta">
+                                        <span>{gameInfo.label || template.gameType || 'Custom'}</span>
+                                        <span>{template.minPlayers || 2}-{template.maxPlayers || '∞'} players</span>
+                                        <span>{template.estimatedDuration || 60} min</span>
+                                    </div>
+                                </div>
+                                {#if canManageTemplate(template)}
+                                    <div class="template-actions">
+                                        <button
+                                            class="action-btn"
+                                            type="button"
+                                            title="Edit template"
+                                            on:click|stopPropagation={() => handleOpenEditTemplate(template)}
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            class="action-btn action-btn-danger"
+                                            type="button"
+                                            title="Delete template"
+                                            on:click|stopPropagation={() => handleDeleteTemplate(template)}
+                                            disabled={templateDeleteLoading[template.id]}
+                                        >
+                                            {templateDeleteLoading[template.id] ? '…' : '🗑️'}
+                                        </button>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/each}
                     </div>
                 {/if}
             </div>
@@ -764,6 +892,17 @@
             gameTemplates={$gameTemplates}
             isGameManager={isGameManager}
             on:tournamentCreated={handleTournamentCreated}
+        />
+
+        <CreateGameTemplateModal
+            show={showCreateTemplateModal}
+            loading={templateSaveLoading}
+            {editTemplate}
+            on:close={() => {
+                showCreateTemplateModal = false;
+                editTemplate = null;
+            }}
+            on:submit={handleSubmitTemplate}
         />
 
         <AddPlayersModal

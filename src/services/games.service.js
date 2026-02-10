@@ -92,8 +92,58 @@ export async function getMyMembershipId() {
 }
 
 // ============================================================================
-// TEMPLATE CRUD FUNCTIONS (Admin/Moderator only)
+// TEMPLATE CRUD FUNCTIONS (Admin/Moderator/Game Manager)
 // ============================================================================
+
+async function getTemplateManagementContext() {
+    const supabase = getSupabase();
+    const authUserId = await getAuthUserId();
+    if (!authUserId) {
+        throw new Error('Please sign in to manage game templates.');
+    }
+
+    const authUserUuid = await getAuthUserUuid();
+    const membershipId = await getActiveMembershipId();
+    if (!membershipId) {
+        throw new Error('Join a community to manage game templates.');
+    }
+
+    const { data: membership, error: membershipError } = await supabase
+        .from('instance_memberships')
+        .select('instance_id, role')
+        .eq('id', membershipId)
+        .single();
+
+    if (membershipError || !membership?.instance_id) {
+        throw new Error('Unable to resolve instance.');
+    }
+
+    let canManageTemplates = ['admin', 'moderator'].includes(membership.role);
+
+    if (!canManageTemplates && authUserUuid) {
+        const { data: gameManagerRoles, error: roleError } = await supabase
+            .from('game_roles')
+            .select('id')
+            .eq('user_id', authUserUuid)
+            .eq('instance_id', membership.instance_id)
+            .eq('role', 'game_manager')
+            .eq('is_active', true)
+            .limit(1);
+
+        if (!roleError && (gameManagerRoles || []).length > 0) {
+            canManageTemplates = true;
+        }
+    }
+
+    if (!canManageTemplates) {
+        throw new Error('Only admins, moderators, or game managers can manage game templates.');
+    }
+
+    return {
+        membershipId,
+        instanceId: membership.instance_id
+    };
+}
 
 export async function createGameTemplate({
     name,
@@ -108,34 +158,12 @@ export async function createGameTemplate({
     config
 }) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
-        throw new Error('Please sign in to create game templates.');
-    }
-
-    const membershipId = await getActiveMembershipId();
-    if (!membershipId) {
-        throw new Error('Join a community to create game templates.');
-    }
-
-    const { data: membership } = await supabase
-        .from('instance_memberships')
-        .select('instance_id, role')
-        .eq('id', membershipId)
-        .single();
-
-    if (!membership?.instance_id) {
-        throw new Error('Unable to resolve instance.');
-    }
-
-    if (!['admin', 'moderator'].includes(membership.role)) {
-        throw new Error('Only admins and moderators can create game templates.');
-    }
+    const { membershipId, instanceId } = await getTemplateManagementContext();
 
     const templateId = `game_tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
         id: templateId,
-        instance_id: membership.instance_id,
+        instance_id: instanceId,
         name: name.trim(),
         description: description?.trim() || null,
         icon: icon || '🎮',
@@ -171,10 +199,7 @@ export async function createGameTemplate({
 
 export async function updateGameTemplate(templateId, updates) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
-        throw new Error('Please sign in to update game templates.');
-    }
+    await getTemplateManagementContext();
 
     const dbUpdates = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name.trim();
@@ -204,10 +229,7 @@ export async function updateGameTemplate(templateId, updates) {
 
 export async function deleteGameTemplate(templateId) {
     const supabase = getSupabase();
-    const authUserId = await getAuthUserId();
-    if (!authUserId) {
-        throw new Error('Please sign in to delete game templates.');
-    }
+    await getTemplateManagementContext();
 
     const { error } = await supabase
         .from('game_templates')
