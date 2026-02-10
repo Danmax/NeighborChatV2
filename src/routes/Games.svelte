@@ -1,14 +1,11 @@
 <script>
     import { onMount } from 'svelte';
-    import { push } from 'svelte-spa-router';
     import { 
-        fetchGameTemplates, 
         fetchGameSessions, 
         fetchLeaderboard,
         getMyMembershipId
     } from '../services/games.service.js';
 
-    let templates = [];
     let sessions = [];
     let myStats = null;
     let loading = true;
@@ -18,13 +15,11 @@
         loading = true;
         try {
             membershipId = await getMyMembershipId();
-            const [tpls, sess, lb] = await Promise.all([
-                fetchGameTemplates(),
+            const [sess, lb] = await Promise.all([
                 fetchGameSessions(),
                 fetchLeaderboard({ limit: 1000 })
             ]);
-            
-            templates = tpls;
+
             sessions = sess.filter(s => s.status === 'active' || s.status === 'scheduled');
             
             if (membershipId && lb.individual) {
@@ -37,17 +32,8 @@
         }
     });
 
-    function handleStartSession(template) {
-        // Navigate to session creation or handle logic
-        // For now, we can redirect to the sessions tab or open a modal if implemented
-        console.log("Starting session for:", template.name);
-        // Example: push(`/games/create-session/${template.id}`);
-        alert(`Starting a new session for ${template.name}`);
-    }
-
     function joinSession(session) {
         console.log("Joining session:", session.id);
-        // Example: push(`/games/session/${session.id}`);
         alert(`Joining session: ${session.name}`);
     }
 </script>
@@ -113,20 +99,6 @@
             {/if}
         </section>
 
-        <!-- Start a Game (Templates) -->
-        <section class="templates-section">
-            <h2>Start a Game</h2>
-            <div class="templates-grid">
-                {#each templates as template}
-                    <div class="template-card">
-                        <div class="template-icon">{template.icon}</div>
-                        <h3>{template.name}</h3>
-                        <p>{template.description || 'No description available.'}</p>
-                        <button class="btn-secondary" on:click={() => handleStartSession(template)}>Play</button>
-                    </div>
-                {/each}
-            </div>
-        </section>
     {/if}
 </div>
 
@@ -151,16 +123,7 @@
     .status-badge.active { background: #e6fffa; color: #006040; }
     .status-badge.scheduled { background: #fff8e1; color: #b7791f; }
 
-    .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
-    .template-card { border: 1px solid #eee; padding: 20px; border-radius: 12px; text-align: center; transition: transform 0.2s; background: white; }
-    .template-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .template-icon { font-size: 2.5rem; margin-bottom: 15px; }
-    .template-card h3 { margin: 0 0 10px 0; font-size: 1.1rem; }
-    .template-card p { font-size: 0.9rem; color: #666; margin-bottom: 20px; min-height: 40px; }
-
     .btn-primary { background: #0070f3; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; }
-    .btn-secondary { background: white; color: #333; border: 1px solid #ddd; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; }
-    .btn-secondary:hover { background: #f5f5f5; }
     .empty-text { color: #888; font-style: italic; }
     .loading-state { text-align: center; padding: 40px; color: #666; }
 </style>
