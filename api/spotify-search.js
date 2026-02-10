@@ -1,40 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import { requireClerkUser } from './_clerk.js';
 import { rateLimitMiddleware } from './_rateLimit.js';
+import { getSupabaseAdmin, readCache, writeCache } from './_shared.js';
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
-
-function getSupabaseAdmin() {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return null;
-    return createClient(url, key, { auth: { persistSession: false } });
-}
-
-async function readCache(cacheKey) {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return null;
-    const { data } = await supabase
-        .from('movie_cache')
-        .select('data, expires_at')
-        .eq('cache_key', cacheKey)
-        .single();
-    if (!data) return null;
-    if (new Date(data.expires_at) < new Date()) return null;
-    return data.data;
-}
-
-async function writeCache(cacheKey, payload, ttlHours = 6) {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return;
-    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
-    await supabase.from('movie_cache').upsert({
-        cache_key: cacheKey,
-        data: payload,
-        expires_at: expiresAt
-    });
-}
 
 async function getSpotifyToken() {
     const now = Date.now();
@@ -91,8 +60,9 @@ export default async function handler(req, res) {
         return;
     }
 
-    const cacheKey = `spotify:track:${query.toLowerCase()}`;
-    const cached = await readCache(cacheKey);
+    const offset = parseInt(req.query?.offset || '0', 10);
+    const cacheKey = `spotify:track:${query.toLowerCase()}:${offset}`;
+    const cached = await readCache(supabase, cacheKey);
     if (cached) {
         res.status(200).json(cached);
         return;
@@ -108,6 +78,7 @@ export default async function handler(req, res) {
     url.searchParams.set('q', query);
     url.searchParams.set('type', 'track');
     url.searchParams.set('limit', '10');
+    url.searchParams.set('offset', offset.toString());
 
     try {
         const response = await fetch(url.toString(), {
@@ -130,7 +101,7 @@ export default async function handler(req, res) {
             uri: item.uri
         }));
         const payload = { results };
-        await writeCache(cacheKey, payload, 6);
+        await writeCache(supabase, cacheKey, payload, 6);
         res.status(200).json(payload);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch tracks' });

@@ -36,7 +36,8 @@ export default async function handler(req, res) {
         return;
     }
 
-    const cacheKey = `tmdb:search:${query.toLowerCase()}`;
+    const page = parseInt(req.query?.page || '1', 10);
+    const cacheKey = `tmdb:search:${query.toLowerCase()}:${page}`;
     const cached = await readCache(supabase, cacheKey);
     if (cached) {
         res.status(200).json(cached);
@@ -47,6 +48,7 @@ export default async function handler(req, res) {
     url.searchParams.set('api_key', apiKey);
     url.searchParams.set('query', query);
     url.searchParams.set('include_adult', 'false');
+    url.searchParams.set('page', page.toString());
 
     try {
         const response = await fetch(url.toString());
