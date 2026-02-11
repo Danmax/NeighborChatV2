@@ -34,6 +34,7 @@
     let communityInstance = null;
     let managedCommunityInstances = [];
     let selectedCommunityInstanceId = '';
+    let settingsTab = 'community';
     let communityFeatureSettings = {
         enableGames: true,
         enableEvents: true,
@@ -46,6 +47,12 @@
         allowGuestAccess: true
     };
     let communityVisibility = true;
+    let communityEdit = {
+        name: '',
+        description: '',
+        logo: '🏘️',
+        instance_type: 'neighborhood'
+    };
     let creatingCommunity = false;
     let newCommunity = {
         name: '',
@@ -121,6 +128,12 @@
         const instanceSettings = instance?.settings || {};
         const enabledFeatures = new Set(instance?.enabled_features || []);
         communityVisibility = instance?.is_public ?? true;
+        communityEdit = {
+            name: instance?.name || '',
+            description: instance?.description || '',
+            logo: instance?.logo || '🏘️',
+            instance_type: instance?.instance_type || 'neighborhood'
+        };
         communityFeatureSettings = {
             enableGames: instanceSettings.enableGames ?? enabledFeatures.has('games') ?? true,
             enableEvents: instanceSettings.enableEvents ?? enabledFeatures.has('events') ?? true,
@@ -186,6 +199,10 @@
 
             communityInstance = await updateMyCommunityInstanceSettings({
                 instance_id: communityInstance.id,
+                name: communityEdit.name,
+                description: communityEdit.description,
+                logo: communityEdit.logo,
+                instance_type: communityEdit.instance_type,
                 is_public: !!communityVisibility,
                 settings: settingsPayload,
                 enabled_features: enabledFeatures
@@ -267,6 +284,13 @@
             showToast(`Failed to update feedback: ${err.message}`, 'error');
         }
     }
+
+    function getRequesterDisplay(req) {
+        if (req.display_name && req.username) return `${req.display_name} (@${req.username})`;
+        if (req.display_name) return req.display_name;
+        if (req.username) return `@${req.username}`;
+        return 'Community Member';
+    }
 </script>
 
 {#if loading}
@@ -281,166 +305,204 @@
         </header>
 
         {#if isAdminUser}
+        <section class="settings-tabs">
+            <button class="btn" class:primary={settingsTab === 'community'} on:click={() => settingsTab = 'community'}>Community</button>
+            <button class="btn" class:primary={settingsTab === 'branding'} on:click={() => settingsTab = 'branding'}>Branding</button>
+            <button class="btn" class:primary={settingsTab === 'ai'} on:click={() => settingsTab = 'ai'}>AI</button>
+            <button class="btn" class:primary={settingsTab === 'ops'} on:click={() => settingsTab = 'ops'}>Metrics & DB</button>
+        </section>
+
         <section class="admin-grid">
-            <div class="admin-card">
-                <h2>Branding</h2>
-                <div class="field-row">
-                    <label>App Name</label>
-                    <input type="text" bind:value={branding.name} />
-                </div>
-                <div class="field-row">
-                    <label>Logo Emoji</label>
-                    <input type="text" bind:value={branding.logo} maxlength="3" />
-                </div>
-                <div class="field-row">
-                    <label>Tagline</label>
-                    <input type="text" bind:value={branding.tagline} />
-                </div>
-                <button class="btn primary" on:click={saveBranding}>Save Branding</button>
-            </div>
-
-            <div class="admin-card">
-                <h2>AI Integration</h2>
-                <label class="toggle">
-                    <input type="checkbox" bind:checked={aiSettings.enabled} />
-                    <span>Enable AI features</span>
-                </label>
-                <div class="field-row">
-                    <label>Provider</label>
-                    <select bind:value={aiSettings.provider}>
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="field-row">
-                    <label>Key Status</label>
-                    <input type="text" bind:value={aiSettings.status} placeholder="set in Supabase secrets" />
-                </div>
-                <button class="btn primary" on:click={saveAiSettings}>Save AI Settings</button>
-            </div>
-
-            <div class="admin-card">
-                <h2>Community Instance</h2>
-                {#if communityInstance}
-                    <p class="muted">Managing: <strong>{communityInstance.name}</strong></p>
-                    {#if managedCommunityInstances.length > 1}
+            {#if settingsTab === 'community'}
+                <div class="admin-card">
+                    <h2>Edit Community</h2>
+                    {#if communityInstance}
+                        <p class="muted">Managing: <strong>{communityInstance.name}</strong></p>
+                        {#if managedCommunityInstances.length > 1}
+                            <div class="field-row">
+                                <label>Community</label>
+                                <select
+                                    bind:value={selectedCommunityInstanceId}
+                                    on:change={(e) => selectCommunityInstance(e.target.value)}
+                                >
+                                    {#each managedCommunityInstances as instance}
+                                        <option value={instance.id}>{instance.name}</option>
+                                    {/each}
+                                </select>
+                            </div>
+                        {/if}
                         <div class="field-row">
-                            <label>Community</label>
-                            <select
-                                bind:value={selectedCommunityInstanceId}
-                                on:change={(e) => selectCommunityInstance(e.target.value)}
-                            >
-                                {#each managedCommunityInstances as instance}
-                                    <option value={instance.id}>{instance.name}</option>
-                                {/each}
+                            <label>Name</label>
+                            <input type="text" bind:value={communityEdit.name} />
+                        </div>
+                        <div class="field-row">
+                            <label>Description</label>
+                            <input type="text" bind:value={communityEdit.description} />
+                        </div>
+                        <div class="community-create-grid">
+                            <div class="field-row">
+                                <label>Logo</label>
+                                <input type="text" bind:value={communityEdit.logo} maxlength="3" />
+                            </div>
+                            <div class="field-row">
+                                <label>Type</label>
+                                <select bind:value={communityEdit.instance_type}>
+                                    <option value="neighborhood">Neighborhood</option>
+                                    <option value="office">Office</option>
+                                    <option value="campus">Campus</option>
+                                    <option value="club">Club</option>
+                                </select>
+                            </div>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityVisibility} />
+                            <span>Public community listing</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableGames} />
+                            <span>Enable Games</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableEvents} />
+                            <span>Enable Events</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableCelebrations} />
+                            <span>Enable Celebrations</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableChat} />
+                            <span>Enable Chat</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableAwards} />
+                            <span>Enable Awards</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableSponsors} />
+                            <span>Enable Sponsors</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.enableKnowledge} />
+                            <span>Enable Knowledge</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.requireApproval} />
+                            <span>Require Join Approval</span>
+                        </label>
+                        <label class="toggle">
+                            <input type="checkbox" bind:checked={communityFeatureSettings.allowGuestAccess} />
+                            <span>Allow Guest Access</span>
+                        </label>
+                        <button class="btn primary" on:click={saveCommunityInstanceSettings}>Save Community</button>
+                    {:else}
+                        <p class="empty">No active community instance found for your current membership.</p>
+                    {/if}
+                </div>
+
+                <div class="admin-card">
+                    <h2>Create Community</h2>
+                    <div class="field-row">
+                        <label>Name</label>
+                        <input type="text" bind:value={newCommunity.name} placeholder="My Community" />
+                    </div>
+                    <div class="field-row">
+                        <label>Description</label>
+                        <input type="text" bind:value={newCommunity.description} placeholder="What this community is about" />
+                    </div>
+                    <div class="community-create-grid">
+                        <div class="field-row">
+                            <label>Logo</label>
+                            <input type="text" bind:value={newCommunity.logo} maxlength="3" />
+                        </div>
+                        <div class="field-row">
+                            <label>Type</label>
+                            <select bind:value={newCommunity.instance_type}>
+                                <option value="neighborhood">Neighborhood</option>
+                                <option value="office">Office</option>
+                                <option value="campus">Campus</option>
+                                <option value="club">Club</option>
                             </select>
                         </div>
-                    {/if}
+                    </div>
                     <label class="toggle">
-                        <input type="checkbox" bind:checked={communityVisibility} />
+                        <input type="checkbox" bind:checked={newCommunity.is_public} />
                         <span>Public community listing</span>
                     </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableGames} />
-                        <span>Enable Games</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableEvents} />
-                        <span>Enable Events</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableCelebrations} />
-                        <span>Enable Celebrations</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableChat} />
-                        <span>Enable Chat</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableAwards} />
-                        <span>Enable Awards</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableSponsors} />
-                        <span>Enable Sponsors</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.enableKnowledge} />
-                        <span>Enable Knowledge</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.requireApproval} />
-                        <span>Require Join Approval</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" bind:checked={communityFeatureSettings.allowGuestAccess} />
-                        <span>Allow Guest Access</span>
-                    </label>
-                    <button class="btn primary" on:click={saveCommunityInstanceSettings}>Save Community Settings</button>
-                {:else}
-                    <p class="empty">No active community instance found for your current membership.</p>
-                {/if}
-            </div>
+                    <button class="btn primary" on:click={handleCreateCommunity} disabled={creatingCommunity}>
+                        {creatingCommunity ? 'Creating...' : 'Create Community'}
+                    </button>
+                </div>
+            {/if}
 
-            <div class="admin-card">
-                <h2>Create Community</h2>
-                <div class="field-row">
-                    <label>Name</label>
-                    <input type="text" bind:value={newCommunity.name} placeholder="My Community" />
-                </div>
-                <div class="field-row">
-                    <label>Description</label>
-                    <input type="text" bind:value={newCommunity.description} placeholder="What this community is about" />
-                </div>
-                <div class="community-create-grid">
+            {#if settingsTab === 'branding'}
+                <div class="admin-card">
+                    <h2>Branding</h2>
                     <div class="field-row">
-                        <label>Logo</label>
-                        <input type="text" bind:value={newCommunity.logo} maxlength="3" />
+                        <label>App Name</label>
+                        <input type="text" bind:value={branding.name} />
                     </div>
                     <div class="field-row">
-                        <label>Type</label>
-                        <select bind:value={newCommunity.instance_type}>
-                            <option value="neighborhood">Neighborhood</option>
-                            <option value="office">Office</option>
-                            <option value="campus">Campus</option>
-                            <option value="club">Club</option>
+                        <label>Logo Emoji</label>
+                        <input type="text" bind:value={branding.logo} maxlength="3" />
+                    </div>
+                    <div class="field-row">
+                        <label>Tagline</label>
+                        <input type="text" bind:value={branding.tagline} />
+                    </div>
+                    <button class="btn primary" on:click={saveBranding}>Save Branding</button>
+                </div>
+            {/if}
+
+            {#if settingsTab === 'ai'}
+                <div class="admin-card">
+                    <h2>AI Integration</h2>
+                    <label class="toggle">
+                        <input type="checkbox" bind:checked={aiSettings.enabled} />
+                        <span>Enable AI features</span>
+                    </label>
+                    <div class="field-row">
+                        <label>Provider</label>
+                        <select bind:value={aiSettings.provider}>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="other">Other</option>
                         </select>
                     </div>
+                    <div class="field-row">
+                        <label>Key Status</label>
+                        <input type="text" bind:value={aiSettings.status} placeholder="set in Supabase secrets" />
+                    </div>
+                    <button class="btn primary" on:click={saveAiSettings}>Save AI Settings</button>
                 </div>
-                <label class="toggle">
-                    <input type="checkbox" bind:checked={newCommunity.is_public} />
-                    <span>Public community listing</span>
-                </label>
-                <button class="btn primary" on:click={handleCreateCommunity} disabled={creatingCommunity}>
-                    {creatingCommunity ? 'Creating...' : 'Create Community'}
-                </button>
-            </div>
+            {/if}
 
-            <div class="admin-card">
-                <h2>Usage Metrics</h2>
-                {#if metrics}
-                    <div class="metric"><span>Users</span><strong>{metrics.users}</strong></div>
-                    <div class="metric"><span>Events</span><strong>{metrics.events}</strong></div>
-                    <div class="metric"><span>Celebrations</span><strong>{metrics.celebrations}</strong></div>
-                    <div class="metric"><span>Messages</span><strong>{metrics.messages}</strong></div>
-                    <div class="metric"><span>Feedback</span><strong>{metrics.feedback}</strong></div>
-                    <div class="metric"><span>Storage Objects</span><strong>{metrics.storage_objects}</strong></div>
-                {:else}
-                    <p>No metrics available.</p>
-                {/if}
-            </div>
+            {#if settingsTab === 'ops'}
+                <div class="admin-card">
+                    <h2>Usage Metrics</h2>
+                    {#if metrics}
+                        <div class="metric"><span>Users</span><strong>{metrics.users}</strong></div>
+                        <div class="metric"><span>Events</span><strong>{metrics.events}</strong></div>
+                        <div class="metric"><span>Celebrations</span><strong>{metrics.celebrations}</strong></div>
+                        <div class="metric"><span>Messages</span><strong>{metrics.messages}</strong></div>
+                        <div class="metric"><span>Feedback</span><strong>{metrics.feedback}</strong></div>
+                        <div class="metric"><span>Storage Objects</span><strong>{metrics.storage_objects}</strong></div>
+                    {:else}
+                        <p>No metrics available.</p>
+                    {/if}
+                </div>
 
-            <div class="admin-card">
-                <h2>Database Status</h2>
-                {#if dbStatus}
-                    <div class="metric"><span>DB</span><strong>{dbStatus.database}</strong></div>
-                    <div class="metric"><span>Size</span><strong>{Math.round(dbStatus.db_size_bytes / 1024 / 1024)} MB</strong></div>
-                    <div class="metric"><span>Timestamp</span><strong>{new Date(dbStatus.timestamp).toLocaleString()}</strong></div>
-                {:else}
-                    <p>No database info.</p>
-                {/if}
-            </div>
+                <div class="admin-card">
+                    <h2>Database Status</h2>
+                    {#if dbStatus}
+                        <div class="metric"><span>DB</span><strong>{dbStatus.database}</strong></div>
+                        <div class="metric"><span>Size</span><strong>{Math.round(dbStatus.db_size_bytes / 1024 / 1024)} MB</strong></div>
+                        <div class="metric"><span>Timestamp</span><strong>{new Date(dbStatus.timestamp).toLocaleString()}</strong></div>
+                    {:else}
+                        <p>No database info.</p>
+                    {/if}
+                </div>
+            {/if}
         </section>
         {/if}
 
@@ -459,11 +521,7 @@
                     {#each requests as req}
                         <div class="row">
                             <span>
-                                {#if req.display_name && req.username}
-                                    {req.display_name} (@{req.username})
-                                {:else}
-                                    {req.username || req.display_name || `user:${String(req.user_id).slice(0, 8)}`}
-                                {/if}
+                                {getRequesterDisplay(req)}
                             </span>
                             <span class="badge {req.status}">{req.status}</span>
                             <span>{req.reason || '—'}</span>
@@ -588,6 +646,13 @@
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 16px;
         margin: 20px 0 32px;
+    }
+
+    .settings-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 16px 0 4px;
     }
 
     .admin-card {

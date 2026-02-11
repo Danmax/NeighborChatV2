@@ -147,6 +147,27 @@ export async function fetchEventManagerRequests() {
     const unresolved = userIds.filter((id) => !profileMap.has(String(id)));
     const unresolvedUuidIds = unresolved.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id)));
 
+    // Fallback 1: public_profiles view (often less restrictive than user_profiles RLS)
+    if (unresolved.length > 0) {
+        const { data: publicProfiles } = await supabase
+            .from('public_profiles')
+            .select('user_id, username, display_name')
+            .in('user_id', unresolved.map(String));
+
+        for (const profile of publicProfiles || []) {
+            if (!profile?.user_id) continue;
+            const key = String(profile.user_id);
+            if (!profileMap.has(key)) {
+                profileMap.set(key, {
+                    id: profile.user_id,
+                    clerk_user_id: null,
+                    username: profile.username || null,
+                    display_name: profile.display_name || null
+                });
+            }
+        }
+    }
+
     if (unresolvedUuidIds.length > 0) {
         const { data: memberships } = await supabase
             .from('instance_memberships')
@@ -359,6 +380,10 @@ export async function createCommunityInstance({
 
 export async function updateMyCommunityInstanceSettings({
     instance_id,
+    name,
+    description,
+    logo,
+    instance_type,
     is_public,
     settings,
     enabled_features
@@ -387,6 +412,10 @@ export async function updateMyCommunityInstanceSettings({
     const updates = {
         updated_at: new Date().toISOString()
     };
+    if (name !== undefined) updates.name = String(name || '').trim() || null;
+    if (description !== undefined) updates.description = String(description || '').trim() || null;
+    if (logo !== undefined) updates.logo = String(logo || '').trim() || '🏘️';
+    if (instance_type !== undefined) updates.instance_type = instance_type;
     if (is_public !== undefined) updates.is_public = is_public;
     if (settings !== undefined) updates.settings = settings;
     if (enabled_features !== undefined) updates.enabled_features = enabled_features;

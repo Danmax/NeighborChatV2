@@ -111,26 +111,33 @@
                                 celebration.category || celebration.type,
                                 celebration.celebration_date
                             )}
+                            {@const celebrationType = getCelebrationCategory(celebration.category || celebration.type)}
+                            {@const mediaSrc = celebration.gif_url || celebration.image || celebration.image_url}
+                            {@const hasGif = !!celebration.gif_url}
                             <button
                                 type="button"
                                 class="celebration-feed-card"
                                 on:click={() => push(`/celebrations/${celebration.id}`)}
                             >
-                                <div class="feed-media">
-                                    {#if celebration.gif_url || celebration.image || celebration.image_url}
+                                <div class="feed-media" class:has-gif={hasGif}>
+                                    {#if mediaSrc}
                                         <img
-                                            src={celebration.gif_url || celebration.image || celebration.image_url}
+                                            src={mediaSrc}
                                             alt="Celebration media"
                                             loading="lazy"
+                                            class:gif-media={hasGif}
                                         />
                                     {:else}
-                                        <div class="media-fallback">
-                                            <span>{getCelebrationCategory(celebration.category).emoji}</span>
+                                        <div
+                                            class="media-fallback"
+                                            style={getCelebrationMessageStyle(celebration.message_bg_color, celebration.message_bg_pattern)}
+                                        >
+                                            <span>{celebrationType.emoji}</span>
                                         </div>
                                     {/if}
                                     <div class="feed-type">
-                                        <span class="feed-emoji">{getCelebrationCategory(celebration.category).emoji}</span>
-                                        <span class="feed-type-label">{getCelebrationCategory(celebration.category).label}</span>
+                                        <span class="feed-emoji">{celebrationType.emoji}</span>
+                                        <span class="feed-type-label">{celebrationType.label}</span>
                                     </div>
                                 </div>
 
@@ -156,6 +163,11 @@
                                             {celebration.message}
                                         </p>
                                     {/if}
+                                </div>
+
+                                <div class="feed-type-footer">
+                                    <span class="feed-type-footer-icon">{celebrationType.emoji}</span>
+                                    <span class="feed-type-footer-label">{celebrationType.label}</span>
                                 </div>
                             </button>
                         {/each}
@@ -396,7 +408,8 @@
 
     .feed-media {
         position: relative;
-        aspect-ratio: 4 / 3;
+        min-height: 260px;
+        height: 260px;
         background: #f4f4f4;
         overflow: hidden;
     }
@@ -407,6 +420,15 @@
         object-fit: contain;
         display: block;
         background: #f4f4f4;
+    }
+
+    .feed-media.has-gif {
+        min-height: 320px;
+        height: 320px;
+    }
+
+    .feed-media img.gif-media {
+        object-fit: cover;
     }
 
     .media-fallback {
@@ -444,7 +466,7 @@
         padding: 14px 16px 16px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
     }
 
     .feed-title {
@@ -488,6 +510,30 @@
     .feed-pseudo-secondary {
         font-size: 11px;
         color: var(--text-muted);
+    }
+
+    .feed-type-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--cream-dark);
+        background: var(--cream);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .feed-type-footer-icon {
+        font-size: 15px;
+        line-height: 1;
+    }
+
+    .feed-type-footer-label {
+        line-height: 1;
     }
 
     .empty-state {
@@ -545,6 +591,16 @@
     @media (max-width: 768px) {
         .celebrations-preview {
             max-height: 440px;
+        }
+
+        .feed-media {
+            min-height: 220px;
+            height: 220px;
+        }
+
+        .feed-media.has-gif {
+            min-height: 280px;
+            height: 280px;
         }
     }
 </style>
