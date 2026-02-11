@@ -100,6 +100,8 @@
     let editTeam = null;
     let currentMembershipId = null;
     let currentInstanceId = null;
+    let currentInstanceName = '';
+    let currentInstanceLogo = '🏘️';
     let userRole = null;
     let availableInstances = [];
     let loadingInstances = false;
@@ -157,6 +159,7 @@
     $: selectedSessionTemplate = $gameTemplates.find(t => t.id === sessionForm.templateId) || null;
     $: playerDisplayName = gameProfileForm.displayName?.trim() || $currentUser?.name || 'Player';
     $: playerAvatarValue = gameProfileForm.avatar?.trim() || '';
+    $: gameHeaderTitle = currentInstanceName ? `${currentInstanceName} Games` : 'Office Games';
 
     function getDefaultSessionDateTime() {
         const now = new Date();
@@ -185,27 +188,41 @@
         return myJoinedSessionIds.includes(sessionId);
     }
 
+    async function loadCurrentCommunityContext(membershipId = currentMembershipId) {
+        if (!membershipId) {
+            currentInstanceId = null;
+            currentInstanceName = '';
+            currentInstanceLogo = '🏘️';
+            return;
+        }
+
+        try {
+            const supabase = getSupabase();
+            const { data: membership } = await supabase
+                .from('instance_memberships')
+                .select('instance_id, community_instances(name, logo)')
+                .eq('id', membershipId)
+                .single();
+
+            if (membership?.instance_id) {
+                currentInstanceId = membership.instance_id;
+                currentInstanceName = membership.community_instances?.name || '';
+                currentInstanceLogo = membership.community_instances?.logo || '🏘️';
+                return;
+            }
+        } catch (error) {
+            console.error('Error loading current community context:', error);
+        }
+
+        currentInstanceId = null;
+        currentInstanceName = '';
+        currentInstanceLogo = '🏘️';
+    }
+
     onMount(async () => {
         if ($isAuthenticated) {
             currentMembershipId = await getActiveMembershipId();
-
-            // Get instance ID from the active membership
-            if (currentMembershipId) {
-                try {
-                    const supabase = getSupabase();
-                    const { data: membership } = await supabase
-                        .from('instance_memberships')
-                        .select('instance_id')
-                        .eq('id', currentMembershipId)
-                        .single();
-
-                    if (membership?.instance_id) {
-                        currentInstanceId = membership.instance_id;
-                    }
-                } catch (error) {
-                    console.error('Error fetching instance ID:', error);
-                }
-            }
+            await loadCurrentCommunityContext(currentMembershipId);
 
             userRole = await getUserRole();
             const [templates] = await Promise.all([
@@ -667,9 +684,13 @@
         try {
             await joinInstance(instanceId);
             showToast('Successfully joined community!', 'success');
-            // Reload page or update instance
+            const joinedInstance = availableInstances.find(instance => instance.id === instanceId);
             currentInstanceId = instanceId;
+            currentInstanceName = joinedInstance?.name || currentInstanceName;
+            currentInstanceLogo = joinedInstance?.icon || currentInstanceLogo;
             showJoinInstanceModal = false;
+            currentMembershipId = await getActiveMembershipId();
+            await loadCurrentCommunityContext(currentMembershipId);
             await fetchMyGameRoles(instanceId);
             const [templates] = await Promise.all([
                 fetchGameTemplates(),
@@ -697,7 +718,20 @@
         <div class="screen-header">
             <button class="back-btn" on:click={() => push('/')}>← Back</button>
             <div class="header-content">
-                <h2 class="card-title">Office Games</h2>
+                <h2 class="card-title">{gameHeaderTitle}</h2>
+                {#if currentInstanceId}
+                    <div class="community-indicator" title={`Current community: ${currentInstanceName || currentInstanceId}`}>
+                        <span class="community-icon">{currentInstanceLogo || '🏘️'}</span>
+                        <span class="community-label">
+                            Community: {currentInstanceName || currentInstanceId}
+                        </span>
+                    </div>
+                {:else}
+                    <div class="community-indicator muted">
+                        <span class="community-icon">🏘️</span>
+                        <span class="community-label">No active community selected</span>
+                    </div>
+                {/if}
             </div>
             <div class="header-actions">
                 <RoleRequestModal
@@ -1343,6 +1377,38 @@
         font-weight: 800;
         color: #1f2937;
         letter-spacing: -0.02em;
+    }
+
+    .community-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        color: #3730a3;
+        font-size: 12px;
+        font-weight: 700;
+        max-width: 100%;
+    }
+
+    .community-indicator.muted {
+        background: #f3f4f6;
+        border-color: #e5e7eb;
+        color: #6b7280;
+    }
+
+    .community-icon {
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    .community-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: min(70vw, 420px);
     }
 
     .screen-subtitle {
@@ -2276,6 +2342,15 @@
     }
 
     @media (max-width: 640px) {
+        .screen-header {
+            flex-wrap: wrap;
+        }
+
+        .header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
         .card-title {
             font-size: 22px;
         }
