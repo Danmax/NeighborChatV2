@@ -6,6 +6,7 @@
     import { upcomingEvents } from '../../stores/events.js';
     import { celebrations } from '../../stores/celebrations.js';
     import { savedContacts } from '../../stores/contacts.js';
+    import { getCelebrationCategory } from '../../stores/celebrations.js';
     import {
         setupPresenceChannel,
         updatePresenceStatus
@@ -13,9 +14,10 @@
     import { fetchEvents } from '../../services/events.service.js';
     import { fetchCelebrations } from '../../services/celebrations.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
+    import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
+    import { getCelebrationMessageStyle } from '../../lib/utils/celebrationStyle.js';
     import OnlineCount from '../../components/users/OnlineCount.svelte';
     import EventCard from '../../components/events/EventCard.svelte';
-    import CelebrationCard from '../../components/celebrations/CelebrationCard.svelte';
     import ContactList from '../../components/contacts/ContactList.svelte';
 
     // Auth routing handled centrally in App.svelte
@@ -105,11 +107,57 @@
                 {#if recentCelebrations.length > 0}
                     <div class="celebrations-preview">
                         {#each recentCelebrations as celebration (celebration.id)}
-                            <CelebrationCard
-                                {celebration}
-                                interactive={false}
-                                on:open={() => push(`/celebrations/${celebration.id}`)}
-                            />
+                            {@const pseudoDate = getCelebrationPseudoDate(
+                                celebration.category || celebration.type,
+                                celebration.celebration_date
+                            )}
+                            <button
+                                type="button"
+                                class="celebration-feed-card"
+                                on:click={() => push(`/celebrations/${celebration.id}`)}
+                            >
+                                <div class="feed-media">
+                                    {#if celebration.gif_url || celebration.image || celebration.image_url}
+                                        <img
+                                            src={celebration.gif_url || celebration.image || celebration.image_url}
+                                            alt="Celebration media"
+                                            loading="lazy"
+                                        />
+                                    {:else}
+                                        <div class="media-fallback">
+                                            <span>{getCelebrationCategory(celebration.category).emoji}</span>
+                                        </div>
+                                    {/if}
+                                    <div class="feed-type">
+                                        <span class="feed-emoji">{getCelebrationCategory(celebration.category).emoji}</span>
+                                        <span class="feed-type-label">{getCelebrationCategory(celebration.category).label}</span>
+                                    </div>
+                                </div>
+
+                                <div class="feed-body">
+                                    {#if celebration.title}
+                                        <h3 class="feed-title">{celebration.title}</h3>
+                                    {:else}
+                                        <h3 class="feed-title">Kudos</h3>
+                                    {/if}
+
+                                    {#if pseudoDate}
+                                        <div class="feed-pseudo-date">
+                                            <span class="feed-pseudo-primary">{pseudoDate.primary}</span>
+                                            <span class="feed-pseudo-secondary">{pseudoDate.secondary}</span>
+                                        </div>
+                                    {/if}
+
+                                    {#if celebration.message}
+                                        <p
+                                            class="feed-message"
+                                            style={getCelebrationMessageStyle(celebration.message_bg_color, celebration.message_bg_pattern)}
+                                        >
+                                            {celebration.message}
+                                        </p>
+                                    {/if}
+                                </div>
+                            </button>
                         {/each}
                     </div>
                 {:else}
@@ -324,6 +372,122 @@
         max-height: 560px;
         overflow-y: auto;
         padding-right: 4px;
+    }
+
+    .celebration-feed-card {
+        background: white;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid var(--cream-dark);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        text-align: left;
+        padding: 0;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .celebration-feed-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .feed-media {
+        position: relative;
+        aspect-ratio: 4 / 3;
+        background: #f4f4f4;
+        overflow: hidden;
+    }
+
+    .feed-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        background: #f4f4f4;
+    }
+
+    .media-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 42px;
+        color: var(--text-muted);
+        background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
+    }
+
+    .feed-type {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.65);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .feed-emoji {
+        font-size: 14px;
+    }
+
+    .feed-body {
+        padding: 14px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .feed-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .feed-message {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-light);
+        line-height: 1.5;
+        border-radius: 10px;
+        border: 1px solid var(--cream-dark);
+        padding: 8px 10px;
+        max-height: 3.6em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .feed-pseudo-date {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--cream-dark);
+        background: var(--cream);
+    }
+
+    .feed-pseudo-primary {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .feed-pseudo-secondary {
+        font-size: 11px;
+        color: var(--text-muted);
     }
 
     .empty-state {
