@@ -408,26 +408,34 @@
 
     .feed-media {
         position: relative;
-        min-height: 260px;
-        height: 260px;
         background: #f4f4f4;
         overflow: hidden;
     }
 
     .feed-media img {
         width: 100%;
-        height: 100%;
-        object-fit: contain;
         display: block;
         background: #f4f4f4;
     }
 
+    .feed-media:not(.has-gif) {
+        aspect-ratio: 16 / 9;
+    }
+
+    .feed-media:not(.has-gif) img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
     .feed-media.has-gif {
-        min-height: 320px;
-        height: 320px;
+        overflow: visible;
     }
 
     .feed-media img.gif-media {
+        width: 100%;
+        height: auto;
+        max-height: none;
         object-fit: contain;
     }
 
@@ -593,14 +601,8 @@
             max-height: 440px;
         }
 
-        .feed-media {
-            min-height: 220px;
-            height: 220px;
-        }
-
-        .feed-media.has-gif {
-            min-height: 280px;
-            height: 280px;
+        .feed-media:not(.has-gif) {
+            aspect-ratio: 4 / 3;
         }
     }
 </style>
