@@ -49,7 +49,6 @@
     import TeamCard from '../../components/games/TeamCard.svelte';
     import CreateTeamModal from '../../components/games/CreateTeamModal.svelte';
     import LeaderboardTab from '../../components/games/LeaderboardTab.svelte';
-    import AwardsSection from '../../components/games/AwardsSection.svelte';
     import GameScoreEntry from '../../components/games/GameScoreEntry.svelte';
     import AddPlayersModal from '../../components/games/AddPlayersModal.svelte';
     import UserDashboard from '../../components/games/UserDashboard.svelte';
@@ -120,8 +119,7 @@
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'sessions', label: 'Sessions', icon: '📅' },
         { id: 'teams', label: 'Teams', icon: '👥' },
-        { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
-        { id: 'awards', label: 'Awards', icon: '🎖️' }
+        { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' }
     ];
 
     // Role-specific tabs
@@ -1080,13 +1078,6 @@
         {#if activeTab === 'leaderboard'}
             <div class="tab-content">
                 <LeaderboardTab />
-            </div>
-        {/if}
-
-        <!-- Awards Tab -->
-        {#if activeTab === 'awards'}
-            <div class="tab-content">
-                <AwardsSection />
             </div>
         {/if}
 
