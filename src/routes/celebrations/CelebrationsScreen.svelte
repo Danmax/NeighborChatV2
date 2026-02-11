@@ -73,6 +73,17 @@
         }
     }
 
+    function handleSpotifyPreviewPlay(event) {
+        const currentAudio = event.currentTarget;
+        const resultsContainer = currentAudio?.closest('.spotify-results');
+        if (!resultsContainer) return;
+        resultsContainer.querySelectorAll('audio').forEach(audio => {
+            if (audio !== currentAudio) {
+                audio.pause();
+            }
+        });
+    }
+
     function handleSelectSpotifyTrack(track) {
         musicUrl = track?.url || track?.uri || '';
         spotifyResults = [];
@@ -371,6 +382,17 @@
                                         <div class="spotify-track-meta">
                                             {track.artists}{#if track.album} • {track.album}{/if}
                                         </div>
+                                        {#if track.preview_url}
+                                            <audio
+                                                class="spotify-preview"
+                                                controls
+                                                preload="none"
+                                                src={track.preview_url}
+                                                on:play={handleSpotifyPreviewPlay}
+                                            ></audio>
+                                        {:else}
+                                            <div class="spotify-preview-unavailable">Preview unavailable for this track</div>
+                                        {/if}
                                     </div>
                                     <button
                                         class="btn btn-secondary btn-small"
@@ -729,6 +751,19 @@
     }
 
     .spotify-track-meta {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .spotify-preview {
+        margin-top: 8px;
+        width: 100%;
+        max-width: 260px;
+        height: 32px;
+    }
+
+    .spotify-preview-unavailable {
+        margin-top: 6px;
         font-size: 12px;
         color: var(--text-muted);
     }

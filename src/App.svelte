@@ -418,10 +418,6 @@
                         <span class="mega-icon">💬</span>
                         <span class="mega-label">Feedback</span>
                     </a>
-                    <a href="#/pricing" class="mega-item" on:click={() => showMobileMenu = false}>
-                        <span class="mega-icon">💳</span>
-                        <span class="mega-label">Pricing</span>
-                    </a>
                     {#if isAdmin}
                         <a href="#/admin" class="mega-item" on:click={() => showMobileMenu = false}>
                             <span class="mega-icon">🛠️</span>
