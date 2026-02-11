@@ -148,17 +148,6 @@
         return labels[role] || role;
     }
 
-    function isLikelyImageUrl(value) {
-        const trimmed = (value || '').trim();
-        if (!trimmed) return false;
-        return /^(https?:\/\/|data:image\/|\/)/i.test(trimmed);
-    }
-
-    function getPlayerInitial(name) {
-        const trimmed = (name || '').trim();
-        return trimmed ? trimmed[0].toUpperCase() : 'P';
-    }
-
     $: isCaptain = (team) => {
         return team.captainMembershipId === currentMembershipId;
     };
@@ -170,10 +159,6 @@
     $: selectedSessionTemplate = $gameTemplates.find(t => t.id === sessionForm.templateId) || null;
     $: playerDisplayName = gameProfileForm.displayName?.trim() || $currentUser?.name || 'Player';
     $: playerAvatarValue = gameProfileForm.avatar?.trim() || '';
-    $: playerAvatarIsImage = isLikelyImageUrl(playerAvatarValue);
-    $: playerAvatarFallback = playerAvatarIsImage
-        ? getPlayerInitial(playerDisplayName)
-        : (playerAvatarValue || getPlayerInitial(playerDisplayName));
 
     function getDefaultSessionDateTime() {
         const now = new Date();
@@ -770,32 +755,14 @@
         <!-- Dashboard Tab -->
         {#if activeTab === 'dashboard'}
             <div class="tab-content">
-                <div class="profile-setup-card">
-                    <div class="player-profile-summary">
-                        <div class="player-avatar-chip">
-                            {#if playerAvatarIsImage}
-                                <img src={playerAvatarValue} alt={playerDisplayName} />
-                            {:else}
-                                <span>{playerAvatarFallback}</span>
-                            {/if}
-                        </div>
-                        <div class="player-profile-text">
-                            <h3>{playerDisplayName}</h3>
-                            <p>
-                                {#if gameProfileForm.skillLevel}
-                                    {gameProfileForm.skillLevel}
-                                {:else}
-                                    Set up your game identity, skill level, and preferences.
-                                {/if}
-                            </p>
-                        </div>
-                    </div>
-                    <button class="btn btn-secondary btn-small" on:click={() => showGameProfileModal = true}>
-                        {gameProfileId ? 'Edit Profile' : 'Create Profile'}
-                    </button>
-                </div>
-
-                <UserDashboard instanceId={currentInstanceId} />
+                <UserDashboard
+                    instanceId={currentInstanceId}
+                    profileName={playerDisplayName}
+                    profileAvatar={playerAvatarValue}
+                    profileSkillLevel={gameProfileId ? gameProfileForm.skillLevel : ''}
+                    profileActionLabel={gameProfileId ? 'Edit Profile' : 'Create Profile'}
+                    on:editProfile={() => showGameProfileModal = true}
+                />
                 {#if isAdmin}
                     <div class="role-requests-panel">
                         <div class="section-header">
@@ -1384,75 +1351,6 @@
         font-size: 15px;
         margin-bottom: 24px;
         line-height: 1.5;
-    }
-
-    .profile-setup-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-    }
-
-    .profile-setup-card h3 {
-        margin: 0 0 4px;
-        font-size: 16px;
-        color: #111827;
-    }
-
-    .profile-setup-card p {
-        margin: 0;
-        font-size: 13px;
-        color: #6b7280;
-    }
-
-    .player-profile-summary {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-width: 0;
-    }
-
-    .player-avatar-chip {
-        width: 52px;
-        height: 52px;
-        border-radius: 50%;
-        overflow: hidden;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-        border: 1px solid #dbeafe;
-        color: #312e81;
-        font-size: 24px;
-        font-weight: 700;
-        line-height: 1;
-    }
-
-    .player-avatar-chip img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .player-profile-text {
-        min-width: 0;
-    }
-
-    .player-profile-text h3 {
-        margin: 0;
-        font-size: 17px;
-        font-weight: 700;
-        color: #111827;
-    }
-
-    .player-profile-text p {
-        margin-top: 2px;
     }
 
     .role-requests-panel {
@@ -2391,17 +2289,6 @@
             width: 56px;
             height: 56px;
             font-size: 32px;
-        }
-
-        .profile-setup-card {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .player-avatar-chip {
-            width: 46px;
-            height: 46px;
-            font-size: 20px;
         }
 
         .session-row {

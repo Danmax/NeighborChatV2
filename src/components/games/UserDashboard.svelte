@@ -1,11 +1,17 @@
 <script>
-    import { onMount } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';
     import { currentUser } from '../../stores/auth.js';
     import { playerAwards, gameSessions, gameRoles, leaderboard, myTeam } from '../../stores/games.js';
     import { fetchMyGameRoles, fetchPlayerAwards, fetchGameSessions } from '../../services/games.service.js';
     import { getGameTypeInfo } from '../../stores/games.js';
 
     export let instanceId;
+    export let profileName = '';
+    export let profileAvatar = '';
+    export let profileSkillLevel = '';
+    export let profileActionLabel = 'Edit Profile';
+
+    const dispatch = createEventDispatcher();
 
     let loading = true;
     let stats = {
@@ -36,6 +42,13 @@
         .slice(0, 6);
 
     $: myRoles = $gameRoles.filter(r => r.isActive);
+    $: displayName = profileName?.trim() || $currentUser?.displayName || $currentUser?.name || 'Player';
+    $: avatarValue = profileAvatar?.trim() || $currentUser?.avatar || '';
+    $: avatarIsImage = /^https?:\/\//i.test(avatarValue) || avatarValue.startsWith('data:image/');
+    $: avatarFallback = avatarValue || displayName[0]?.toUpperCase() || 'P';
+    $: skillLabel = profileSkillLevel
+        ? `${profileSkillLevel[0].toUpperCase()}${profileSkillLevel.slice(1)} skill level`
+        : 'Complete your game profile';
 
     $: {
         if ($currentUser && $gameSessions.length > 0) {
@@ -117,6 +130,10 @@
         return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     }
 
+    function handleEditProfile() {
+        dispatch('editProfile');
+    }
+
     onMount(async () => {
         loading = true;
         try {
@@ -140,34 +157,40 @@
             <p>Loading your dashboard...</p>
         </div>
     {:else}
-        <!-- Header Section with Roles -->
+        <!-- Header Section -->
         <div class="dashboard-header">
-            <div class="user-info">
-                <div class="user-avatar">
-                    {#if $currentUser?.avatar}
-                        <img src={$currentUser.avatar} alt={$currentUser.displayName} />
-                    {:else}
-                        <span>{($currentUser?.displayName || 'U')[0].toUpperCase()}</span>
-                    {/if}
+            <div class="dashboard-header-main">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        {#if avatarIsImage}
+                            <img src={avatarValue} alt={displayName} />
+                        {:else}
+                            <span>{avatarFallback}</span>
+                        {/if}
+                    </div>
+                    <div class="user-details">
+                        <h2>{displayName}</h2>
+                        <p class="profile-subtitle">{skillLabel}</p>
+                        {#if myRoles.length > 0}
+                            <div class="role-badges">
+                                {#each myRoles as role}
+                                    <span class="role-badge">
+                                        {getRoleIcon(role.role)} {getRoleLabel(role.role)}
+                                    </span>
+                                {/each}
+                            </div>
+                        {/if}
+                        {#if $myTeam}
+                            <div class="team-badge">
+                                <span class="team-icon">{$myTeam.icon}</span>
+                                <span class="team-name">{$myTeam.name}</span>
+                            </div>
+                        {/if}
+                    </div>
                 </div>
-                <div class="user-details">
-                    <h2>{$currentUser?.displayName || 'Player'}</h2>
-                    {#if myRoles.length > 0}
-                        <div class="role-badges">
-                            {#each myRoles as role}
-                                <span class="role-badge">
-                                    {getRoleIcon(role.role)} {getRoleLabel(role.role)}
-                                </span>
-                            {/each}
-                        </div>
-                    {/if}
-                    {#if $myTeam}
-                        <div class="team-badge">
-                            <span class="team-icon">{$myTeam.icon}</span>
-                            <span class="team-name">{$myTeam.name}</span>
-                        </div>
-                    {/if}
-                </div>
+                <button class="btn btn-secondary btn-small profile-action-btn" type="button" on:click={handleEditProfile}>
+                    {profileActionLabel}
+                </button>
             </div>
         </div>
 
@@ -351,10 +374,18 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
+    .dashboard-header-main {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
     .user-info {
         display: flex;
         align-items: center;
         gap: 16px;
+        min-width: 0;
     }
 
     .user-avatar {
@@ -382,17 +413,24 @@
     }
 
     .user-details h2 {
-        margin: 0 0 8px;
+        margin: 0;
         font-size: 24px;
         font-weight: 700;
         color: #333;
+    }
+
+    .profile-subtitle {
+        margin: 2px 0 8px;
+        font-size: 13px;
+        color: #666;
+        font-weight: 500;
     }
 
     .role-badges {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
 
     .role-badge {
@@ -422,6 +460,12 @@
 
     .team-icon {
         font-size: 14px;
+    }
+
+    .profile-action-btn {
+        white-space: nowrap;
+        align-self: center;
+        flex-shrink: 0;
     }
 
     .stats-grid {
@@ -651,6 +695,15 @@
     @media (max-width: 768px) {
         .user-dashboard {
             padding: 12px;
+        }
+
+        .dashboard-header-main {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .profile-action-btn {
+            width: 100%;
         }
 
         .stats-grid {
