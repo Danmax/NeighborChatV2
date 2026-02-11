@@ -261,7 +261,10 @@
         </header>
         <div class="beta-banner" role="status">
             <span class="beta-badge">Beta</span>
-            <span>We’re testing this app — your feedback is appreciated.</span>
+            <div class="beta-message">
+                <span>Join User Acceptance Beta</span>
+                <span>Provide Feedback on the latest Features.</span>
+            </div>
         </div>
 
         {#if $isAuthenticated && $showTopMenu}
@@ -458,6 +461,12 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+    }
+
+    .beta-message {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
     }
 
     /* Modern Top Navigation - Glassmorphism */

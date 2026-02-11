@@ -135,16 +135,17 @@
 	}
 </script>
 
-<button
-	class="create-tournament-button"
-	on:click={openModal}
-	disabled={!isGameManager}
-	title={isGameManager ? 'Create a new tournament' : 'Only Game Managers can create tournaments'}
-	aria-label="Create tournament"
->
-	<span class="icon">🏆</span>
-	<span class="label">Create Tournament</span>
-</button>
+{#if isGameManager}
+	<button
+		class="create-tournament-button"
+		on:click={openModal}
+		title="Create a new tournament"
+		aria-label="Create tournament"
+	>
+		<span class="icon">🏆</span>
+		<span class="label">Create Tournament</span>
+	</button>
+{/if}
 
 {#if isOpen}
 	<div class="modal-overlay" on:click={closeModal}>

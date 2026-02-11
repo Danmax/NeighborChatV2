@@ -560,11 +560,13 @@
     }
 
     function handleOpenCreateTemplate() {
+        if (!isGameManager) return;
         editTemplate = null;
         showCreateTemplateModal = true;
     }
 
     function handleOpenEditTemplate(template) {
+        if (!canManageTemplate(template)) return;
         editTemplate = template;
         showCreateTemplateModal = true;
     }
@@ -1268,12 +1270,14 @@
             on:submit={handleCreateTeam}
         />
 
-        <CreateTournamentModal
-            instanceId={currentInstanceId}
-            gameTemplates={$gameTemplates}
-            isGameManager={isGameManager}
-            on:tournamentCreated={handleTournamentCreated}
-        />
+        {#if isGameManager}
+            <CreateTournamentModal
+                instanceId={currentInstanceId}
+                gameTemplates={$gameTemplates}
+                isGameManager={isGameManager}
+                on:tournamentCreated={handleTournamentCreated}
+            />
+        {/if}
 
         <CreateGameTemplateModal
             show={showCreateTemplateModal}
