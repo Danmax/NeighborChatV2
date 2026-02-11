@@ -11,6 +11,11 @@
     import { showToast } from '../../stores/toasts.js';
     import { toDateInputUtc } from '../../lib/utils/date.js';
     import { getClerkToken } from '../../lib/clerk.js';
+    import {
+        CELEBRATION_MESSAGE_COLORS,
+        CELEBRATION_MESSAGE_PATTERNS,
+        getCelebrationMessageStyle
+    } from '../../lib/utils/celebrationStyle.js';
 
     export let params = {};
 
@@ -36,6 +41,8 @@
     let searchingEditSpotify = false;
     let editSpotifyError = '';
     let editSpotifyEmbedPreviewTrackId = null;
+    let editMessageBgColor = CELEBRATION_MESSAGE_COLORS[0].value;
+    let editMessageBgPattern = CELEBRATION_MESSAGE_PATTERNS[0].id;
 
     $: replyCount = celebration?.comments?.length || 0;
     $: currentUuid = $currentUser?.user_uuid;
@@ -107,6 +114,10 @@
         if (!trimmed) return true;
         return /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(trimmed)
             || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(trimmed);
+    }
+
+    function editMessageStylePreview() {
+        return getCelebrationMessageStyle(editMessageBgColor, editMessageBgPattern);
     }
 
     function getSpotifyEmbedUrl(url) {
@@ -206,6 +217,8 @@
         editGif = target.gif_url ? { url: target.gif_url } : null;
         editImageUrl = target.image_url || '';
         editMusicUrl = target.music_url || '';
+        editMessageBgColor = target.message_bg_color || CELEBRATION_MESSAGE_COLORS[0].value;
+        editMessageBgPattern = target.message_bg_pattern || CELEBRATION_MESSAGE_PATTERNS[0].id;
         editSpotifyQuery = '';
         editSpotifyResults = [];
         editSpotifyError = '';
@@ -231,6 +244,8 @@
                 gif_url: editGif?.url || null,
                 image_url: editImageUrl || null,
                 music_url: editMusicUrl.trim() || null,
+                message_bg_color: editMessageBgColor,
+                message_bg_pattern: editMessageBgPattern,
                 celebration_date: toDateInputUtc(editDate) || null
             });
             celebration = await fetchCelebrationById(celebration.id);
@@ -307,6 +322,44 @@
                         Message
                         <textarea bind:value={editMessage} rows="3" maxlength="500"></textarea>
                     </label>
+                    <fieldset class="emoji-style-fieldset">
+                        <legend>Emoji Art Style</legend>
+                        <div class="message-style-grid">
+                            <div class="message-style-block">
+                                <span class="style-label">Background</span>
+                                <div class="color-chip-row" role="group" aria-label="Message background color">
+                                    {#each CELEBRATION_MESSAGE_COLORS as option}
+                                        <button
+                                            type="button"
+                                            class="color-chip"
+                                            class:selected={editMessageBgColor === option.value}
+                                            title={option.label}
+                                            style={`--chip-color: ${option.value};`}
+                                            on:click={() => editMessageBgColor = option.value}
+                                        ></button>
+                                    {/each}
+                                </div>
+                            </div>
+                            <div class="message-style-block">
+                                <span class="style-label">Pattern</span>
+                                <div class="pattern-chip-row" role="group" aria-label="Message pattern">
+                                    {#each CELEBRATION_MESSAGE_PATTERNS as pattern}
+                                        <button
+                                            type="button"
+                                            class="pattern-chip"
+                                            class:selected={editMessageBgPattern === pattern.id}
+                                            on:click={() => editMessageBgPattern = pattern.id}
+                                        >
+                                            {pattern.label}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="message-style-preview" style={editMessageStylePreview()}>
+                            ✨ {editMessage.trim() || 'Your emoji art message preview'}
+                        </div>
+                    </fieldset>
                     <label>
                         Image
                         {#if editImageUrl}
@@ -607,6 +660,82 @@
         gap: 6px;
         font-size: 13px;
         color: var(--text-muted);
+    }
+
+    .emoji-style-fieldset {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin: 0;
+    }
+
+    .emoji-style-fieldset legend {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 0 4px;
+    }
+
+    .message-style-grid {
+        display: grid;
+        gap: 10px;
+    }
+
+    .message-style-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .style-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .color-chip-row,
+    .pattern-chip-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .color-chip {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        background: var(--chip-color);
+        cursor: pointer;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .color-chip.selected {
+        border-color: var(--primary);
+    }
+
+    .pattern-chip {
+        border: 1px solid #e0e0e0;
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: white;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .pattern-chip.selected {
+        border-color: var(--primary);
+        background: var(--cream);
+        font-weight: 600;
+    }
+
+    .message-style-preview {
+        margin-top: 8px;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--text);
     }
 
     .edit-card input,

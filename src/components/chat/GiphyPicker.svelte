@@ -199,33 +199,36 @@
 
     .giphy-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 3px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
         padding: 6px;
-        max-height: 180px;
+        max-height: 320px;
         overflow-y: auto;
     }
 
     .gif-item {
-        aspect-ratio: 1;
+        aspect-ratio: auto;
+        min-height: 110px;
         border: none;
-        background: var(--cream);
+        background: #fff;
         border-radius: 6px;
         overflow: hidden;
         cursor: pointer;
         padding: 0;
-        transition: transform 0.15s ease;
+        border: 1px solid var(--cream-dark);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .gif-item:hover {
-        transform: scale(1.08);
-        z-index: 1;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
     }
 
     .gif-item img {
         width: 100%;
-        height: 100%;
-        object-fit: cover;
+        height: 120px;
+        object-fit: contain;
+        background: #f7f7f7;
     }
 
     /* Preview Styles */
@@ -246,10 +249,12 @@
     }
 
     .preview-image img {
-        max-width: 150px;
-        max-height: 150px;
+        width: 100%;
+        max-width: 280px;
+        max-height: 220px;
         border-radius: 8px;
         object-fit: contain;
+        background: #f7f7f7;
     }
 
     .preview-message {
@@ -336,5 +341,11 @@
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 520px) {
+        .giphy-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 </style>

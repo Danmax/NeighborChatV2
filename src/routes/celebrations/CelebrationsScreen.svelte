@@ -24,6 +24,11 @@
     import { toDateInputUtc } from '../../lib/utils/date.js';
     import { getClerkToken } from '../../lib/clerk.js';
     import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
+    import {
+        CELEBRATION_MESSAGE_COLORS,
+        CELEBRATION_MESSAGE_PATTERNS,
+        getCelebrationMessageStyle
+    } from '../../lib/utils/celebrationStyle.js';
 
     let showCreateForm = false;
     let creating = false;
@@ -44,12 +49,18 @@
     let title = '';
     let message = '';
     let celebrationDate = '';
+    let messageBgColor = CELEBRATION_MESSAGE_COLORS[0].value;
+    let messageBgPattern = CELEBRATION_MESSAGE_PATTERNS[0].id;
 
     function isValidSpotifyUrl(url) {
         const trimmed = (url || '').trim();
         if (!trimmed) return true;
         return /spotify\.com\/(track|album|playlist)\/[a-zA-Z0-9]+/.test(trimmed)
             || /spotify:(track|album|playlist):[a-zA-Z0-9]+/.test(trimmed);
+    }
+
+    function messageStylePreview(color = messageBgColor, pattern = messageBgPattern) {
+        return getCelebrationMessageStyle(color, pattern);
     }
 
     async function searchSpotifyTracks() {
@@ -140,6 +151,8 @@
                 gif_url: selectedGif?.url || null,
                 image_url: imageUrl || null,
                 music_url: musicUrl.trim() || null,
+                message_bg_color: messageBgColor,
+                message_bg_pattern: messageBgPattern,
                 celebration_date: toDateInputUtc(celebrationDate) || null
             };
 
@@ -156,6 +169,8 @@
             title = '';
             message = '';
             celebrationDate = '';
+            messageBgColor = CELEBRATION_MESSAGE_COLORS[0].value;
+            messageBgPattern = CELEBRATION_MESSAGE_PATTERNS[0].id;
             selectedGif = null;
             imageUrl = '';
             musicUrl = '';
@@ -187,6 +202,8 @@
         title = celebration.title || '';
         message = celebration.message || '';
         celebrationDate = toDateInputUtc(celebration.celebration_date) || '';
+        messageBgColor = celebration.message_bg_color || CELEBRATION_MESSAGE_COLORS[0].value;
+        messageBgPattern = celebration.message_bg_pattern || CELEBRATION_MESSAGE_PATTERNS[0].id;
         selectedGif = celebration.gif_url ? { url: celebration.gif_url } : null;
         imageUrl = celebration.image_url || '';
         musicUrl = celebration.music_url || '';
@@ -317,6 +334,45 @@
                         maxlength="500"
                     ></textarea>
                 </div>
+
+                <fieldset class="form-group">
+                    <legend>Emoji Art Style</legend>
+                    <div class="message-style-grid">
+                        <div class="message-style-block">
+                            <span class="style-label">Background</span>
+                            <div class="color-chip-row" role="group" aria-label="Message background color">
+                                {#each CELEBRATION_MESSAGE_COLORS as option}
+                                    <button
+                                        type="button"
+                                        class="color-chip"
+                                        class:selected={messageBgColor === option.value}
+                                        title={option.label}
+                                        style={`--chip-color: ${option.value};`}
+                                        on:click={() => messageBgColor = option.value}
+                                    ></button>
+                                {/each}
+                            </div>
+                        </div>
+                        <div class="message-style-block">
+                            <span class="style-label">Pattern</span>
+                            <div class="pattern-chip-row" role="group" aria-label="Message pattern">
+                                {#each CELEBRATION_MESSAGE_PATTERNS as pattern}
+                                    <button
+                                        type="button"
+                                        class="pattern-chip"
+                                        class:selected={messageBgPattern === pattern.id}
+                                        on:click={() => messageBgPattern = pattern.id}
+                                    >
+                                        {pattern.label}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="message-style-preview" style={messageStylePreview()}>
+                        ✨ {message.trim() || 'Your emoji art message preview'}
+                    </div>
+                </fieldset>
 
                 {#if category === 'birthday' || category === 'anniversary'}
                     <div class="form-group">
@@ -533,7 +589,10 @@
                                     {/if}
 
                                     {#if celebration.message}
-                                        <p class="feed-message">
+                                        <p
+                                            class="feed-message"
+                                            style={messageStylePreview(celebration.message_bg_color, celebration.message_bg_pattern)}
+                                        >
                                             {celebration.message}
                                         </p>
                                     {/if}
@@ -736,6 +795,68 @@
         display: flex;
         gap: 12px;
         justify-content: flex-end;
+    }
+
+    .message-style-grid {
+        display: grid;
+        gap: 10px;
+    }
+
+    .message-style-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .style-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .color-chip-row,
+    .pattern-chip-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .color-chip {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        background: var(--chip-color);
+        cursor: pointer;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .color-chip.selected {
+        border-color: var(--primary);
+    }
+
+    .pattern-chip {
+        border: 1px solid var(--cream-dark);
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: white;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .pattern-chip.selected {
+        border-color: var(--primary);
+        background: var(--cream);
+        font-weight: 600;
+    }
+
+    .message-style-preview {
+        margin-top: 8px;
+        border-radius: 10px;
+        border: 1px solid var(--cream-dark);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--text);
     }
 
     .gif-preview {
@@ -983,6 +1104,9 @@
         font-size: 13px;
         color: var(--text-light);
         line-height: 1.5;
+        border-radius: 10px;
+        border: 1px solid var(--cream-dark);
+        padding: 8px 10px;
         max-height: 3.6em;
         overflow: hidden;
         display: -webkit-box;

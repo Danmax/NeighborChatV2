@@ -5,6 +5,7 @@
     import { getCelebrationCategory, REACTIONS } from '../../stores/celebrations.js';
     import { currentUser } from '../../stores/auth.js';
     import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
+    import { getCelebrationMessageStyle } from '../../lib/utils/celebrationStyle.js';
 
     export let celebration;
     export let interactive = true;
@@ -28,6 +29,7 @@
     $: mediaUrl = celebration.gif_url || celebration.image || celebration.image_url;
     $: authorId = celebration.authorId || celebration.user_id;
     $: pseudoDate = getCelebrationPseudoDate(celebration.category || celebration.type, celebration.celebration_date);
+    $: messageStyle = getCelebrationMessageStyle(celebration.message_bg_color, celebration.message_bg_pattern);
 
     function getReactionCounts(reactions = {}) {
         const counts = {};
@@ -140,7 +142,7 @@
                 </div>
             </div>
             {#if celebration.message}
-                <p class="celebration-message">{celebration.message}</p>
+                <p class="celebration-message" style={messageStyle}>{celebration.message}</p>
             {/if}
         {:else}
             {#if celebration.title}
@@ -152,11 +154,11 @@
                     <img src={mediaUrl} alt="Celebration media" loading="lazy" />
                 </div>
                 {#if celebration.message}
-                    <p class="celebration-message">{celebration.message}</p>
+                    <p class="celebration-message" style={messageStyle}>{celebration.message}</p>
                 {/if}
             {:else}
                 {#if celebration.message}
-                    <p class="celebration-message">{celebration.message}</p>
+                    <p class="celebration-message" style={messageStyle}>{celebration.message}</p>
                 {/if}
                 {#if celebration.image}
                     <div class="celebration-image">
@@ -327,6 +329,9 @@
         color: var(--text-light);
         line-height: 1.5;
         white-space: pre-wrap;
+        padding: 10px 12px;
+        border: 1px solid var(--cream-dark);
+        border-radius: 12px;
     }
 
     .celebration-pseudo-date {
