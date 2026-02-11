@@ -23,6 +23,7 @@
     import { showToast } from '../../stores/toasts.js';
     import { toDateInputUtc } from '../../lib/utils/date.js';
     import { getClerkToken } from '../../lib/clerk.js';
+    import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
 
     let showCreateForm = false;
     let creating = false;
@@ -490,6 +491,10 @@
                 {:else}
                     <div class="celebrations-grid">
                         {#each $celebrations as celebration (celebration.id)}
+                            {@const pseudoDate = getCelebrationPseudoDate(
+                                celebration.category || celebration.type,
+                                celebration.celebration_date
+                            )}
                             <button
                                 type="button"
                                 class="celebration-feed-card"
@@ -518,6 +523,13 @@
                                         <h3 class="feed-title">{celebration.title}</h3>
                                     {:else}
                                         <h3 class="feed-title">Kudos</h3>
+                                    {/if}
+
+                                    {#if pseudoDate}
+                                        <div class="feed-pseudo-date">
+                                            <span class="feed-pseudo-primary">{pseudoDate.primary}</span>
+                                            <span class="feed-pseudo-secondary">{pseudoDate.secondary}</span>
+                                        </div>
                                     {/if}
 
                                     {#if celebration.message}
@@ -976,6 +988,27 @@
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
+    }
+
+    .feed-pseudo-date {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--cream-dark);
+        background: var(--cream);
+    }
+
+    .feed-pseudo-primary {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .feed-pseudo-secondary {
+        font-size: 11px;
+        color: var(--text-muted);
     }
 
     .feed-mentions {

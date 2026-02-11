@@ -4,6 +4,7 @@
     import Avatar from '../avatar/Avatar.svelte';
     import { getCelebrationCategory, REACTIONS } from '../../stores/celebrations.js';
     import { currentUser } from '../../stores/auth.js';
+    import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
 
     export let celebration;
     export let interactive = true;
@@ -26,6 +27,7 @@
     $: formattedTime = formatTime(celebration.created_at);
     $: mediaUrl = celebration.gif_url || celebration.image || celebration.image_url;
     $: authorId = celebration.authorId || celebration.user_id;
+    $: pseudoDate = getCelebrationPseudoDate(celebration.category || celebration.type, celebration.celebration_date);
 
     function getReactionCounts(reactions = {}) {
         const counts = {};
@@ -162,6 +164,13 @@
                     </div>
                 {/if}
             {/if}
+        {/if}
+
+        {#if pseudoDate}
+            <div class="celebration-pseudo-date">
+                <span class="pseudo-date-primary">{pseudoDate.primary}</span>
+                <span class="pseudo-date-secondary">{pseudoDate.secondary}</span>
+            </div>
         {/if}
     </div>
 
@@ -318,6 +327,28 @@
         color: var(--text-light);
         line-height: 1.5;
         white-space: pre-wrap;
+    }
+
+    .celebration-pseudo-date {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: var(--cream);
+        border: 1px solid var(--cream-dark);
+    }
+
+    .pseudo-date-primary {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .pseudo-date-secondary {
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     .celebration-image {
