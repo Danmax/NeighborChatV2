@@ -428,7 +428,7 @@
     }
 
     .feed-media img.gif-media {
-        object-fit: cover;
+        object-fit: contain;
     }
 
     .media-fallback {

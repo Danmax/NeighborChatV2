@@ -366,7 +366,6 @@
     .celebration-image img {
         width: 100%;
         height: auto;
-        max-height: 420px;
         display: block;
         object-fit: contain;
     }
@@ -530,9 +529,9 @@
 
     .comment-gif {
         width: 100%;
-        max-height: 180px;
+        height: auto;
         border-radius: 8px;
-        object-fit: cover;
+        object-fit: contain;
     }
 
     .view-all-comments {

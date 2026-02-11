@@ -924,8 +924,8 @@
 
     .reply-gif {
         width: 100%;
-        max-height: 240px;
-        object-fit: cover;
+        height: auto;
+        object-fit: contain;
         border-radius: 10px;
     }
 
