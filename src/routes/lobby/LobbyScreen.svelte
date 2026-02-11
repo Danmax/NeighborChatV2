@@ -24,7 +24,7 @@
         .filter(e => (e.visibility === 'public' || e.visibility === undefined) && e.status !== 'draft')
         .slice(0, 3);
 
-    $: recentCelebrations = ($celebrations || []).slice(0, 3);
+    $: recentCelebrations = ($celebrations || []);
     $: recentConnections = ($savedContacts || []).slice(0, 3);
 
 
@@ -320,6 +320,12 @@
         gap: 12px;
     }
 
+    .celebrations-preview {
+        max-height: 560px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
     .empty-state {
         text-align: center;
         padding: 30px 20px;
@@ -370,5 +376,11 @@
 
     .btn-full {
         width: 100%;
+    }
+
+    @media (max-width: 768px) {
+        .celebrations-preview {
+            max-height: 440px;
+        }
     }
 </style>
