@@ -36,6 +36,7 @@
     let spotifyResults = [];
     let searchingSpotify = false;
     let spotifyError = '';
+    let spotifyEmbedPreviewTrackId = null;
 
     // Form fields
     let category = 'milestone';
@@ -66,6 +67,7 @@
                 throw new Error(data.error || 'Search failed');
             }
             spotifyResults = data.results || [];
+            spotifyEmbedPreviewTrackId = null;
         } catch (err) {
             spotifyError = err.message || 'Search failed';
         } finally {
@@ -84,11 +86,31 @@
         });
     }
 
+    function toggleSpotifyEmbedPreview(trackId) {
+        spotifyEmbedPreviewTrackId = spotifyEmbedPreviewTrackId === trackId ? null : trackId;
+    }
+
+    function getSpotifyTrackEmbedUrl(track) {
+        if (track?.id) {
+            return `https://open.spotify.com/embed/track/${track.id}`;
+        }
+        const uriMatch = (track?.uri || '').match(/^spotify:track:([a-zA-Z0-9]+)$/);
+        if (uriMatch) {
+            return `https://open.spotify.com/embed/track/${uriMatch[1]}`;
+        }
+        const webMatch = (track?.url || '').match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+        if (webMatch) {
+            return `https://open.spotify.com/embed/track/${webMatch[1]}`;
+        }
+        return null;
+    }
+
     function handleSelectSpotifyTrack(track) {
         musicUrl = track?.url || track?.uri || '';
         spotifyResults = [];
         spotifyQuery = '';
         spotifyError = '';
+        spotifyEmbedPreviewTrackId = null;
     }
 
     onMount(() => {
@@ -391,7 +413,28 @@
                                                 on:play={handleSpotifyPreviewPlay}
                                             ></audio>
                                         {:else}
-                                            <div class="spotify-preview-unavailable">Preview unavailable for this track</div>
+                                            <button
+                                                class="btn btn-secondary btn-small spotify-preview-fallback-btn"
+                                                type="button"
+                                                on:click={() => toggleSpotifyEmbedPreview(track.id)}
+                                            >
+                                                {spotifyEmbedPreviewTrackId === track.id ? 'Hide Preview' : 'Preview'}
+                                            </button>
+                                            {#if spotifyEmbedPreviewTrackId === track.id}
+                                                {@const embedUrl = getSpotifyTrackEmbedUrl(track)}
+                                                {#if embedUrl}
+                                                    <iframe
+                                                        class="spotify-preview-embed"
+                                                        title={`Spotify preview ${track.title}`}
+                                                        src={embedUrl}
+                                                        width="100%"
+                                                        height="80"
+                                                        frameborder="0"
+                                                        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                                                        loading="lazy"
+                                                    ></iframe>
+                                                {/if}
+                                            {/if}
                                         {/if}
                                     </div>
                                     <button
@@ -762,10 +805,18 @@
         height: 32px;
     }
 
-    .spotify-preview-unavailable {
-        margin-top: 6px;
-        font-size: 12px;
-        color: var(--text-muted);
+    .spotify-preview-fallback-btn {
+        margin-top: 8px;
+    }
+
+    .spotify-preview-embed {
+        margin-top: 8px;
+        border: 0;
+        border-radius: 10px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 320px;
+        background: #fff;
     }
 
     .btn {

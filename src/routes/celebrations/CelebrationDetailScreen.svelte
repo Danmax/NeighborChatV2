@@ -35,6 +35,7 @@
     let editSpotifyResults = [];
     let searchingEditSpotify = false;
     let editSpotifyError = '';
+    let editSpotifyEmbedPreviewTrackId = null;
 
     $: replyCount = celebration?.comments?.length || 0;
     $: currentUuid = $currentUser?.user_uuid;
@@ -138,6 +139,7 @@
                 throw new Error(data.error || 'Search failed');
             }
             editSpotifyResults = data.results || [];
+            editSpotifyEmbedPreviewTrackId = null;
         } catch (err) {
             editSpotifyError = err.message || 'Search failed';
         } finally {
@@ -156,11 +158,31 @@
         });
     }
 
+    function toggleEditSpotifyEmbedPreview(trackId) {
+        editSpotifyEmbedPreviewTrackId = editSpotifyEmbedPreviewTrackId === trackId ? null : trackId;
+    }
+
+    function getSpotifyTrackEmbedUrl(track) {
+        if (track?.id) {
+            return `https://open.spotify.com/embed/track/${track.id}`;
+        }
+        const uriMatch = (track?.uri || '').match(/^spotify:track:([a-zA-Z0-9]+)$/);
+        if (uriMatch) {
+            return `https://open.spotify.com/embed/track/${uriMatch[1]}`;
+        }
+        const webMatch = (track?.url || '').match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+        if (webMatch) {
+            return `https://open.spotify.com/embed/track/${webMatch[1]}`;
+        }
+        return null;
+    }
+
     function handleSelectEditSpotifyTrack(track) {
         editMusicUrl = track?.url || track?.uri || '';
         editSpotifyResults = [];
         editSpotifyQuery = '';
         editSpotifyError = '';
+        editSpotifyEmbedPreviewTrackId = null;
     }
 
     async function handleReaction(event) {
@@ -350,7 +372,28 @@
                                                     on:play={handleSpotifyPreviewPlay}
                                                 ></audio>
                                             {:else}
-                                                <div class="spotify-preview-unavailable">Preview unavailable for this track</div>
+                                                <button
+                                                    class="btn btn-secondary btn-small spotify-preview-fallback-btn"
+                                                    type="button"
+                                                    on:click={() => toggleEditSpotifyEmbedPreview(track.id)}
+                                                >
+                                                    {editSpotifyEmbedPreviewTrackId === track.id ? 'Hide Preview' : 'Preview'}
+                                                </button>
+                                                {#if editSpotifyEmbedPreviewTrackId === track.id}
+                                                    {@const embedUrl = getSpotifyTrackEmbedUrl(track)}
+                                                    {#if embedUrl}
+                                                        <iframe
+                                                            class="spotify-preview-embed"
+                                                            title={`Spotify preview ${track.title}`}
+                                                            src={embedUrl}
+                                                            width="100%"
+                                                            height="80"
+                                                            frameborder="0"
+                                                            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                                                            loading="lazy"
+                                                        ></iframe>
+                                                    {/if}
+                                                {/if}
                                             {/if}
                                         </div>
                                         <button
@@ -651,10 +694,18 @@
         height: 32px;
     }
 
-    .spotify-preview-unavailable {
-        margin-top: 6px;
-        font-size: 12px;
-        color: var(--text-muted);
+    .spotify-preview-fallback-btn {
+        margin-top: 8px;
+    }
+
+    .spotify-preview-embed {
+        margin-top: 8px;
+        border: 0;
+        border-radius: 10px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 320px;
+        background: #fff;
     }
 
     .music-embed {
