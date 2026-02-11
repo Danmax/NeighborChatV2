@@ -34,9 +34,15 @@ BEGIN
     IF v_user_id IS NULL THEN
         INSERT INTO public.user_profiles (clerk_user_id, created_at, updated_at)
         VALUES (v_clerk_id, now(), now())
-        ON CONFLICT (clerk_user_id) DO UPDATE
-        SET updated_at = EXCLUDED.updated_at
+        ON CONFLICT (clerk_user_id) DO NOTHING
         RETURNING id INTO v_user_id;
+
+        IF v_user_id IS NULL THEN
+            SELECT id INTO v_user_id
+            FROM public.user_profiles
+            WHERE clerk_user_id = v_clerk_id
+            LIMIT 1;
+        END IF;
     END IF;
 
     RETURN v_user_id;
@@ -49,6 +55,35 @@ LANGUAGE sql
 STABLE
 AS $$
     SELECT public.ensure_current_user_profile();
+$$;
+
+GRANT EXECUTE ON FUNCTION public.ensure_current_user_profile() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.current_user_uuid() TO anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.is_instance_member(p_instance_id text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_user_uuid uuid;
+BEGIN
+    v_user_uuid := public.current_user_uuid();
+    IF v_user_uuid IS NULL THEN
+        RETURN false;
+    END IF;
+
+    PERFORM set_config('row_security', 'off', true);
+
+    RETURN EXISTS (
+        SELECT 1
+        FROM public.instance_memberships
+        WHERE user_id = v_user_uuid
+          AND instance_id = p_instance_id
+          AND status = 'active'
+    );
+END;
 $$;
 
 -- ============================================================================

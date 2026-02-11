@@ -633,7 +633,13 @@ export async function addPlayerToSession(sessionId, membershipId, teamId = null)
         .select('id, membership_id, team_id, final_score')
         .single();
 
-    if (error) throw error;
+    if (error) {
+        const rawMessage = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+        if (rawMessage.includes('row-level security policy for table "user_profiles"')) {
+            throw new Error('Unable to resolve your profile for game access. Run migration_085_fix_current_user_uuid_and_memberships_rls.sql, then reload schema.');
+        }
+        throw error;
+    }
 
     addSessionScore(sessionId, {
         id: playerId,
