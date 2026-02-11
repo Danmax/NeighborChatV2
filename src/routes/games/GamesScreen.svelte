@@ -660,6 +660,10 @@
 
     async function handleJoinInstance(event) {
         const { instanceId } = event.detail;
+        if (!instanceId || typeof instanceId !== 'string') {
+            showToast('Please select a valid community.', 'error');
+            return;
+        }
         try {
             await joinInstance(instanceId);
             showToast('Successfully joined community!', 'success');

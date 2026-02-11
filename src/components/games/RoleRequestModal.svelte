@@ -51,8 +51,17 @@
 		return roleOptions.find(r => r.id === selectedRole);
 	}
 
+	function getFirstRequestableRole() {
+		return roleOptions.find(option => !hasRole(option.id))?.id || roleOptions[0]?.id || '';
+	}
+
 	async function handleSubmit() {
-		if (!selectedRole || !instanceId) {
+		if (!instanceId) {
+			showToast('Join a community before requesting a game role.', 'error');
+			return;
+		}
+
+		if (!selectedRole) {
 			showToast('Please select a role', 'error');
 			return;
 		}
@@ -79,13 +88,13 @@
 	function openModal() {
 		isOpen = true;
 		reason = '';
-		selectedRole = 'game_manager';
+		selectedRole = getFirstRequestableRole();
 	}
 
 	function closeModal() {
 		isOpen = false;
 		reason = '';
-		selectedRole = 'game_manager';
+		selectedRole = getFirstRequestableRole();
 	}
 </script>
 
@@ -107,10 +116,15 @@
 				<button class="close-button" on:click={closeModal} aria-label="Close modal">✕</button>
 			</div>
 
-			<div class="modal-body">
-				<p class="description">
-					Request a specialized role to unlock additional features and permissions in the Games module.
-				</p>
+				<div class="modal-body">
+					<p class="description">
+						Request a specialized role to unlock additional features and permissions in the Games module.
+					</p>
+					{#if !instanceId}
+						<p class="instance-warning">
+							Join a community first to submit a role request.
+						</p>
+					{/if}
 
 				<div class="roles-grid">
 					{#each roleOptions as option}
@@ -155,14 +169,14 @@
 				<button class="button secondary" on:click={closeModal} disabled={isSubmitting}>
 					Cancel
 				</button>
-				{#if !hasRole(selectedRole)}
-					<button
-						class="button primary"
-						on:click={handleSubmit}
-						disabled={isSubmitting}
-						aria-busy={isSubmitting}
-					>
-						{isSubmitting ? 'Submitting...' : 'Submit Request'}
+					{#if !hasRole(selectedRole)}
+						<button
+							class="button primary"
+							on:click={handleSubmit}
+							disabled={isSubmitting || !instanceId}
+							aria-busy={isSubmitting}
+						>
+							{isSubmitting ? 'Submitting...' : 'Submit Request'}
 					</button>
 				{:else}
 					<button class="button secondary" disabled>
@@ -372,11 +386,21 @@
 		cursor: not-allowed;
 	}
 
-	.help-text {
-		font-size: 0.8rem;
-		color: #999;
-		margin-top: 0.5rem;
-	}
+		.help-text {
+			font-size: 0.8rem;
+			color: #999;
+			margin-top: 0.5rem;
+		}
+
+		.instance-warning {
+			margin: 0 0 1rem;
+			padding: 0.75rem;
+			border-radius: 6px;
+			background: #fff4e5;
+			border: 1px solid #ffd9a8;
+			color: #8a5a00;
+			font-size: 0.85rem;
+		}
 
 	.modal-footer {
 		display: flex;

@@ -33,6 +33,10 @@ import {
 } from '../stores/games.js';
 import { getActiveMembershipId } from './events.service.js';
 
+function makeTextId(prefix) {
+    return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-6)}`;
+}
+
 function normalizeAvatarUrl(avatar) {
     if (!avatar) return null;
     if (typeof avatar === 'string') return avatar;
@@ -2380,12 +2384,18 @@ export async function fetchAvailableInstances() {
     ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: true, filterDeleted: true }));
 
     // Fallback: schema without deleted_at.
-    if (instancesError?.code === '42703' && instancesError?.message?.includes('deleted_at')) {
+    if (
+        (instancesError?.code === '42703' || instancesError?.code === 'PGRST204')
+        && instancesError?.message?.includes('deleted_at')
+    ) {
         ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: true, filterDeleted: false }));
     }
 
     // Fallback: schema without logo.
-    if (instancesError?.code === '42703' && instancesError?.message?.includes('logo')) {
+    if (
+        (instancesError?.code === '42703' || instancesError?.code === 'PGRST204')
+        && instancesError?.message?.includes('logo')
+    ) {
         ({ data: instances, error: instancesError } = await runInstanceQuery({ includeLogo: false, filterDeleted: false }));
     }
 
@@ -2422,27 +2432,50 @@ export async function joinInstance(instanceId) {
     if (!userUuid) {
         throw new Error('User not authenticated');
     }
+    if (!instanceId || typeof instanceId !== 'string') {
+        throw new Error('Please select a valid community.');
+    }
 
     // Check if already a member
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from('instance_memberships')
         .select('id')
         .eq('user_id', userUuid)
         .eq('instance_id', instanceId)
-        .single();
+        .eq('status', 'active')
+        .maybeSingle();
+
+    if (existingError) throw existingError;
 
     if (existing) {
         throw new Error('Already a member of this community');
     }
 
+    // Resolve profile values required by instance_memberships schema.
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('display_name, username, avatar')
+        .eq('id', userUuid)
+        .maybeSingle();
+
+    const membershipId = makeTextId('mbr');
+    const displayName = profile?.display_name || profile?.username || 'Member';
+    const avatar = profile?.avatar || {};
+    const now = new Date().toISOString();
+
     // Create membership
     const { data, error } = await supabase
         .from('instance_memberships')
         .insert({
+            id: membershipId,
             user_id: userUuid,
             instance_id: instanceId,
+            display_name: displayName,
+            avatar,
             status: 'active',
-            role: 'member'
+            role: 'member',
+            joined_at: now,
+            last_active_at: now
         })
         .select()
         .single();
