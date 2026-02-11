@@ -1564,12 +1564,14 @@ export async function recordPlayerScore(sessionId, membershipId, score, teamId =
 export async function updatePlayerScore(sessionId, membershipId, scoreDelta) {
     const supabase = getSupabase();
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from('game_players')
         .select('id, final_score')
         .eq('session_id', sessionId)
         .eq('membership_id', membershipId)
         .single();
+
+    if (existingError) throw existingError;
 
     if (!existing) {
         throw new Error('Player not found in session.');
@@ -1594,6 +1596,9 @@ export async function updatePlayerScore(sessionId, membershipId, scoreDelta) {
         reason: 'Score delta applied',
         metadata: { previousScore: existing.final_score || 0, newScore }
     });
+
+    // Keep live scoreboard consistent even if realtime subscription is delayed/unavailable.
+    await fetchSessionScores(sessionId);
     return data;
 }
 

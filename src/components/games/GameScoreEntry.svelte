@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { sessionScores } from '../../stores/games.js';
     import { fetchSessionScores, recordPlayerScore, updatePlayerScore, subscribeToSessionScores, removePlayerFromSession } from '../../services/games.service.js';
+    import { showToast } from '../../stores/toasts.js';
 
     export let sessionId;
     export let isHost = false;
@@ -49,6 +50,7 @@
             await updatePlayerScore(sessionId, membershipId, delta);
         } catch (err) {
             console.error('Failed to update score:', err);
+            showToast(err.message || 'Failed to update score', 'error');
         } finally {
             loading = false;
         }

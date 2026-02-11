@@ -287,9 +287,15 @@ export function setSessionScores(sessionId, scores) {
 export function updateSessionScore(sessionId, participantId, points) {
     sessionScores.update(ss => {
         const sessionData = ss[sessionId] || [];
-        const idx = sessionData.findIndex(s => s.participantId === participantId);
+        const idx = sessionData.findIndex(s =>
+            s.membershipId === participantId || s.participantId === participantId
+        );
         if (idx >= 0) {
-            sessionData[idx] = { ...sessionData[idx], points };
+            sessionData[idx] = {
+                ...sessionData[idx],
+                finalScore: points,
+                points
+            };
             return { ...ss, [sessionId]: [...sessionData] };
         }
         return ss;

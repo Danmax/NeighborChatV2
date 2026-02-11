@@ -1,7 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
-    import { isAuthenticated } from '../../stores/auth.js';
+    import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import {
         gameTemplates,
         gameTemplatesLoading,
@@ -111,9 +111,6 @@
 
     $: isAdmin = userRole === 'admin' || userRole === 'moderator';
     $: isGameManager = $gameRoles.some(r => r.role === 'game_manager' && r.isActive) || isAdmin;
-    $: isTeamLead = $gameRoles.some(r => r.role === 'team_lead' && r.isActive);
-    $: isReferee = $gameRoles.some(r => r.role === 'referee' && r.isActive);
-    $: hasAnyGameRole = isGameManager || isTeamLead || isReferee;
 
     // Team actions
     let teamActionLoading = {};
@@ -142,16 +139,6 @@
         })
     ];
 
-    // Helper functions for role badges
-    function getRoleIcon(role) {
-        const icons = {
-            game_manager: '🎮',
-            team_lead: '👥',
-            referee: '⚖️'
-        };
-        return icons[role] || '🎯';
-    }
-
     function getRoleLabel(role) {
         const labels = {
             game_manager: 'Game Manager',
@@ -159,6 +146,17 @@
             referee: 'Referee'
         };
         return labels[role] || role;
+    }
+
+    function isLikelyImageUrl(value) {
+        const trimmed = (value || '').trim();
+        if (!trimmed) return false;
+        return /^(https?:\/\/|data:image\/|\/)/i.test(trimmed);
+    }
+
+    function getPlayerInitial(name) {
+        const trimmed = (name || '').trim();
+        return trimmed ? trimmed[0].toUpperCase() : 'P';
     }
 
     $: isCaptain = (team) => {
@@ -170,6 +168,12 @@
     };
 
     $: selectedSessionTemplate = $gameTemplates.find(t => t.id === sessionForm.templateId) || null;
+    $: playerDisplayName = gameProfileForm.displayName?.trim() || $currentUser?.name || 'Player';
+    $: playerAvatarValue = gameProfileForm.avatar?.trim() || '';
+    $: playerAvatarIsImage = isLikelyImageUrl(playerAvatarValue);
+    $: playerAvatarFallback = playerAvatarIsImage
+        ? getPlayerInitial(playerDisplayName)
+        : (playerAvatarValue || getPlayerInitial(playerDisplayName));
 
     function getDefaultSessionDateTime() {
         const now = new Date();
@@ -705,15 +709,6 @@
             <button class="back-btn" on:click={() => push('/')}>← Back</button>
             <div class="header-content">
                 <h2 class="card-title">Office Games</h2>
-                {#if hasAnyGameRole}
-                    <div class="role-badges">
-                        {#each $gameRoles.filter(r => r.isActive) as role}
-                            <span class="role-badge">
-                                {getRoleIcon(role.role)} {getRoleLabel(role.role)}
-                            </span>
-                        {/each}
-                    </div>
-                {/if}
             </div>
             <div class="header-actions">
                 <RoleRequestModal
@@ -776,18 +771,24 @@
         {#if activeTab === 'dashboard'}
             <div class="tab-content">
                 <div class="profile-setup-card">
-                    <div>
-                        <h3>Game Profile</h3>
-                        <p>
-                            {#if gameProfileForm.displayName}
-                                {gameProfileForm.displayName}
-                                {#if gameProfileForm.skillLevel}
-                                    · {gameProfileForm.skillLevel}
-                                {/if}
+                    <div class="player-profile-summary">
+                        <div class="player-avatar-chip">
+                            {#if playerAvatarIsImage}
+                                <img src={playerAvatarValue} alt={playerDisplayName} />
                             {:else}
-                                Set up your game identity, skill level, and preferences.
+                                <span>{playerAvatarFallback}</span>
                             {/if}
-                        </p>
+                        </div>
+                        <div class="player-profile-text">
+                            <h3>{playerDisplayName}</h3>
+                            <p>
+                                {#if gameProfileForm.skillLevel}
+                                    {gameProfileForm.skillLevel}
+                                {:else}
+                                    Set up your game identity, skill level, and preferences.
+                                {/if}
+                            </p>
+                        </div>
                     </div>
                     <button class="btn btn-secondary btn-small" on:click={() => showGameProfileModal = true}>
                         {gameProfileId ? 'Edit Profile' : 'Create Profile'}
@@ -1378,27 +1379,6 @@
         letter-spacing: -0.02em;
     }
 
-    .role-badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .role-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 14px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        font-size: 11px;
-        font-weight: 700;
-        border-radius: 20px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    }
-
     .screen-subtitle {
         color: #6b7280;
         font-size: 15px;
@@ -1428,6 +1408,51 @@
         margin: 0;
         font-size: 13px;
         color: #6b7280;
+    }
+
+    .player-profile-summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .player-avatar-chip {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        border: 1px solid #dbeafe;
+        color: #312e81;
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .player-avatar-chip img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .player-profile-text {
+        min-width: 0;
+    }
+
+    .player-profile-text h3 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .player-profile-text p {
+        margin-top: 2px;
     }
 
     .role-requests-panel {
@@ -1617,36 +1642,32 @@
 
     /* Tabs */
     .tabs {
-        display: flex;
-        gap: 6px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
         margin-bottom: 24px;
-        overflow-x: auto;
-        padding: 6px;
+        padding: 8px;
         background: #f3f4f6;
         border-radius: 14px;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-    }
-
-    .tabs::-webkit-scrollbar {
-        display: none;
     }
 
     .tab {
         display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 18px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 5px;
+        padding: 12px 10px;
         border: none;
         border-radius: 10px;
         background: transparent;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        white-space: nowrap;
         color: #6b7280;
         position: relative;
+        text-align: center;
+        min-height: 64px;
     }
 
     .tab:hover {
@@ -1661,7 +1682,7 @@
     }
 
     .tab-icon {
-        font-size: 16px;
+        font-size: 18px;
         transition: transform 0.2s ease;
     }
 
@@ -1671,6 +1692,7 @@
 
     .tab-label {
         transition: color 0.2s ease;
+        line-height: 1.2;
     }
 
     .tab-content {
@@ -2376,21 +2398,30 @@
             align-items: flex-start;
         }
 
+        .player-avatar-chip {
+            width: 46px;
+            height: 46px;
+            font-size: 20px;
+        }
+
         .session-row {
             grid-template-columns: 1fr;
         }
 
         .tabs {
-            padding: 4px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            padding: 6px;
             border-radius: 12px;
         }
 
         .tab-label {
-            display: none;
+            display: block;
+            font-size: 11px;
         }
 
         .tab {
-            padding: 10px 14px;
+            min-height: 56px;
+            padding: 10px 8px;
             border-radius: 8px;
         }
 

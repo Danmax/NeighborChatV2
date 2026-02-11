@@ -96,33 +96,6 @@
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <span class="icon">📅</span>
-                        Upcoming Events
-                    </h3>
-                    <a href="#/events" class="see-all-btn">See All</a>
-                </div>
-
-                {#if publicUpcomingEvents.length > 0}
-                    <div class="events-preview-list">
-                        {#each publicUpcomingEvents as event (event.id)}
-                            <EventCard {event} compact={true} on:click={() => push(`/events/${event.id}`)} />
-                        {/each}
-                    </div>
-                {:else}
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p class="empty-state-text">No upcoming events</p>
-                    </div>
-                {/if}
-
-                <a href="#/events?create=1" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
-                    ➕ Create an Event
-                </a>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
                         <span class="icon">🎉</span>
                         Celebrations
                     </h3>
@@ -148,6 +121,33 @@
 
                 <a href="#/celebrations" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
                     ✨ Share Kudos
+                </a>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <span class="icon">📅</span>
+                        Upcoming Events
+                    </h3>
+                    <a href="#/events" class="see-all-btn">See All</a>
+                </div>
+
+                {#if publicUpcomingEvents.length > 0}
+                    <div class="events-preview-list">
+                        {#each publicUpcomingEvents as event (event.id)}
+                            <EventCard {event} compact={true} on:click={() => push(`/events/${event.id}`)} />
+                        {/each}
+                    </div>
+                {:else}
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p class="empty-state-text">No upcoming events</p>
+                    </div>
+                {/if}
+
+                <a href="#/events?create=1" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
+                    ➕ Create an Event
                 </a>
             </div>
 
