@@ -1,34 +1,117 @@
 <script>
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount } from 'svelte';
     import { push } from 'svelte-spa-router';
     import { isAuthenticated, currentUser } from '../../stores/auth.js';
     import { onlineUsersList, onlineContactsList, isAvailable } from '../../stores/presence.js';
     import { upcomingEvents } from '../../stores/events.js';
-    import { celebrations } from '../../stores/celebrations.js';
+    import { celebrations, getCelebrationCategory } from '../../stores/celebrations.js';
     import { savedContacts } from '../../stores/contacts.js';
-    import { getCelebrationCategory } from '../../stores/celebrations.js';
-    import {
-        setupPresenceChannel,
-        updatePresenceStatus
-    } from '../../services/realtime.service.js';
+    import { setupPresenceChannel, updatePresenceStatus } from '../../services/realtime.service.js';
     import { fetchEvents } from '../../services/events.service.js';
     import { fetchCelebrations } from '../../services/celebrations.service.js';
     import { fetchContacts } from '../../services/contacts.service.js';
+    import { fetchFavoriteMovies } from '../../services/profile.service.js';
     import { getCelebrationPseudoDate } from '../../lib/utils/celebrationDates.js';
-    import { getCelebrationMessageStyle } from '../../lib/utils/celebrationStyle.js';
     import OnlineCount from '../../components/users/OnlineCount.svelte';
-    import EventCard from '../../components/events/EventCard.svelte';
-    import ContactList from '../../components/contacts/ContactList.svelte';
+    import FeatureCard from '../../components/home/FeatureCard.svelte';
 
-    // Auth routing handled centrally in App.svelte
+    let favoriteMovies = [];
+    let moviesLoading = false;
+    let moviesLoadedFor = null;
+
+    const quickActions = [
+        { label: 'Share Kudos', icon: '🎉', route: '/celebrations' },
+        { label: 'Plan Event', icon: '📅', route: '/events?create=1' },
+        { label: 'Start 1:1 Chat', icon: '💬', route: '/find-match' },
+        { label: 'Share Recipe', icon: '🥘', route: '/recipes' }
+    ];
 
     $: publicUpcomingEvents = ($upcomingEvents || [])
-        .filter(e => (e.visibility === 'public' || e.visibility === undefined) && e.status !== 'draft')
+        .filter((event) => (event.visibility === 'public' || event.visibility === undefined) && event.status !== 'draft')
         .slice(0, 3);
 
-    $: recentCelebrations = ($celebrations || []);
-    $: recentConnections = ($savedContacts || []).slice(0, 3);
+    $: recentCelebrations = ($celebrations || []).slice(0, 4);
+    $: recentConnections = ($savedContacts || []).slice(0, 4);
+    $: kudosCount = ($celebrations || []).filter((item) => (item.category || item.type || '').toLowerCase() === 'kudos').length;
+    $: birthdayAnniversaryCount = ($celebrations || []).filter((item) => {
+        const key = (item.category || item.type || '').toLowerCase();
+        return key.includes('birthday') || key.includes('anniversary');
+    }).length;
 
+    $: featureCards = [
+        {
+            title: 'Celebrate Kudos',
+            description: 'Highlight wins and gratitude moments with rich celebration posts.',
+            icon: '🏆',
+            cta: 'Open celebrations',
+            route: '/celebrations',
+            badge: kudosCount > 0 ? `${kudosCount} kudos posts` : 'Start now',
+            accent: 'sunset'
+        },
+        {
+            title: 'Event Manager',
+            description: 'Create gatherings, track RSVPs, and keep event details in one place.',
+            icon: '📅',
+            cta: 'Manage events',
+            route: '/events',
+            badge: publicUpcomingEvents.length > 0 ? `${publicUpcomingEvents.length} upcoming` : '',
+            accent: 'mint'
+        },
+        {
+            title: '1 on 1 Chat',
+            description: 'Find someone available now and jump into a direct conversation.',
+            icon: '💬',
+            cta: 'Find a match',
+            route: '/find-match',
+            badge: ($onlineContactsList || []).length > 0 ? `${($onlineContactsList || []).length} contacts online` : '',
+            accent: 'sky'
+        },
+        {
+            title: 'Share Recipes',
+            description: 'Post your best dishes and discover what your community is cooking.',
+            icon: '🥘',
+            cta: 'Browse recipes',
+            route: '/recipes',
+            badge: '',
+            accent: 'sunset'
+        },
+        {
+            title: 'Your Favorite Movies',
+            description: 'Show your movie tastes and spark conversations around favorites.',
+            icon: '🎬',
+            cta: 'Update favorites',
+            route: '/profile',
+            badge: favoriteMovies.length > 0 ? `${favoriteMovies.length} saved` : '',
+            accent: 'rose'
+        },
+        {
+            title: 'Music Celebration',
+            description: 'Set your current track and celebrate moments with your soundtrack.',
+            icon: '🎵',
+            cta: 'Set your track',
+            route: '/profile',
+            badge: $currentUser?.spotify_track_url ? 'Track selected' : '',
+            accent: 'mint'
+        },
+        {
+            title: 'Game Management',
+            description: 'Run games, score sessions, and manage teams and tournaments.',
+            icon: '🎮',
+            cta: 'Open games',
+            route: '/games',
+            badge: '',
+            accent: 'sky'
+        },
+        {
+            title: 'Birthdays and Anniversaries',
+            description: 'Make milestone moments visible so nobody misses a special day.',
+            icon: '🎂',
+            cta: 'Celebrate milestones',
+            route: '/celebrations',
+            badge: birthdayAnniversaryCount > 0 ? `${birthdayAnniversaryCount} upcoming` : '',
+            accent: 'rose'
+        }
+    ];
 
     onMount(() => {
         if ($isAuthenticated) {
@@ -36,573 +119,652 @@
             fetchEvents();
             fetchCelebrations();
             fetchContacts();
+            loadFavoriteMovies();
         }
     });
 
-    onDestroy(() => {
-        // Presence is global; avoid tearing down on navigation
-    });
+    $: {
+        const profileKey = $currentUser?.user_uuid || $currentUser?.user_id || null;
+        if ($isAuthenticated && profileKey && moviesLoadedFor !== profileKey && !moviesLoading) {
+            loadFavoriteMovies(profileKey);
+        }
+    }
+
+    async function loadFavoriteMovies(profileKey = null) {
+        const userKey = profileKey || $currentUser?.user_uuid || $currentUser?.user_id;
+        if (!userKey) return;
+
+        moviesLoading = true;
+        try {
+            favoriteMovies = await fetchFavoriteMovies(userKey);
+            moviesLoadedFor = userKey;
+        } catch (error) {
+            console.error('Failed to load favorite movies:', error);
+            favoriteMovies = [];
+            moviesLoadedFor = userKey;
+        } finally {
+            moviesLoading = false;
+        }
+    }
 
     function toggleAvailability() {
         const newStatus = $isAvailable ? 'away' : 'available';
         updatePresenceStatus(newStatus);
     }
 
-    function goToFindMatch() {
-        push('/find-match');
+    function goTo(route) {
+        push(route);
     }
 
-    function openMessageThread(event) {
-        const contact = event.detail;
-        if (contact?.user_id) {
-            push(`/messages/${contact.user_id}`);
-        }
+    function formatEventDate(rawDate) {
+        if (!rawDate) return 'Date TBD';
+        const date = new Date(rawDate);
+        if (Number.isNaN(date.getTime())) return 'Date TBD';
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function getCelebrationMeta(celebration) {
+        const pseudoDate = getCelebrationPseudoDate(celebration.category || celebration.type, celebration.celebration_date);
+        if (!pseudoDate) return 'Moment worth celebrating';
+        return `${pseudoDate.primary} ${pseudoDate.secondary}`.trim();
     }
 </script>
 
 {#if $isAuthenticated}
     <div class="home-screen">
-        <div class="card hero-card">
-            <div class="hero-header">
-                <div>
-                    <h2 class="card-title">Welcome, {$currentUser?.name || 'Neighbor'}!</h2>
-                    <p class="hero-subtitle">Find real-time matches and stay connected.</p>
+        <section class="hero-shell">
+            <div class="hero-content">
+                <p class="hero-kicker">Community Home</p>
+                <h1>Welcome back, {$currentUser?.name || 'Neighbor'}.</h1>
+                <p class="hero-subtitle">Celebrate achievements, run events, chat 1 on 1, and keep your community's stories in one place.</p>
+
+                <div class="hero-actions">
+                    <button class="btn btn-primary" on:click={() => goTo('/celebrations')}>🎉 Start celebrating</button>
+                    <button class="btn btn-secondary" on:click={() => goTo('/messages')}>✉️ Open messages</button>
                 </div>
-                <OnlineCount />
+
+                <div class="hero-stats">
+                    <span>{($onlineUsersList || []).length} neighbors online</span>
+                    <span>{publicUpcomingEvents.length} upcoming events</span>
+                    <span>{recentCelebrations.length} recent celebrations</span>
+                </div>
             </div>
 
-            <div class="availability-section">
-                <button
-                    class="availability-btn"
-                    class:available={$isAvailable}
-                    on:click={toggleAvailability}
-                >
+            <div class="hero-side">
+                <OnlineCount />
+                <button class="availability-btn" class:available={$isAvailable} on:click={toggleAvailability}>
                     <span class="status-dot" class:online={$isAvailable}></span>
                     {$isAvailable ? 'Available for 1:1 Match' : 'Set as Available'}
                 </button>
+                <button class="btn btn-ghost" on:click={() => goTo('/find-match')}>🔍 Find a match now</button>
+            </div>
+        </section>
+
+        <section class="section-block">
+            <div class="section-header">
+                <h2>Main Features</h2>
+                <p>Everything you asked to spotlight, ready from one homepage.</p>
             </div>
 
-            <div class="hero-actions">
-                <button class="btn btn-primary btn-full" on:click={goToFindMatch}>
-                    🔍 Find a Match Now
-                </button>
-                <div class="hero-stats">
-                    <span>{($onlineUsersList || []).length} neighbors online</span>
-                    <span>·</span>
-                    <span>{($onlineContactsList || []).length} contacts online</span>
-                </div>
+            <div class="features-grid">
+                {#each featureCards as card, index (card.title)}
+                    <FeatureCard
+                        title={card.title}
+                        description={card.description}
+                        icon={card.icon}
+                        cta={card.cta}
+                        route={card.route}
+                        badge={card.badge}
+                        accent={card.accent}
+                        delay={index * 50}
+                    />
+                {/each}
             </div>
-        </div>
+        </section>
 
-        <div class="grid">
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span class="icon">🎉</span>
-                        Celebrations
-                    </h3>
-                    <a href="#/celebrations" class="see-all-btn">See All</a>
-                </div>
+        <section class="section-block">
+            <div class="section-header">
+                <h2>What's Happening Now</h2>
+                <p>Quick live view of celebrations, events, and chat activity.</p>
+            </div>
 
-                {#if recentCelebrations.length > 0}
-                    <div class="celebrations-preview">
-                        {#each recentCelebrations as celebration (celebration.id)}
-                            {@const pseudoDate = getCelebrationPseudoDate(
-                                celebration.category || celebration.type,
-                                celebration.celebration_date
-                            )}
-                            {@const celebrationType = getCelebrationCategory(celebration.category || celebration.type)}
-                            {@const mediaSrc = celebration.gif_url || celebration.image || celebration.image_url}
-                            {@const hasGif = !!celebration.gif_url}
-                            <button
-                                type="button"
-                                class="celebration-feed-card"
-                                on:click={() => push(`/celebrations/${celebration.id}`)}
-                            >
-                                <div class="feed-media" class:has-gif={hasGif}>
-                                    {#if mediaSrc}
-                                        <img
-                                            src={mediaSrc}
-                                            alt="Celebration media"
-                                            loading="lazy"
-                                            class:gif-media={hasGif}
-                                        />
+            <div class="live-grid">
+                <article class="panel">
+                    <div class="panel-head">
+                        <h3>Celebrate Kudos</h3>
+                        <a href="#/celebrations">See all</a>
+                    </div>
+                    {#if recentCelebrations.length === 0}
+                        <p class="empty-text">No celebrations yet.</p>
+                    {:else}
+                        <div class="list-stack">
+                            {#each recentCelebrations as celebration (celebration.id)}
+                                {@const celebrationType = getCelebrationCategory(celebration.category || celebration.type)}
+                                <button class="list-item" on:click={() => goTo(`/celebrations/${celebration.id}`)}>
+                                    <span class="list-icon">{celebrationType.emoji}</span>
+                                    <span class="list-copy">
+                                        <strong>{celebration.title || celebrationType.label}</strong>
+                                        <small>{getCelebrationMeta(celebration)}</small>
+                                    </span>
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                </article>
+
+                <article class="panel">
+                    <div class="panel-head">
+                        <h3>Event Manager</h3>
+                        <a href="#/events">See all</a>
+                    </div>
+                    {#if publicUpcomingEvents.length === 0}
+                        <p class="empty-text">No upcoming events.</p>
+                    {:else}
+                        <div class="list-stack">
+                            {#each publicUpcomingEvents as event (event.id)}
+                                <button class="list-item" on:click={() => goTo(`/events/${event.id}`)}>
+                                    <span class="list-icon">📍</span>
+                                    <span class="list-copy">
+                                        <strong>{event.title || 'Untitled event'}</strong>
+                                        <small>{formatEventDate(event.event_date || event.start_time || event.starts_at)}</small>
+                                    </span>
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                </article>
+
+                <article class="panel">
+                    <div class="panel-head">
+                        <h3>1 on 1 Chat</h3>
+                        <a href="#/messages">Open inbox</a>
+                    </div>
+                    <div class="chat-pulse">
+                        <div class="pulse-row">
+                            <span class="pulse-dot"></span>
+                            <span>{($onlineContactsList || []).length} contacts online right now</span>
+                        </div>
+                        <div class="pulse-row">
+                            <span class="pulse-dot"></span>
+                            <span>{recentConnections.length} recent connections available for follow-up</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-full" on:click={() => goTo('/find-match')}>Start a 1 on 1 chat</button>
+                </article>
+            </div>
+        </section>
+
+        <section class="section-block">
+            <div class="section-header">
+                <h2>Quick Actions</h2>
+                <p>Fast paths to your most common tasks.</p>
+            </div>
+            <div class="quick-row">
+                {#each quickActions as action (action.label)}
+                    <a class="quick-action" href={`#${action.route}`}>
+                        <span>{action.icon}</span>
+                        <span>{action.label}</span>
+                    </a>
+                {/each}
+            </div>
+        </section>
+
+        <section class="section-block">
+            <div class="section-header">
+                <h2>Your Personal Picks</h2>
+                <p>Movie favorites and music celebration status from your profile.</p>
+            </div>
+
+            <div class="personal-grid">
+                <article class="panel">
+                    <div class="panel-head">
+                        <h3>Your Favorite Movies</h3>
+                        <a href="#/profile">Manage</a>
+                    </div>
+                    {#if moviesLoading}
+                        <p class="empty-text">Loading favorites...</p>
+                    {:else if favoriteMovies.length === 0}
+                        <p class="empty-text">No favorite movies yet. Add them from profile.</p>
+                    {:else}
+                        <div class="movie-grid">
+                            {#each favoriteMovies.slice(0, 4) as movie (movie.id)}
+                                <div class="movie-card" title={movie.title}>
+                                    {#if movie.poster_url}
+                                        <img src={movie.poster_url} alt={movie.title} loading="lazy" />
                                     {:else}
-                                        <div
-                                            class="media-fallback"
-                                            style={getCelebrationMessageStyle(celebration.message_bg_color, celebration.message_bg_pattern)}
-                                        >
-                                            <span>{celebrationType.emoji}</span>
-                                        </div>
+                                        <div class="movie-fallback">🎬</div>
                                     {/if}
-                                    <div class="feed-type">
-                                        <span class="feed-emoji">{celebrationType.emoji}</span>
-                                        <span class="feed-type-label">{celebrationType.label}</span>
-                                    </div>
+                                    <small>{movie.title}</small>
                                 </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </article>
 
-                                <div class="feed-body">
-                                    {#if celebration.title}
-                                        <h3 class="feed-title">{celebration.title}</h3>
-                                    {:else}
-                                        <h3 class="feed-title">Kudos</h3>
-                                    {/if}
-
-                                    {#if pseudoDate}
-                                        <div class="feed-pseudo-date">
-                                            <span class="feed-pseudo-primary">{pseudoDate.primary}</span>
-                                            <span class="feed-pseudo-secondary">{pseudoDate.secondary}</span>
-                                        </div>
-                                    {/if}
-
-                                    {#if celebration.message}
-                                        <p
-                                            class="feed-message"
-                                            style={getCelebrationMessageStyle(celebration.message_bg_color, celebration.message_bg_pattern)}
-                                        >
-                                            {celebration.message}
-                                        </p>
-                                    {/if}
-                                </div>
-
-                                <div class="feed-type-footer">
-                                    <span class="feed-type-footer-icon">{celebrationType.emoji}</span>
-                                    <span class="feed-type-footer-label">{celebrationType.label}</span>
-                                </div>
-                            </button>
-                        {/each}
+                <article class="panel">
+                    <div class="panel-head">
+                        <h3>Music Celebration</h3>
+                        <a href="#/profile">Manage</a>
                     </div>
-                {:else}
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🎊</div>
-                        <p class="empty-state-text">No celebrations yet</p>
-                    </div>
-                {/if}
-
-                <a href="#/celebrations" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
-                    ✨ Share Kudos
-                </a>
+                    {#if $currentUser?.spotify_track_url}
+                        <p class="music-link">{$currentUser.spotify_track_url}</p>
+                        <a class="btn btn-secondary btn-full" href={$currentUser.spotify_track_url} target="_blank" rel="noopener noreferrer">Open current track</a>
+                    {:else}
+                        <p class="empty-text">No music track selected yet. Add one in profile.</p>
+                        <a class="btn btn-secondary btn-full" href="#/profile">Set music celebration</a>
+                    {/if}
+                </article>
             </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span class="icon">📅</span>
-                        Upcoming Events
-                    </h3>
-                    <a href="#/events" class="see-all-btn">See All</a>
-                </div>
-
-                {#if publicUpcomingEvents.length > 0}
-                    <div class="events-preview-list">
-                        {#each publicUpcomingEvents as event (event.id)}
-                            <EventCard {event} compact={true} on:click={() => push(`/events/${event.id}`)} />
-                        {/each}
-                    </div>
-                {:else}
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p class="empty-state-text">No upcoming events</p>
-                    </div>
-                {/if}
-
-                <a href="#/events?create=1" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
-                    ➕ Create an Event
-                </a>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <span class="icon">🤝</span>
-                        Recent Connections
-                    </h3>
-                    <a href="#/contacts" class="see-all-btn">View Contacts</a>
-                </div>
-
-                <ContactList
-                    contacts={recentConnections}
-                    emptyMessage="No recent connections yet"
-                    emptyIcon="👥"
-                    showInterests={false}
-                    compact={true}
-                    menuMode="recent"
-                    on:chat={openMessageThread}
-                    on:click={openMessageThread}
-                />
-
-                <a href="#/messages" class="btn btn-secondary btn-full" style="margin-top: 16px; text-decoration: none;">
-                    ✉️ Open Messages
-                </a>
-            </div>
-
-        </div>
+        </section>
     </div>
 {/if}
 
 <style>
     .home-screen {
-        padding-bottom: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+        display: grid;
+        gap: 18px;
+        padding-bottom: 28px;
     }
 
-    .card {
-        background: white;
-        border-radius: var(--radius-md);
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    .hero-shell {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at 12% 16%, rgba(255, 188, 88, 0.22), transparent 45%),
+            radial-gradient(circle at 92% 86%, rgba(83, 196, 159, 0.2), transparent 38%),
+            linear-gradient(130deg, #f9fbff, #fff8ef);
+        border: 1px solid #eadfd0;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
     }
 
-    .hero-card {
-        background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(255, 255, 255, 0.9));
-        border: 1px solid rgba(76, 175, 80, 0.15);
+    .hero-kicker {
+        margin: 0 0 6px;
+        display: inline-flex;
+        padding: 6px 11px;
+        border-radius: 999px;
+        background: #fff1d6;
+        color: #9f4b00;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
     }
 
-    .hero-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 16px;
+    h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 40px);
+        line-height: 1.1;
     }
 
     .hero-subtitle {
+        margin: 10px 0 0;
+        color: var(--text-muted);
+        max-width: 60ch;
+        line-height: 1.5;
+    }
+
+    .hero-actions {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .hero-stats {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .hero-stats span {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ebdfcd;
+        font-size: 12px;
+        font-weight: 600;
+        color: #69533a;
+    }
+
+    .hero-side {
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid #eadfce;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        justify-content: center;
+    }
+
+    .availability-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid #d7d2c9;
+        border-radius: 999px;
+        background: #fff;
+        color: var(--text);
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 180ms ease;
+    }
+
+    .availability-btn.available {
+        border-color: #3d9d74;
+        background: #edf9f3;
+        color: #1e6a4f;
+    }
+
+    .status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #9ca3af;
+    }
+
+    .status-dot.online {
+        background: #2ca56f;
+        box-shadow: 0 0 0 4px rgba(44, 165, 111, 0.15);
+    }
+
+    .section-block {
+        background: #fff;
+        border: 1px solid #eee6d8;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .section-header {
+        margin-bottom: 14px;
+    }
+
+    .section-header h2 {
+        margin: 0;
+        font-size: 22px;
+    }
+
+    .section-header p {
         margin: 6px 0 0;
         color: var(--text-muted);
         font-size: 14px;
     }
 
-    .availability-section {
-        display: flex;
-        justify-content: center;
-        margin: 16px 0;
-    }
-
-    .availability-btn {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 24px;
-        border: 2px solid var(--cream-dark);
-        border-radius: 100px;
-        background: white;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text);
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .availability-btn:hover {
-        border-color: var(--primary-light);
-    }
-
-    .availability-btn.available {
-        background: #E8F5E9;
-        border-color: #4CAF50;
-        color: #2E7D32;
-    }
-
-    .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #9E9E9E;
-        transition: background 0.2s ease;
-    }
-
-    .status-dot.online {
-        background: #4CAF50;
-    }
-
-    .hero-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .hero-stats {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--text-muted);
-    }
-
-    .grid {
+    .features-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
-    }
-
-    .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .card-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text);
-        margin: 0;
-    }
-
-    .icon {
-        font-size: 22px;
-    }
-
-    .see-all-btn {
-        background: none;
-        border: none;
-        color: var(--primary);
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 0;
-        text-decoration: none;
-    }
-
-    .see-all-btn:hover {
-        color: var(--primary-dark);
-    }
-
-    .events-preview-list,
-    .celebrations-preview {
-        display: flex;
-        flex-direction: column;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 12px;
     }
 
-    .celebrations-preview {
-        max-height: 560px;
-        overflow-y: auto;
-        padding-right: 4px;
+    .live-grid,
+    .personal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 12px;
     }
 
-    .celebration-feed-card {
-        background: white;
-        border-radius: var(--radius-md);
-        overflow: hidden;
-        border: 1px solid var(--cream-dark);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        text-align: left;
-        padding: 0;
-        cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-    }
-
-    .celebration-feed-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .feed-media {
-        position: relative;
-        background: #f4f4f4;
-        overflow: hidden;
-    }
-
-    .feed-media img {
-        width: 100%;
-        display: block;
-        background: #f4f4f4;
-    }
-
-    .feed-media:not(.has-gif) {
-        aspect-ratio: 16 / 9;
-    }
-
-    .feed-media:not(.has-gif) img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .feed-media.has-gif {
-        overflow: visible;
-    }
-
-    .feed-media img.gif-media {
-        width: 100%;
-        height: auto;
-        max-height: none;
-        object-fit: contain;
-    }
-
-    .media-fallback {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 42px;
-        color: var(--text-muted);
-        background: linear-gradient(135deg, #f5f5f5, #e9e9e9);
-    }
-
-    .feed-type {
-        position: absolute;
-        left: 12px;
-        bottom: 12px;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: rgba(0, 0, 0, 0.65);
-        color: white;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: capitalize;
-    }
-
-    .feed-emoji {
-        font-size: 14px;
-    }
-
-    .feed-body {
-        padding: 14px 16px 16px;
+    .panel {
+        background: linear-gradient(135deg, #fff, #faf8f4);
+        border: 1px solid #e9dfd0;
+        border-radius: 14px;
+        padding: 14px;
         display: flex;
         flex-direction: column;
         gap: 10px;
     }
 
-    .feed-title {
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .panel-head h3 {
         margin: 0;
         font-size: 16px;
+    }
+
+    .panel-head a {
+        color: #a14a00;
+        text-decoration: none;
+        font-size: 12px;
         font-weight: 700;
-        color: var(--text);
     }
 
-    .feed-message {
-        margin: 0;
-        font-size: 13px;
-        color: var(--text-light);
-        line-height: 1.5;
-        border-radius: 10px;
-        border: 1px solid var(--cream-dark);
-        padding: 8px 10px;
-        max-height: 3.6em;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
+    .list-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
     }
 
-    .feed-pseudo-date {
+    .list-item {
+        text-align: left;
+        width: 100%;
+        border: 1px solid #e9dece;
+        background: #fff;
+        border-radius: 12px;
+        padding: 10px;
+        display: flex;
+        gap: 9px;
+        cursor: pointer;
+    }
+
+    .list-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: #fff6e7;
+        flex-shrink: 0;
+    }
+
+    .list-copy {
+        min-width: 0;
         display: flex;
         flex-direction: column;
         gap: 2px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid var(--cream-dark);
-        background: var(--cream);
     }
 
-    .feed-pseudo-primary {
-        font-size: 12px;
-        font-weight: 700;
+    .list-copy strong,
+    .list-copy small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .list-copy strong {
+        font-size: 13px;
+    }
+
+    .list-copy small {
+        color: var(--text-muted);
+        font-size: 11px;
+    }
+
+    .chat-pulse {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .pulse-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 13px;
         color: var(--text);
     }
 
-    .feed-pseudo-secondary {
-        font-size: 11px;
-        color: var(--text-muted);
+    .pulse-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #f97316;
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.45);
+        animation: pulse 1.8s infinite;
     }
 
-    .feed-type-footer {
+    .quick-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+    }
+
+    .quick-action {
+        text-decoration: none;
+        color: var(--text);
+        border: 1px solid #e8dece;
+        border-radius: 12px;
+        padding: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        padding: 10px 12px;
-        border-top: 1px solid var(--cream-dark);
-        background: var(--cream);
-        color: var(--text);
-        font-size: 12px;
+        background: linear-gradient(150deg, #fff, #fff7ec);
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
+        font-size: 13px;
     }
 
-    .feed-type-footer-icon {
-        font-size: 15px;
-        line-height: 1;
+    .movie-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
     }
 
-    .feed-type-footer-label {
-        line-height: 1;
+    .movie-card {
+        display: grid;
+        gap: 6px;
     }
 
-    .empty-state {
-        text-align: center;
-        padding: 30px 20px;
+    .movie-card img,
+    .movie-fallback {
+        width: 100%;
+        aspect-ratio: 2 / 3;
+        border-radius: 10px;
+        border: 1px solid #e5dccd;
+        object-fit: cover;
+    }
+
+    .movie-fallback {
+        display: grid;
+        place-items: center;
+        background: #faf5ea;
+    }
+
+    .movie-card small {
+        font-size: 12px;
         color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .empty-state-icon {
-        font-size: 40px;
-        margin-bottom: 12px;
+    .music-link {
+        margin: 0;
+        padding: 10px;
+        border-radius: 10px;
+        background: #f8f7f3;
+        border: 1px solid #e8e1d4;
+        font-size: 12px;
+        color: #475569;
+        word-break: break-all;
     }
 
-    .empty-state-text {
-        font-size: 14px;
+    .empty-text {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 13px;
     }
-
 
     .btn {
+        border: none;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        padding: 12px 24px;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
+        text-decoration: none;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
     }
 
     .btn-primary {
-        background: var(--primary);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background: var(--primary-dark);
+        background: linear-gradient(135deg, #f97316, #c2410c);
+        color: #fff;
+        box-shadow: 0 10px 22px rgba(249, 115, 22, 0.25);
     }
 
     .btn-secondary {
-        background: var(--cream);
-        color: var(--text);
+        background: #fff6e7;
+        color: #8f3a00;
+        border: 1px solid #f0d7b3;
     }
 
-    .btn-secondary:hover {
-        background: var(--cream-dark);
+    .btn-ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid #d8d2c6;
     }
 
     .btn-full {
         width: 100%;
     }
 
-    @media (max-width: 768px) {
-        .celebrations-preview {
-            max-height: 440px;
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.45);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(249, 115, 22, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+        }
+    }
+
+    @media (max-width: 960px) {
+        .hero-shell {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .home-screen {
+            gap: 14px;
         }
 
-        .feed-media:not(.has-gif) {
-            aspect-ratio: 4 / 3;
+        .hero-shell,
+        .section-block {
+            padding: 16px;
+            border-radius: 16px;
+        }
+
+        .features-grid,
+        .live-grid,
+        .personal-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .quick-row {
+            grid-template-columns: 1fr 1fr;
         }
     }
 </style>
