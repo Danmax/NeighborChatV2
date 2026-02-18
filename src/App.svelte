@@ -262,8 +262,7 @@
         <div class="beta-banner" role="status">
             <span class="beta-badge">Beta</span>
             <div class="beta-message">
-                <span>Join User Acceptance Beta</span>
-                <span>Provide Feedback on the latest Features.</span>
+                <span>Leave feedback <a href="#/feedback" class="beta-link">click here</a></span>
             </div>
         </div>
 
@@ -467,6 +466,12 @@
         display: flex;
         flex-direction: column;
         line-height: 1.3;
+    }
+
+    .beta-link {
+        color: inherit;
+        text-decoration: underline;
+        font-weight: 700;
     }
 
     /* Modern Top Navigation - Glassmorphism */
