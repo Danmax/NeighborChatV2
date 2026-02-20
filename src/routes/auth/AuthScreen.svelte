@@ -5,37 +5,90 @@
     let loading = true;
     let error = '';
     let clerkNode;
+    let authMode = 'sign-in';
+    let clerk = null;
+
+    function resolveAuthModeFromHash(hashValue) {
+        return hashValue.includes('mode=sign-up') ? 'sign-up' : 'sign-in';
+    }
+
+    function getAuthUrls() {
+        const appBaseUrl = window.location.origin;
+        return {
+            signInUrl: `${appBaseUrl}/#/auth?mode=sign-in`,
+            signUpUrl: `${appBaseUrl}/#/auth?mode=sign-up`,
+            homeUrl: `${appBaseUrl}/#/`
+        };
+    }
+
+    async function mountAuthWidget() {
+        if (!clerk) return;
+        await tick();
+        if (!clerkNode) {
+            throw new Error('Auth container not found');
+        }
+
+        const { signInUrl, signUpUrl, homeUrl } = getAuthUrls();
+        window.Clerk?.unmountSignIn?.(clerkNode);
+        window.Clerk?.unmountSignUp?.(clerkNode);
+
+        const sharedConfig = {
+            routing: 'hash',
+            signInUrl,
+            signUpUrl,
+            forceRedirectUrl: homeUrl,
+            fallbackRedirectUrl: homeUrl
+        };
+
+        if (authMode === 'sign-up') {
+            clerk.mountSignUp(clerkNode, sharedConfig);
+            return;
+        }
+
+        clerk.mountSignIn(clerkNode, sharedConfig);
+    }
+
+    function setAuthMode(mode) {
+        const nextMode = mode === 'sign-up' ? 'sign-up' : 'sign-in';
+        const nextHash = nextMode === 'sign-up' ? '#/auth?mode=sign-up' : '#/auth?mode=sign-in';
+        if (window.location.hash !== nextHash) {
+            window.location.hash = nextHash;
+        }
+    }
 
     onMount(async () => {
-        try {
-            const clerk = await loadClerk();
-            await clerk.load();
-            await tick();
-            if (!clerkNode) {
-                throw new Error('Sign-in container not found');
+        const handleHashChange = async () => {
+            const nextMode = resolveAuthModeFromHash(window.location.hash || '');
+            if (nextMode === authMode) return;
+            authMode = nextMode;
+            try {
+                await mountAuthWidget();
+            } catch (err) {
+                error = err.message || 'Unable to load authentication';
             }
-            const appBaseUrl = window.location.origin;
-            const authUrl = `${appBaseUrl}/#/auth`;
-            const homeUrl = `${appBaseUrl}/#/`;
+        };
 
-            clerk.mountSignIn(clerkNode, {
-                routing: 'hash',
-                signInUrl: authUrl,
-                signUpUrl: authUrl,
-                forceRedirectUrl: homeUrl,
-                fallbackRedirectUrl: homeUrl
-            });
+        try {
+            authMode = resolveAuthModeFromHash(window.location.hash || '');
+            clerk = await loadClerk();
+            await clerk.load();
+            await mountAuthWidget();
+            window.addEventListener('hashchange', handleHashChange);
         } catch (err) {
-            error = err.message || 'Unable to load sign-in';
+            error = err.message || 'Unable to load authentication';
         } finally {
             loading = false;
         }
+
+        return () => {
+            window.removeEventListener('hashchange', handleHashChange);
+        };
     });
 
     onDestroy(() => {
-        if (window.Clerk?.unmountSignIn && clerkNode) {
-            window.Clerk.unmountSignIn(clerkNode);
-        }
+        if (!clerkNode) return;
+        window.Clerk?.unmountSignIn?.(clerkNode);
+        window.Clerk?.unmountSignUp?.(clerkNode);
     });
 </script>
 
@@ -76,14 +129,33 @@
             <div class="panel-header">
                 <div class="auth-icon">🏘️</div>
                 <div>
-                    <h2>Sign in to Neighbor Chat</h2>
-                    <p>Jump into your community in seconds.</p>
+                    <h2>{authMode === 'sign-up' ? 'Create your Neighbor Chat account' : 'Sign in to Neighbor Chat'}</h2>
+                    <p>{authMode === 'sign-up' ? 'Join your community in seconds.' : 'Jump into your community in seconds.'}</p>
                 </div>
             </div>
 
             {#if error}
                 <div class="auth-message error">{error}</div>
             {/if}
+
+            <div class="auth-mode-toggle" role="tablist" aria-label="Authentication mode">
+                <button
+                    type="button"
+                    class="auth-mode-btn"
+                    class:active={authMode === 'sign-in'}
+                    on:click={() => setAuthMode('sign-in')}
+                >
+                    Log In
+                </button>
+                <button
+                    type="button"
+                    class="auth-mode-btn"
+                    class:active={authMode === 'sign-up'}
+                    on:click={() => setAuthMode('sign-up')}
+                >
+                    Sign Up
+                </button>
+            </div>
 
             <div class="auth-actions">
                 <a class="btn btn-clerk btn-full" href="#/pricing">
@@ -94,14 +166,14 @@
             {#if loading}
                 <div class="loading-state">
                     <div class="loading-spinner"></div>
-                    <p>Loading sign-in...</p>
+                    <p>{authMode === 'sign-up' ? 'Loading sign-up...' : 'Loading sign-in...'}</p>
                 </div>
             {/if}
             <div class="clerk-signin" bind:this={clerkNode}></div>
 
             <div class="auth-footer">
-                <p>Secure sign‑in powered by Clerk.</p>
-                <span class="auth-status">{loading ? 'Loading sign-in...' : 'Ready to sign in'}</span>
+                <p>Secure authentication powered by Clerk.</p>
+                <span class="auth-status">{loading ? 'Loading authentication...' : 'Ready'}</span>
             </div>
         </section>
     </div>
@@ -218,6 +290,31 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
+    }
+
+    .auth-mode-toggle {
+        display: flex;
+        gap: 8px;
+        padding: 6px;
+        background: #f4f4f7;
+        border-radius: 12px;
+    }
+
+    .auth-mode-btn {
+        flex: 1;
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .auth-mode-btn.active {
+        background: #ffffff;
+        color: var(--text);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
     .clerk-signin {

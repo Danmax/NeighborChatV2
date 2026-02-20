@@ -102,17 +102,22 @@
             await initSupabase();
             await loadBrandingSettings();
 
-            // Set up auth state listener first so INITIAL_SESSION is handled
+            const existingUser = await checkExistingAuth();
+            if (existingUser) {
+                setupInviteListener();
+                setupPresenceChannel();
+            }
+
+            // Set up auth state listener for sign-in/sign-out transitions
             authSubscription = setupAuthListener(({ event, user }) => {
                 console.log('Auth event:', event);
 
-                if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
+                if (event === 'SIGNED_IN' && user) {
                     setupInviteListener();
                     setupPresenceChannel();
                 }
             });
 
-            // Rely on setupAuthListener's INITIAL_SESSION event for session init
             authInitialized.set(true);
             authLoading.set(false);
             console.log('🔐 Auth initialization complete');
@@ -229,10 +234,12 @@
 
     // Centralized routing guard
     $: if ($authInitialized) {
+        const isAuthRoute = $location?.startsWith('/auth');
+
         if (!$authUser) {
             showTopMenu.set(false);
-            if ($location !== '/auth' && $location !== '/demo') {
-                push('/demo');
+            if (!isAuthRoute && $location !== '/demo') {
+                push('/auth');
             }
         } else if ($currentUser && !$currentUser.onboardingCompleted) {
             showTopMenu.set(false);
@@ -241,7 +248,7 @@
             }
         } else if ($currentUser && $currentUser.onboardingCompleted) {
             showTopMenu.set(true);
-            if ($location === '/auth' || $location === '/onboarding') {
+            if (isAuthRoute || $location === '/onboarding') {
                 push('/');
             }
         }
