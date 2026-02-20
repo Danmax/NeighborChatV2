@@ -14,10 +14,16 @@
             if (!clerkNode) {
                 throw new Error('Sign-in container not found');
             }
+            const appBaseUrl = window.location.origin;
+            const authUrl = `${appBaseUrl}/#/auth`;
+            const homeUrl = `${appBaseUrl}/#/`;
+
             clerk.mountSignIn(clerkNode, {
                 routing: 'hash',
-                signUpUrl: '#/auth',
-                forceRedirectUrl: '#/'
+                signInUrl: authUrl,
+                signUpUrl: authUrl,
+                forceRedirectUrl: homeUrl,
+                fallbackRedirectUrl: homeUrl
             });
         } catch (err) {
             error = err.message || 'Unable to load sign-in';

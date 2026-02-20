@@ -168,7 +168,9 @@ export function setupAuthListener(callback) {
 
     const unsubscribePromise = addClerkListener(({ session, user }) => {
         const event = session && user ? 'SIGNED_IN' : 'SIGNED_OUT';
-        console.log('Auth state changed:', event);
+        if (import.meta.env.DEV) {
+            console.log('Auth state changed:', event);
+        }
 
         if (event === 'SIGNED_IN') {
             const currentUserId = user?.id || null;

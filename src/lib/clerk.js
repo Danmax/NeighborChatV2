@@ -1,9 +1,7 @@
-const CLERK_PUBLISHABLE_KEY =
-    import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ||
-    'pk_test_c29jaWFsLWVzY2FyZ290LTAuY2xlcmsuYWNjb3VudHMuZGV2JA';
-
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const CLERK_SCRIPT_SRC =
-    'https://social-escargot-0.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+    import.meta.env.VITE_CLERK_JS_URL ||
+    'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
@@ -12,6 +10,11 @@ let clerkPromise = null;
 
 function loadClerkScript() {
     return new Promise((resolve, reject) => {
+        if (!CLERK_PUBLISHABLE_KEY) {
+            reject(new Error('Missing VITE_CLERK_PUBLISHABLE_KEY environment variable.'));
+            return;
+        }
+
         // If Clerk is already on window, we're done
         if (window.Clerk) {
             resolve(window.Clerk);
