@@ -4,12 +4,59 @@ import { getClerkToken, getClerkUser } from './clerk.js';
 
 let supabaseClient = null;
 let config = null;
+const PUBLIC_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const PUBLIC_SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+function createSupabaseClient(url, anonKey) {
+    return createClient(
+        url,
+        anonKey,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+                detectSessionInUrl: false
+            },
+            accessToken: async () => getClerkToken()
+        }
+    );
+}
+
+function initFromConfig(nextConfig, sourceLabel = 'config') {
+    config = nextConfig;
+
+    if (!config?.supabase?.url) {
+        throw new Error(`Config missing supabase.url (${sourceLabel})`);
+    }
+
+    if (!config?.supabase?.anonKey) {
+        throw new Error(`Config missing supabase.anonKey (${sourceLabel})`);
+    }
+
+    supabaseClient = createSupabaseClient(config.supabase.url, config.supabase.anonKey);
+    return supabaseClient;
+}
 
 /**
  * Initialize Supabase client by fetching config from API
  */
 export async function initSupabase() {
     if (supabaseClient) return supabaseClient;
+
+    // Prefer build-time public env vars for static hosting (no /api runtime required).
+    if (PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY) {
+        console.log('✅ Supabase initialized from VITE environment variables');
+        return initFromConfig({
+            supabase: {
+                url: PUBLIC_SUPABASE_URL,
+                anonKey: PUBLIC_SUPABASE_ANON_KEY
+            },
+            app: {
+                name: 'Neighbor Chat',
+                version: '2.1.0'
+            }
+        }, 'vite-env');
+    }
 
     try {
         console.log('🔄 Fetching config from API...');
@@ -20,41 +67,16 @@ export async function initSupabase() {
             throw new Error(`API returned ${response.status}: ${response.statusText}`);
         }
 
-        config = await response.json();
+        const apiConfig = await response.json();
 
         console.log('📦 Config received:', {
-            hasSupabase: !!config.supabase,
-            hasUrl: !!config.supabase?.url,
-            hasKey: !!config.supabase?.anonKey,
-            url: config.supabase?.url
+            hasSupabase: !!apiConfig.supabase,
+            hasUrl: !!apiConfig.supabase?.url,
+            hasKey: !!apiConfig.supabase?.anonKey,
+            url: apiConfig.supabase?.url
         });
 
-        // Validate config
-        if (!config.supabase) {
-            throw new Error('Config missing supabase section');
-        }
-
-        if (!config.supabase.url) {
-            throw new Error('Config missing supabase.url');
-        }
-
-        if (!config.supabase.anonKey) {
-            throw new Error('Config missing supabase.anonKey');
-        }
-
-        // Initialize Supabase client
-        supabaseClient = createClient(
-            config.supabase.url,
-            config.supabase.anonKey,
-            {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false,
-                    detectSessionInUrl: false
-                },
-                accessToken: async () => getClerkToken()
-            }
-        );
+        initFromConfig(apiConfig, 'api');
 
         console.log('✅ Supabase initialized securely from API');
         return supabaseClient;
@@ -78,7 +100,7 @@ export async function initSupabase() {
  * Fallback for local development
  */
 async function initLocalConfig() {
-    config = {
+    return initFromConfig({
         supabase: {
             url: 'https://llmqvrndctfpuejcyxsa.supabase.co',
             anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsbXF2cm5kY3RmcHVlamN5eHNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MjMwNzUsImV4cCI6MjA4NTA5OTA3NX0.y7tRBi7D47Pn5VwGyVlYRwqJE1BixgwbxpNwlQ5GSso'
@@ -87,20 +109,7 @@ async function initLocalConfig() {
             name: 'Neighbor Chat',
             version: '2.1.0'
         }
-    };
-
-    supabaseClient = createClient(
-        config.supabase.url,
-        config.supabase.anonKey,
-        {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-                detectSessionInUrl: false
-            },
-            accessToken: async () => getClerkToken()
-        }
-    );
+    }, 'localhost-fallback');
 
     console.log('✅ Supabase initialized (local mode)');
     return supabaseClient;
